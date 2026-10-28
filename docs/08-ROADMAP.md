@@ -16,11 +16,11 @@
 
 **GitHub Project:** board planned: `PhotoBunker New — Development`, `https://github.com/users/1troitsky/projects`. **Пока не создан/не подключён через доступный интеграционный интерфейс.** Issues реально созданы, но поле Status в Project нельзя считать заполненным до ручного добавления. См. [COLLABORATION.md](../COLLABORATION.md).
 
-**Review gate:** отдельная ветка и Draft PR, production build/contract tests/target e2e, diff, security evidence. `Integrated` после review и merge Codex; `Accepted` только после проверки владельцем на устройстве.
+**Review gate:** **ChatGPT пишет код и создаёт Draft PR, исправляет замечания**. **Codex** независимо проверяет полный diff, запускает production build/contract/security/target E2E и пишет PASS/FAIL/NOT RUN, **не разрабатывает и не сливает PR**. `Integrated` только после **разрешённого владельцем merge**; `Accepted` только после его ручной проверки на устройстве.
 
-## 1.1. Что агент делает первым и когда владелец проверяет приложение
+## 1.1. Что разрабатывает ChatGPT, что тестирует Codex и когда проверяет владелец
 
-**Ни одного большого переноса из старого репозитория.** `photobunker` — источник проверяемых contracts, test vectors, user journeys и ограниченно пригодных компонентов, **не** исходный код, который копируется целиком. Для каждого reuse Codex фиксирует «копировать без изменений / адаптировать / заменить» и причины; старые `apps/web` mega-stores, Matrix, RTC, plaintext prototype не импортируются. Сохранение Laravel 13 как технологии не равно копированию старого API или БД.
+**Ни одного большого переноса из старого репозитория.** `photobunker` — источник проверяемых contracts, test vectors, user journeys и ограниченно пригодных компонентов, **не** исходный код, который копируется целиком. Для каждого reuse ChatGPT документирует «копировать без изменений / адаптировать / заменить» и причины, а Codex независимо проверяет обоснование; старые `apps/web` mega-stores, Matrix, RTC, plaintext prototype не импортируются. Сохранение Laravel 13 как технологии не равно копированию старого API или БД.
 
 **Принцип — UI first, production first, local-first, owner feedback early.** Владелец проверяет **вехи**, а не каждую мелкую Issue. До демонстрации следующего модуля не нужно завершать весь roadmap.
 
@@ -34,11 +34,11 @@
 | **Проверка 6 — Photo Browser, PIN** | R2-15–17 + R2-18–20 | Коллекции заданий, доступные фото/экспорт, отдельно app lock/local delete/emergency; security test confirmation нужен **до** destructive manual testing. | Финишная независимая security/release matrix остаётся. |
 | **Финальная приёмка** | R2-21/23/24 и обязательные prerequisites | Полная production PWA + staging/prod release gates, mobile iOS/Android, backup/restore, owner acceptance. | Не заменяет ранние проверки 1–6. |
 
-**Обязательное правило для каждого раннего review:** Codex выпускает **собранный production frontend**, доступный владельцу по **отдельному HTTPS staging/preview URL** (или localhost desktop, но проверка на личном телефоне требует HTTPS и доступности). Сервис и данные строго test/staging: никогда не направлять тестовые клиенты в production старого PhotoBunker. Нельзя считать `npm run dev`, скриншот, mock-backend или unit tests достаточными. R2-01 должен включить минимальный повторяемый preview deployment, не ждать R2-24; R2-24 посвящён **финальной** инфраструктуре/релизу.
+**Обязательное правило для каждого раннего review:** ChatGPT обеспечивает **production frontend и воспроизводимый HTTPS staging/preview deployment**, Codex **тестирует именно эту сборку**, затем владелец получает **отдельный HTTPS staging/preview URL** (или localhost desktop, но проверка на личном телефоне требует HTTPS и доступности). Сервис и данные строго test/staging: никогда не направлять тестовые клиенты в production старого PhotoBunker. Нельзя считать `npm run dev`, скриншот, mock-backend или unit tests достаточными. R2-01 должен включить минимальный повторяемый preview deployment, не ждать R2-24; R2-24 посвящён **финальной** инфраструктуре/релизу.
 
 **Очередность исполнения внутри R2-1: сначала R2-04 → R2-06 (минимальная локальная галерея в scope R2-06) → R2-05 → R2-07.** R2-06 не должен зависеть от S3 и remote API; R2-07 может включать полный cloud-backed gallery после R2-05. Ранний encrypted local capture зависит от утверждённого security/key contract, но **не** от выбора конкретного S3-провайдера.
 
-**Приёмка:** Codex вправе интегрировать технический PR по правилам качества, но владелец **лично проверяет и утверждает/возвращает UX в указанных вехах**; отрицательная проверка блокирует переход к следующей зависящей пользовательской вехе, пока не исправлена проблема. Не требовать у владельца ручную проверку после каждой мелкой Issue. Результаты пишутся в GitHub Project/Issue/PR, а не теряются в чате.
+**Приёмка:** Codex вправе проверять/отклонять PR, **но не реализовывать функциональность и не выполнять merge по умолчанию**. ChatGPT исправляет найденные ошибки, владелец **отдельно разрешает merge**, затем **лично проверяет и утверждает/возвращает UX на указанных вехах**; отрицательная проверка блокирует следующий зависимый этап, пока ChatGPT не исправит проблему. Не требовать у владельца ручную проверку после каждой мелкой Issue. Результаты пишутся в GitHub Project/Issue/PR, а не теряются в чате.
 
 ## 2. Открытые продуктовые решения — обязательный gate перед реализации зависимой функции
 
@@ -116,7 +116,7 @@ Cross-module failure tests, independent security review, production build E2E, r
 - **Gate D**: Card/Browser scopes/TTL/revoke independent, no data leaks/false public grants.
 - **Gate E**: PIN destructive flows and backup/restore/recovery tested, release checklist and owner acceptance.
 
-В каждой Issue должна быть: конкретная выгода пользователю, dependencies, decision gates, happy/error/offline/reload/retry/ACL scope, API/data/storage impact, observable acceptance and NOT RUN; пустая ссылка на roadmap недостаточна.
+В каждой Issue должна быть: конкретная выгода пользователю, dependencies, decision gates, happy/error/offline/reload/retry/ACL scope, API/data/storage impact, observable acceptance и NOT RUN; пустая ссылка на roadmap недостаточна. **Автор реализации — ChatGPT; проверяющий агент — Codex**.
 
 ## 6. Вне scope
 
@@ -124,4 +124,4 @@ Messages/Matrix, LiveKit, voice/video calls, chat attachment, Presence, group ch
 
 ## 7. Актуализация
 
-Переходы статусов ведутся **только в Project/Issues**. Roadmap меняется исключительно при scope/архитектурном решении владельца; Codex фиксирует cross-cutting acceptance evidence в Issue/PR. При новом чате агенту достаточно README + AGENTS + этот roadmap + назначенный Issue: вся информация доступна в самом репозитории.
+Переходы статусов ведутся **только в Project/Issues**. Roadmap меняется исключительно при scope/архитектурном решении владельца; ChatGPT ведёт работу и её доказательства, Codex фиксирует результаты независимой проверки в Issue/PR. В любом новом чате **ChatGPT-разработчик** читает README + AGENTS + этот roadmap + назначенный Issue; **Codex** читает те же инструкции для проверки, а не для самостоятельной реализации.
