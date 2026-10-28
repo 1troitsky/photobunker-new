@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import AppIcon from './AppIcon.vue'
 import ScreenHeader from './ScreenHeader.vue'
 import { identity, IdentityPanel } from '../../identity'
+import { StorageDiagnostics } from '../../local-storage'
 import { language, setLanguage, setTheme, text, theme } from './copy'
 import { assignmentFixtures, photoFixtures } from './fixtures'
 
@@ -475,6 +476,7 @@ const title = computed(() => {
           </div>
         </section>
         <IdentityPanel />
+        <StorageDiagnostics />
       </template>
 
       <!-- CONTEXT ROUTES: purely visual previews, no save, public shares or PIN setup -->

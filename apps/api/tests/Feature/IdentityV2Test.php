@@ -73,6 +73,10 @@ final class IdentityV2Test extends TestCase
           'envelope'=>$envelope];
         $this->postIdentity('proof',$body)->assertOk()->assertJsonPath('accountId',$aid);
         $this->assertDatabaseHas('identity_devices',['account_id'=>$aid,'id'=>$deviceId]);
+        $time=$this->getJson('/identity/v2/time')->assertOk()
+            ->assertHeader('Cache-Control','no-store, private')->json('serverUtc');
+        $this->assertIsString($time);
+        $this->assertMatchesRegularExpression('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/',$time);
         $this->postIdentity('proof',$body)->assertUnauthorized();
         $new=$this->challenge(['accountId'=>$aid,'deviceId'=>$deviceId,'purpose'=>'login']);
         $wrong=['challengeId'=>$new['id'],'signature'=>$this->rawSignature($new['message'],$account['key']),
@@ -111,5 +115,6 @@ final class IdentityV2Test extends TestCase
         $this->postJson('/identity/v2/prepare',['operationId'=>(string)Str::uuid(),
           'reservationProof'=>P::encode(random_bytes(32))])->assertForbidden();
         $this->getJson('/identity/v2/devices')->assertUnauthorized();
+        $this->getJson('/identity/v2/time')->assertUnauthorized();
     }
 }

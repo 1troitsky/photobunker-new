@@ -13,6 +13,7 @@ Route::prefix('identity/v2')->middleware('throttle:40,1')->group(function () {
     Route::post('/pairings/{id}/approve', [IdentityController::class,'pairApprove']);
     Route::get('/pairings', [IdentityController::class,'pairList']);
     Route::get('/session', [IdentityController::class,'me']);
+    Route::get('/time', [IdentityController::class,'time']);
     Route::delete('/session', [IdentityController::class,'logout']);
     Route::post('/rotations/status', [IdentityController::class,'rotationStatus']);
     Route::get('/devices', [IdentityController::class,'devices']);

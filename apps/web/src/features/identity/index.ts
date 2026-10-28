@@ -7,3 +7,5 @@ export { identity, prepareCreate, pendingCreate, finishCreate, discardPending,
 export { createPB2 } from './infrastructure/crypto'
 export type { LocalDevice } from './infrastructure/storage'
 export { default as IdentityPanel } from './ui/IdentityPanel.vue'
+
+export { acquireStorageKeys, fetchAuthenticatedServerTime } from './infrastructure/identity'

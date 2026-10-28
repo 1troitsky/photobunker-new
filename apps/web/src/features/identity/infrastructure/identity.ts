@@ -2,7 +2,7 @@ import { computed, shallowRef } from 'vue'
 import { call, challenge, currentGeneration, envelopeHash, invalidateRequests, resetCsrf } from '../infrastructure/api'
 import { b64, createPB2, digest, exportECDHPublic, freshPackage, hex, importSigner, newPairingKey,
   openDevice, openPairing, openRecovery, parsePB2, random, sealDevice, sealPairing,
-  sealRecovery, sign, uuid, exchangeKey } from '../infrastructure/crypto'
+  sealRecovery, sign, uuid, exchangeKey, wrapAssetDEK, unwrapAssetDEK } from '../infrastructure/crypto'
 import type { PackageV2 } from '../infrastructure/crypto'
 import { getPending, listDevices, newLocalDevice, openIdentityDB, probeCapabilities,
   putPending, reservePending, dropPending, saveDevice, getRecoveryPending, saveRecoveryPending,
@@ -322,6 +322,43 @@ export async function backgroundSessionCheck():Promise<void>{
     }
   }catch{ /* No blocking UI or fake authentication */ }
 }
+
+/** Narrow PB2 crypto capability for the encrypted-photo module. Never exposes AKEK/package. */
+export function acquireStorageKeys() {
+  const active=state.value, epoch=currentGeneration()
+  if(!active)throw new Error('storage.account_locked')
+  const scope={accountId:active.accountId,deviceId:active.deviceId,generation:epoch}
+  const check=()=>{assertEpoch(epoch);if(state.value!==active)throw new Error('storage.account_changed')}
+  const create=async (assetId:string,expiresAt:string)=>{
+    check()
+    const wrapped=await wrapAssetDEK(active.pkg,assetId,expiresAt)
+    check()
+    const key=await unwrapAssetDEK(active.pkg,assetId,expiresAt,wrapped)
+    check()
+    return {key,wrapped}
+  }
+  const open=async(assetId:string,expiresAt:string,wrapped:{iv:string;ciphertext:string})=>{
+    check()
+    const key=await unwrapAssetDEK(active.pkg,assetId,expiresAt,wrapped)
+    check()
+    return key
+  }
+  return {scope,check,create,open}
+}
+/** An authenticated HTTPS server clock sample, never a caller-supplied wall time. */
+export async function fetchAuthenticatedServerTime():Promise<number>{
+  const active=state.value,epoch=currentGeneration()
+  if(!active || active.offline)throw new Error('time.not_authenticated')
+  const result=await call<{serverUtc:string}>('/time')
+  assertEpoch(epoch)
+  if(state.value!==active || typeof result.serverUtc!=='string' ||
+    !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(result.serverUtc))
+    throw new Error('time.invalid_server_sample')
+  const ms=Date.parse(result.serverUtc)
+  if(!Number.isSafeInteger(ms)||ms<=0)throw new Error('time.invalid_server_sample')
+  return ms
+}
+
 export async function ensureBrowserSupport():Promise<void>{await openIdentityDB();await probeCapabilities()}
 identityChannel?.addEventListener('message',event=>{if(event.data?.event==='identity-session-changed')dispose()})
 if(typeof window!=='undefined')window.addEventListener('pagehide',()=>dispose())
