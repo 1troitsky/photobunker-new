@@ -1,6 +1,6 @@
 # PhotoBunker — новая версия
 
-**Состояние на 28.10.2026:** архитектурные инварианты **APPROVED**, реализация начата. Codex выполняет **R2-01**: создан Vue/TypeScript PWA workspace, production build/test harness/CI и GitHub Project; внешний HTTPS preview остаётся последним deployment gate перед передачей R2-02 ChatGPT. Garage и PostgreSQL не входят в R2-01.
+**Состояние на 28.10.2026:** архитектурные инварианты **APPROVED**, реализация начата. Codex выполняет **R2-01**: создан Vue/TypeScript PWA workspace, локальный production build/test harness и GitHub Project; внешний HTTPS preview остаётся последним deployment gate перед передачей R2-02 ChatGPT. Garage и PostgreSQL не входят в R2-01.
 
 PhotoBunker — защищённое фотоприложение: камера, локальная галерея, задания и команды, редактор, Photo Card, защищённый Photo Browser, три независимых PIN-сценария. Мобильное PWA и desktop. **Мессенджера/Matrix/чатов/звонков в этой версии нет.**
 
@@ -24,7 +24,7 @@ PhotoBunker — защищённое фотоприложение: камера,
 | Участник | Обязанности |
 | --- | --- |
 | **Владелец** | Продуктовые решения, приоритеты, ручные проверки на телефоне/desktop, разрешения merge/release |
-| **Codex** | Технический координатор **с доступом к окружению**: установка зависимостей, Project/CI/production preview, выдача ChatGPT Ready Issues, code review, тесты **и самостоятельная доработка того же PR** при необходимости |
+| **Codex** | Технический координатор **с доступом к окружению**: установка зависимостей, локальные проверки, Project/production preview, выдача ChatGPT Ready Issues, code review, тесты **и самостоятельная доработка того же PR** при необходимости |
 | **ChatGPT** | **Основная масса реализации по Issue** благодаря доступным лимитам: код, ветка, один Draft PR, передача Codex; проверки по доступным инструментам, без обязанности дублировать тестовое окружение Codex |
 
 **Codex не подчинён ChatGPT и не ограничен ролью пассивного рецензента.** Он вправе настраивать инфраструктуру, писать тесты и исправлять код. ChatGPT не назначает Codex задачи и не навязывает ему лишние процедуры. Правила подробнее — [COLLABORATION.md](COLLABORATION.md), [AGENTS.md](AGENTS.md), [CHATBOT-AGENTS.md](CHATBOT-AGENTS.md).

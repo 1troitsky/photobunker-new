@@ -10,7 +10,7 @@ Closes #<ISSUE_NUMBER>
 
 ## Изменённые контракты / зависимости / байты / ACL / TTL / keys
 
-- [ ] domain/application/infrastructure/ui границы соблюдены и CI catches illegal imports
+- [ ] domain/application/infrastructure/ui границы соблюдены и локальная architecture-проверка отклоняет illegal imports
 - [ ] нет Matrix, RTC, старого plaintext prototype
 - [ ] нет persistent plaintext и сохранения в системную галерею
 - [ ] три режима хранения и original lifecycle не нарушены
