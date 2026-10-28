@@ -12,6 +12,7 @@ type Active={accountId:string; deviceId:string; pkg:PackageV2; device:LocalDevic
 const state=shallowRef<Active|null>(null)
 export const identity=computed(()=>{const s=state.value;return s?{accountId:s.accountId,deviceId:s.deviceId,offline:s.offline}:null})
 const disposers=new Set<()=>void>()
+const identityChannel=typeof BroadcastChannel==='undefined'?null:new BroadcastChannel('photobunker-identity-v2')
 let pairing: {accountId:string; device:LocalDevice; key:CryptoKeyPair; token:string; id:string; fingerprint:string}|undefined
 const objectUrls=new Set<string>()
 export function registerDecryptedObjectUrl(url:string):void{objectUrls.add(url)}
@@ -26,7 +27,7 @@ function dispose(){
 }
 export function onIdentityCleanup(fn:()=>void):()=>void {disposers.add(fn);return()=>disposers.delete(fn)}
 export async function logout():Promise<void>{
-  try{await call('/session','DELETE')}finally{dispose();resetCsrf()}
+  try{await call('/session','DELETE')}finally{dispose();resetCsrf();identityChannel?.postMessage({event:'identity-session-changed'})}
 }
 export function forgetRuntime():void{dispose();resetCsrf()}
 export async function availableDevices():Promise<LocalDevice[]> {return listDevices()}
@@ -62,6 +63,7 @@ async function prove(purpose:string,payload:Record<string,string>,
 async function activated(device:LocalDevice,pkg:PackageV2,offline=false):Promise<void>{
   dispose()
   state.value={accountId:device.accountId,deviceId:device.deviceId,pkg,device,offline}
+  identityChannel?.postMessage({event:'identity-session-changed'})
 }
 export async function finishCreate(encoded:string):Promise<{accountId:string}>{
   const epoch=currentGeneration()
@@ -139,6 +141,7 @@ export async function restore(encoded:string):Promise<void>{
 }
 export async function switchAccount(accountId:string,deviceId:string):Promise<void>{
   dispose()
+  identityChannel?.postMessage({event:'identity-session-changed'})
   const epoch=currentGeneration()
   resetCsrf()
   const devices=await listDevices()
@@ -233,7 +236,7 @@ export async function revokeDevice(id:string):Promise<void>{
   const current=state.value
   if(!current||current.offline)throw new Error('identity.requires_online')
   await call('/devices/'+id,'DELETE')
-  if(id===current.deviceId)dispose()
+  if(id===current.deviceId){dispose();identityChannel?.postMessage({event:'identity-session-changed'})}
 }
 export async function sessionStatus():Promise<{accountId:string;deviceId:string;revision:number}>{
   return call('/session')
@@ -253,3 +256,5 @@ export async function backgroundSessionCheck():Promise<void>{
   }catch{ /* No blocking UI or fake authentication */ }
 }
 export async function ensureBrowserSupport():Promise<void>{await openIdentityDB();await probeCapabilities()}
+identityChannel?.addEventListener('message',event=>{if(event.data?.event==='identity-session-changed')dispose()})
+if(typeof window!=='undefined')window.addEventListener('pagehide',()=>dispose())

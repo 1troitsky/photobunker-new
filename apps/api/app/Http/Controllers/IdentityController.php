@@ -166,6 +166,8 @@ final class IdentityController extends Controller
                     abort_unless($pair && $pair->account_id===$account->id && $pair->device_id===$p['deviceId']
                         && $pair->device_spki===$p['deviceSpki'] && $pair->approved_by && !$pair->consumed_at
                         && now()->lessThan($pair->expires_at),401);
+                    abort_unless(DB::table('identity_devices')->where('id',$pair->approved_by)
+                        ->where('account_id',$account->id)->whereNull('revoked_at')->exists(),401);
                     DB::table('identity_pairings')->where('id',$pair->id)->update(['consumed_at'=>now()]);
                 }
                 $this->insertDevice($account->id,$p['deviceId'],$p['deviceSpki']);

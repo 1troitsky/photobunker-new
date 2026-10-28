@@ -33,6 +33,8 @@ export default defineConfig({
       'Permissions-Policy': 'camera=(self), geolocation=(self)',
       'Referrer-Policy': 'no-referrer',
       'X-Content-Type-Options': 'nosniff',
+      'Cross-Origin-Resource-Policy': 'same-origin',
+      'Content-Security-Policy': "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; worker-src 'self'; require-trusted-types-for 'script'",
     },
   },
   test: {
