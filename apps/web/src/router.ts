@@ -5,6 +5,7 @@ const WelcomeView = () => import('./features/ui-preview/ui/WelcomeView.vue')
 const IdentityPage = () => import('./features/identity/ui/IdentityPage.vue')
 const AppShell = () => import('./features/ui-preview/ui/AppShell.vue')
 const MainScreens = () => import('./features/ui-preview/ui/MainScreens.vue')
+const LocalPhotoViewer = () => import('./features/camera/ui/LocalPhotoViewer.vue')
 
 /* Shell always opens without blocking HTTP; Identity v2 is initialized lazily. */
 export const router = createRouter({
@@ -19,6 +20,7 @@ export const router = createRouter({
       component: AppShell,
       children: [
         { path: 'photos', name: 'photos', component: MainScreens },
+        { path: 'photos/:photoId', name: 'local-photo-viewer', component: LocalPhotoViewer, props: true },
         { path: 'camera', name: 'camera', component: MainScreens },
         { path: 'assignments', name: 'assignments', component: MainScreens },
         { path: 'browser', name: 'browser', component: MainScreens },

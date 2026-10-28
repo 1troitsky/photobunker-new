@@ -5,6 +5,7 @@ import AppIcon from './AppIcon.vue'
 import ScreenHeader from './ScreenHeader.vue'
 import { identity, IdentityPanel } from '../../identity'
 import { StorageDiagnostics } from '../../local-storage'
+import { CameraScreen, LocalPhotosScreen } from '../../camera'
 import { language, setLanguage, setTheme, text, theme } from './copy'
 import { assignmentFixtures, photoFixtures } from './fixtures'
 
@@ -13,14 +14,9 @@ const search = ref('')
 const selectedFilter = ref<'all'|'active'|'personal'>('all')
 const view = ref<'grid'|'list'>('grid')
 const selectedFolder = ref('ALFA')
-const showGrid = ref(false)
 const editorTool = ref<'brush'|'text'|'shape'>('brush')
 
 watch(() => route.path, () => { search.value = ''; selectedFilter.value = 'all' })
-const photos = computed(() => photoFixtures.filter(p =>
-  p.title[language.value].toLocaleLowerCase().includes(search.value.toLocaleLowerCase()) ||
-  p.id.toLowerCase().includes(search.value.toLowerCase())
-).filter(p => selectedFilter.value !== 'personal' || p.assignment === 'PERSONAL'))
 const assignments = computed(() => assignmentFixtures.filter(a =>
   (selectedFilter.value !== 'active' || a.status === 'active') &&
   (a.title[language.value].toLocaleLowerCase().includes(search.value.toLocaleLowerCase()) ||
@@ -53,15 +49,9 @@ const title = computed(() => {
   >
     <ScreenHeader
       :title="title"
-      :subtitle="text.preview"
+      :subtitle="['/photos','/camera'].includes(route.path)?undefined:text.preview"
       :back="['/editor/preview','/photo-card/preview'].includes(route.path)?'/photos': route.path === '/pin/preview'?'/profile':undefined"
     >
-      <RouterLink
-        v-if="route.path==='/photos'"
-        to="/photo-card/preview"
-        class="icon-button"
-        :aria-label="text.openCard"
-      ><AppIcon name="info" /></RouterLink>
       <button
         v-if="route.path==='/profile'"
         type="button"
@@ -75,154 +65,19 @@ const title = computed(() => {
 
     <div class="screen-body">
       <div
+        v-if="!['/photos','/camera'].includes(route.path)"
         class="preview-notice"
         role="note"
       >
         <AppIcon name="info" />{{ text.previewInfo }}
       </div>
 
-      <!-- PHOTOS: local fixtures and working filter/navigation only -->
+      <!-- R2-06: real encrypted photos and camera; no preview fixtures. -->
       <template v-if="route.path==='/photos'">
-        <div class="section-heading">
-          <div><span class="eyebrow">{{ text.demo }}</span><h2>{{ text.recent }}</h2><p>{{ text.photoHint }}</p></div>
-          <RouterLink
-            class="subtle-button"
-            to="/editor/preview"
-          ><AppIcon name="edit" />{{ text.editor }}</RouterLink>
-        </div>
-        <div class="toolbar">
-          <label class="search-field"><AppIcon name="search" /><span class="sr-only">{{ text.search }}</span><input
-            v-model="search"
-            type="search"
-            :placeholder="text.search"
-            :aria-label="text.search"
-          ></label>
-          <div
-            class="pill-group"
-            :aria-label="text.filter"
-          >
-            <button
-              type="button"
-              :class="{ selected: selectedFilter==='all' }"
-              :aria-pressed="selectedFilter==='all'"
-              @click="selectedFilter='all'"
-            >
-              {{ text.all }}
-            </button>
-            <button
-              type="button"
-              :class="{ selected: selectedFilter==='personal' }"
-              :aria-pressed="selectedFilter==='personal'"
-              @click="selectedFilter='personal'"
-            >
-              {{ text.personal }}
-            </button>
-          </div>
-          <div
-            class="pill-group view-switch"
-            :aria-label="text.galleryView"
-          >
-            <button
-              type="button"
-              :class="{ selected: view==='grid' }"
-              :aria-label="text.grid"
-              :aria-pressed="view==='grid'"
-              @click="view='grid'"
-            >
-              <AppIcon name="grid" />
-            </button>
-            <button
-              type="button"
-              :class="{ selected: view==='list' }"
-              :aria-label="text.list"
-              :aria-pressed="view==='list'"
-              @click="view='list'"
-            >
-              <AppIcon name="list" />
-            </button>
-          </div>
-        </div>
-        <div
-          v-if="photos.length"
-          class="photo-gallery"
-          :class="{ 'gallery-list': view==='list' }"
-        >
-          <RouterLink
-            v-for="photo in photos"
-            :key="photo.id"
-            class="photo-tile"
-            to="/photo-card/preview"
-            :aria-label="photo.title[language]+' — '+text.openCard"
-          >
-            <div
-              class="photo-art"
-              :class="photo.art"
-            ><span class="fake-photo-label">{{ text.demo }}</span></div>
-            <div class="photo-caption"><strong>{{ photo.title[language] }}</strong><small>{{ photo.id }} · {{ photo.date }}</small></div>
-          </RouterLink>
-        </div>
-        <div
-          v-else
-          class="empty-state"
-        >
-          <AppIcon name="search" /><h2>{{ text.empty }}</h2><p>{{ text.emptyHint }}</p>
-        </div>
+        <LocalPhotosScreen />
       </template>
-
-      <!-- CAMERA: realistic preview, no getUserMedia, no fake save -->
       <template v-else-if="route.path==='/camera'">
-        <div class="camera-preview">
-          <div class="camera-preview-top">
-            <span class="status-pill"><AppIcon name="shield" />{{ text.preview }}</span>
-            <button
-              class="icon-button on-dark"
-              :aria-pressed="showGrid"
-              :aria-label="text.gridToggle"
-              type="button"
-              @click="showGrid=!showGrid"
-            >
-              <AppIcon name="grid" />
-            </button>
-          </div>
-          <div class="camera-viewfinder">
-            <div
-              v-if="showGrid"
-              class="viewfinder-grid"
-              aria-hidden="true"
-            />
-            <div class="camera-offline">
-              <div class="camera-large-icon">
-                <AppIcon name="camera" />
-              </div>
-              <h2>{{ text.cameraOff }}</h2><p>{{ text.cameraOffDesc }}</p>
-            </div>
-            <span class="viewfinder-corner top-left" /><span class="viewfinder-corner top-right" />
-            <span class="viewfinder-corner bottom-left" /><span class="viewfinder-corner bottom-right" />
-          </div>
-          <div class="camera-actions">
-            <RouterLink
-              to="/photos"
-              class="camera-side-action"
-              :aria-label="text.photos"
-            ><AppIcon name="photos" /><small>{{ text.photos }}</small></RouterLink>
-            <button
-              type="button"
-              class="shutter-button"
-              disabled
-              :aria-label="text.shutter"
-            >
-              <span />
-            </button>
-            <RouterLink
-              to="/assignments"
-              class="camera-side-action"
-              :aria-label="text.assignments"
-            ><AppIcon name="assignments" /><small>{{ text.assignments }}</small></RouterLink>
-          </div>
-          <p class="camera-hint">
-            {{ text.cameraHint }}
-          </p>
-        </div>
+        <CameraScreen />
       </template>
 
       <!-- ASSIGNMENTS: local search/filter, cards never imply actual creation -->
