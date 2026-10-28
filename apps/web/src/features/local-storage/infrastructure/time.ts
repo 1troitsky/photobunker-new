@@ -81,6 +81,9 @@ export class BrowserTimeAuthority implements TimeAuthority{
     }
     this.check()
     if(!saved)return clockError('missing')
+    // A concurrent authenticated refresh is stronger than the persisted
+    // anchor. Never let a slower reload path overwrite that newer proof.
+    if(live&&match(live.scope,this.grant.scope))return this.status()
     const wall=Date.now(),restored=restoreClock(saved.serverUtc,saved.lastObservedWallUtc,wall)
     if(!restored.trusted)return clockError('wall_jump')
     const monotonic=performance.now()
@@ -99,7 +102,8 @@ export class BrowserTimeAuthority implements TimeAuthority{
     this.check()
     if(prior && fetched<prior.serverUtc-MAX_CLOCK_SKEW_MS)return clockError('corrupt')
     // A new authenticated server proof establishes a new monotonic live window.
-    const authoritativeFloor=Math.max(fetched,prior?.serverUtc??0)
+    const liveFloor=live&&match(live.scope,this.grant.scope)?live.proofBase:0
+    const authoritativeFloor=Math.max(fetched,prior?.serverUtc??0,liveFloor)
     const wall=Date.now(),monotonic=performance.now()
     await save(this.grant.scope,authoritativeFloor,wall,this.grant)
     this.check()
