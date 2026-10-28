@@ -64,12 +64,12 @@ Assignment required capture parameters are versioned and frozen at capture; role
 
 ## 7. OPEN decisions before contract freeze
 
-- exact compression profiles/format and browser support (ST-08);
-- thumbnail permissions, formats, remote/cache strategy (ST-05/06);
+- exact compression profiles/format and browser support (ST-08), **не путать с уже выбранным WebP ≤320px для thumbnail**;
+- **Thumbnail уже определён:** один encrypted WebP ≤320px, S3 + bounded encrypted local cache, без постоянного preview. Детальная capability matrix thumbnail-only permission — в составе ACL review;
 - key generation/device recovery (ST-04);
-- S3 provider/deployment, quotas/cleanup/retention (ST-09/14);
+- **S3/TTL уже выбраны:** Garage через адаптер, фото 24ч–45д по заданию с expiry и полным cleanup. OPEN только числовые бюджеты инфраструктуры, recovery/backup и provider deployment;
 - whether version history beyond one current edit exists (ST-07);
-- share export semantics, TTL, recipients (ST-10);
+- share export semantics/recipients (ST-10); **любой share/derivative истекает не позже фото и подлежит физическому cleanup**;
 - data migration from old Photobunker (ST-11).
 
 **Не реализовать чужую догадку об этих решениях под видом задачи из backlog.**
