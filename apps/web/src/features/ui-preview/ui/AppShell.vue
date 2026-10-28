@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import AppDock from './AppDock.vue'
+import { useRoute } from 'vue-router'
+const route = useRoute()
 import AppIcon from './AppIcon.vue'
 import { language, setLanguage, setTheme, text, theme } from './copy'
 </script>
@@ -19,7 +21,7 @@ import { language, setLanguage, setTheme, text, theme } from './copy'
         >
         <span>PhotoBunker</span>
       </RouterLink>
-      <span class="shell-preview">{{ text.preview }}</span>
+      <span v-if="!route.path.startsWith('/photos') && route.path!=='/camera'" class="shell-preview">{{ text.preview }}</span>
       <div class="shell-tools">
         <button
           type="button"

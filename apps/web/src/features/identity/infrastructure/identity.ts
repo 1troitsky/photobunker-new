@@ -19,6 +19,7 @@ const identityChannel=typeof BroadcastChannel==='undefined'?null:new BroadcastCh
 let pairing: PairingPending|undefined
 const objectUrls=new Set<string>()
 export function registerDecryptedObjectUrl(url:string):void{objectUrls.add(url)}
+export function revokeDecryptedObjectUrl(url:string):void{objectUrls.delete(url);URL.revokeObjectURL(url)}
 function assertEpoch(epoch:number):void{if(epoch!==currentGeneration())throw new DOMException('Account changed','AbortError')}
 function dispose(){
   invalidateRequests()
