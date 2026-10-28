@@ -10,17 +10,17 @@
 
 ## 1. Источники и правила исполнения
 
-Прежде каждой задачи прочесть `AGENTS.md`, `CHATBOT-AGENTS.md`, `COLLABORATION.md`, этот roadmap, профильные docs, [аудит](https://github.com/1troitsky/photobunker/blob/main/docs/AUDIT-20261028.md) и [checklist](https://github.com/1troitsky/photobunker/blob/main/docs/CHECKLIST.md). Из старого проекта можно брать спецификации/тест-векторы, но нельзя слепо копировать монолитный frontend/схему вечного immutable original.
+Прежде каждой задачи прочесть **только новые нормативные документы**: `AGENTS.md`, `CHATBOT-AGENTS.md`, `COLLABORATION.md`, этот roadmap, [Product Acceptance Baseline](13-PRODUCT-ACCEPTANCE-BASELINE.md), профильные contracts [Identity](11-IDENTITY-AND-KEYS.md), [Browser Storage/Time](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md) и Issue. [Legacy audit](https://github.com/1troitsky/photobunker/blob/main/docs/AUDIT-20261028.md) и [checklist](https://github.com/1troitsky/photobunker/blob/main/docs/CHECKLIST.md) — справочные, **только для конкретной связанной задачи**, не источник требований в обход нового baseline. Из старого проекта можно брать спецификации/тест-векторы, но нельзя слепо копировать монолитный frontend/схему вечного immutable original.
 
 **Проект создаётся целиком заранее:** полный backlog Issues формируется сразу для всех фаз. `Ready` — только проверенная следующая работа без OPEN решений. Статусы, WIP и передача между тремя участниками — в `COLLABORATION.md`.
 
-**GitHub Project:** board planned: `PhotoBunker New — Development`, `https://github.com/users/1troitsky/projects`. **Пока не создан/не подключён через доступный интеграционный интерфейс.** Issues реально созданы, но поле Status в Project нельзя считать заполненным до ручного добавления. См. [COLLABORATION.md](../COLLABORATION.md).
+**GitHub Project:** `PhotoBunker New — Development` **ещё не создан / не связан с Issues** (проверка на 28.10.2026). **Codex создаёт и заполняет Project в R2-01** с доступным ему GitHub CLI/полномочиями. 26 Issues существуют, но статус Project не считается заполненным до подтверждения. См. [COLLABORATION.md](../COLLABORATION.md).
 
 **Рабочий цикл:** **Codex** подготавливает зависимости, GitHub Project/CI/production preview и **выдаёт ChatGPT Ready Issue**. **ChatGPT** делает объёмную реализацию и Draft PR; **Codex** проверяет diff, запускает/дописывает тесты и **при необходимости дорабатывает тот же PR**, затем согласованно интегрирует после разрешения владельца. `Accepted` — только после ручной проверки владельцем. Благодаря лимитам ChatGPT исполняет большую часть Issues, но техническим координатором остаётся Codex.
 
 ## 1.1. Codex организует и проверяет, ChatGPT реализует по Issues, владелец принимает
 
-**Ни одного большого переноса из старого репозитория.** `photobunker` — источник проверяемых contracts, test vectors, user journeys и ограниченно пригодных компонентов, **не** исходный код, который копируется целиком. Для каждого reuse Codex оценивает допустимость переноса, ChatGPT по его задаче документирует «переиспользовать / адаптировать / заменить» и последствия; старые `apps/web` mega-stores, Matrix, RTC, plaintext prototype не импортируются. Сохранение Laravel 13 как технологии не равно копированию старого API или БД.
+**Ни одного большого переноса из старого репозитория. User/Account — стабильная центральная Identity (без монолитной модели). Будущие Billing/Subscription и Messenger — независимые подключаемые contexts; сейчас только их стабильные contracts, никаких SDK/реализации.** `photobunker` — источник проверяемых contracts, test vectors, user journeys и ограниченно пригодных компонентов, **не** исходный код, который копируется целиком. Для каждого reuse Codex оценивает допустимость переноса, ChatGPT по его задаче документирует «переиспользовать / адаптировать / заменить» и последствия; старые `apps/web` mega-stores, Matrix, RTC, plaintext prototype не импортируются. Сохранение Laravel 13 как технологии не равно копированию старого API или БД.
 
 **Принцип — UI first, production first, local-first, owner feedback early.** Владелец проверяет **вехи**, а не каждую мелкую Issue. До демонстрации следующего модуля не нужно завершать весь roadmap.
 
@@ -42,7 +42,7 @@
 
 ## 2. Открытые продуктовые решения — обязательный gate перед реализации зависимой функции
 
-В [03-PHOTO-STORAGE.md](03-PHOTO-STORAGE.md) **утверждены** ST-01/02/03/05/06/09/12/13: local encrypted → S3 (первый адаптер Garage), три режима originals, **один WebP thumbnail ≤320px, без постоянного preview, TTL каждого фото 24 часа — 45 дней по заданию с полной очисткой**. **Не блокирующие UI вопросы:** ST-04 recovery ключей, ST-07 undo history, ST-08 конкретный профиль сжатия, ST-10 share export, ST-11 migration, ST-15 ретроактивные изменения. Codex определяет безопасные технические детали/предлагает владельцу продуктовые решения **по мере соответствующей Issue**. Вопросы миниатюр/S3/срока хранения больше **не OPEN**.
+В [03-PHOTO-STORAGE.md](03-PHOTO-STORAGE.md) утверждены ST-01/02/03/05/06/09/12/13, первый S3 backend Garage. **ST-04 recovery технический baseline уже зафиксирован** в [11](11-IDENTITY-AND-KEYS.md); **ST-16 browser storage** и **ST-17 trusted-time** — в [12](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md). Перед R2-03/R2-04 Codex делает crypto/device security review и реальные Safari probes, но **не возвращает вопросы хранения в общий дизайн-блокер**. Поздние OPEN — редакторская история (ST-07), fullres compression (ST-08), shares (ST-10), legacy migration (ST-11), изменение уже существующего TTL (ST-15).
 
 Для первой версии режим 1 (no additional compression) показан **disabled**, не имитируется. Mode 2 хранит compressed source и отдельный edited current, mode 3 default безопасно заменяет compressed master. **Миниатюры и 24ч–45д TTL уже закреплены, см. ST-05/06/09**; каждая редакторская версия, derivative и связанная metadata удаляются по expiry.
 
@@ -53,10 +53,10 @@ IDs стабильны; каждому соответствует **отдель
 | ID | Фаза | Пункт | Priority | Зависит от / gate |
 | --- | --- | --- | --- | --- |
 | [R2-00](https://github.com/1troitsky/photobunker-new/issues/1) | Foundation | Проверить инварианты, выбрать недостающие **только для ближайшей Issue** технические решения | P0 | Codex + владелец лишь по существенным вопросам |
-| [R2-01](https://github.com/1troitsky/photobunker-new/issues/2) | Foundation | **Codex setup:** зависимости, инструменты, Laravel 13, production build, modular boundaries CI и HTTPS preview; объёмную реализацию выдаёт ChatGPT отдельными Ready Issues | P0 | Не ждать решений про recovery/editor/share; выбран Garage и storage policy |
+| [R2-01](https://github.com/1troitsky/photobunker-new/issues/2) | Foundation | **Codex setup:** workspace, Vue/TS, production build, CI/import boundaries, test harness, `.gitignore`, Project, HTTPS preview; **никакой интеграции PostgreSQL/Garage** | P0 | Архитектура APPROVED; R2-00 не gate для UI |
 | [R2-02](https://github.com/1troitsky/photobunker-new/issues/3) | Foundation | UI/design system, пять основных экранов, production navigation с fixture-only UI preview | P0 | R2-01, утверждение UX владельцем |
-| [R2-03](https://github.com/1troitsky/photobunker-new/issues/4) | Foundation | Account/Device identity, session/recovery, независимый от сети shell | P0 | R2-01, security decisions R2-00 |
-| [R2-04](https://github.com/1troitsky/photobunker-new/issues/5) | Storage | Encrypted local photo & metadata store, crash journal, outbox, account scopes | P0 | R2-03; ST-04 key/recovery implications, TTL **уже решён** |
+| [R2-03](https://github.com/1troitsky/photobunker-new/issues/4) | Foundation | **Create account/Sign in/Recover + verified email, trusted first device, encrypted recovery secret, new device pairing, session isolation** | P0 | R2-01/02; [11 Identity/Keys](11-IDENTITY-AND-KEYS.md) + Codex crypto/security review, не ждать R2-21 |
+| [R2-04](https://github.com/1troitsky/photobunker-new/issues/5) | Storage | **Dexie/IndexedDB metadata/outbox**, OPFS encrypted blobs + encrypted IDB Blob fallback, trusted-time rollback policy, crash journal | P0 | R2-03; [11](11-IDENTITY-AND-KEYS.md) + [12](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md); Safari real-device capability gates |
 | [R2-05](https://github.com/1troitsky/photobunker-new/issues/6) | Storage | Idempotent encrypted S3 sync, readback, TTL, orphan GC; **scheduled batch deletion** | P0 | R2-04; Garage/24ч–45д TTL/thumb policy утверждены |
 | [R2-06](https://github.com/1troitsky/photobunker-new/issues/7) | Capture | Camera/capture/photo compression policies modes 2/3, mode 1 disabled, no system gallery; **minimal local photo list/view for first real manual test** | P0 | R2-02/03/04; ST-08; **not R2-05** |
 | [R2-07](https://github.com/1troitsky/photobunker-new/issues/8) | Photos | Gallery, metadata, NAME-ID, **one WebP ≤320px per photo**, bounded encrypted cache, GPS | P0 | R2-05/06; ST-05/06 утверждены |
@@ -73,7 +73,7 @@ IDs стабильны; каждому соответствует **отдель
 | [R2-18](https://github.com/1troitsky/photobunker-new/issues/19) | Security | App Lock PIN optional, configured attempts/cooldown, account/device scope | P0 | R2-03 |
 | [R2-19](https://github.com/1troitsky/photobunker-new/issues/20) | Security | Local Delete PIN, backup/recovery preflight, exact-device cleanup | P0 | R2-05/18; ST-04 recovery, TTL утверждён |
 | [R2-20](https://github.com/1troitsky/photobunker-new/issues/21) | Security | Emergency PIN, immediate lock + signed durable server intent, crash/retry | P0 | R2-19; independent threat review |
-| [R2-21](https://github.com/1troitsky/photobunker-new/issues/22) | UX | Welcome, profiles/settings, theme, RU/EN, accessible production UI | P0 | R2-02/18 |
+| [R2-21](https://github.com/1troitsky/photobunker-new/issues/22) | UX | **Full Welcome visual/copy polish**, profile/settings, themes, RU/EN, accessibility; **не реализация login/recover** | P0 | R2-02/03/18; базовые auth screens уже в R2-03 |
 | [R2-22](https://github.com/1troitsky/photobunker-new/issues/23) | Extensions | Geo-based gallery filters, map opt-in, non-blocking GPS | P2 | R2-07/10 |
 | [R2-23](https://github.com/1troitsky/photobunker-new/issues/24) | Assurance | Independent security, fault injection and release E2E hardening | P0 | P0 core modules R2-03–21 |
 | [R2-24](https://github.com/1troitsky/photobunker-new/issues/25) | Delivery | Staging/prod deployment, backup-restore, rollback, mobile PWA acceptance | P0 | R2-23 |
@@ -84,7 +84,7 @@ IDs стабильны; каждому соответствует **отдель
 ## 4. Фазы по результату
 
 ### R2-0 Foundation: R2-00–03
-**Codex** начинает технический setup, устанавливает зависимости/проверочные инструменты и выдаёт ChatGPT первую Ready Issue; разработка shell идёт через PR ChatGPT, а Codex тестирует и допиливает. Исполняемый production app shell, изолированная архитектура, дизайн-система и identity. UI preview без серверного поведения допускается **только явно отмеченный** и не выдаётся за готовую функцию. Начальные gates проверяют production camera capability независимо от dev flags и import-boundary негативными примерами.
+**R2-01 только минимальный frontend/CI/Project/HTTPS preview**, не Garage/PostgreSQL. **R2-02** — пять экранов и первая ручная UX-проверка, не ждать backend. **R2-03** — реальная Create account/Sign in/Recover + first device/recovery по [11](11-IDENTITY-AND-KEYS.md), до камеры; shell не блокирует HTTP. Codex подготавливает, выдаёт ChatGPT задачи, тестирует и допиливает. UI preview без серверного поведения допускается **только явно отмеченный** и не выдаётся за готовую функцию. Начальные gates проверяют production camera capability независимо от dev flags и import-boundary негативными примерами.
 
 ### R2-1 Storage and capture: R2-04–07
 **Execution: R2-04 → R2-06 → R2-05 → R2-07.** Ранний просмотр локального фото входит в R2-06; ждать полного S3 и галереи для первого теста камеры запрещено. Реальная камера, encrypted local files + metadata DB, durable background S3 sync, ограниченные derived assets, галерея, GPS/NAME-ID. **Конечный результат:** offline photo survives reload and safe sync, no system gallery, no plaintext at rest.
@@ -102,14 +102,16 @@ Photo Card (card-only policy), encrypted share with isolated rendition, Browser 
 Три PIN механизма, recovery preflight, error paths, offline emergency. No false promises on secure erase.
 
 ### R2-6 Product UI: R2-21–22, R2-25
-Welcome, Settings, profile, localization, geo UI, performance/a11y, unobtrusive tips. Hardware/browser acceptance never replaced by a screenshot.
+**Только расширенный Welcome/дизайн/copy polish и Settings/profile**, локализация, геофильтры, performance/a11y, tips. **Минимальные auth/recovery screens должны существовать уже в R2-03**. Hardware/browser acceptance never replaced by a screenshot.
 
 ### R2-7 Release: R2-23–24
 Cross-module failure tests, independent security review, production build E2E, real iOS/Android checks, backup/restore and deployment. Stop/release decision based on evidence.
 
 ## 5. Stage gates: нельзя двигаться дальше без
 
-- **Gate A (после R2-02):** frameworks/stack and relevant OPEN policies approved; CI guards block invalid imports/dev-only release paths; владелец **сам проверил** интерактивную production preview-оболочку по HTTPS на телефоне и desktop.
+- **Gate A (после R2-02):** архитектура APPROVED; CI и import-boundaries реально проверены, production HTTPS preview работает; владелец проверил UI на телефоне/desktop **без Garage/PostgreSQL**.
+- **Gate Identity/Keys (после R2-03):** first trusted device bootstrap, email verified, login/reset/recover/pairing, two accounts, partial retry — тесты Codex PASS, без device-unconfirmed deadlock.
+- **Gate Browser Storage/Time (после R2-04):** Safari OPFS/fallback/persist, encrypted IndexedDB + blobs, rollback detection, crash recovery — тесты Codex PASS.
 - **Gate B1 (после R2-06):** реальная камера -> encrypted commit -> минимальный локальный просмотр -> offline/reload в **production** PWA, без S3, без записи в системную галерею, владелец проверил.
 - **Gate B2 (после R2-05/R2-07):** sync -> S3 readback -> полная галерея, бюджет assets и cleanup доказаны, владелец проверил.
 - **Gate C**: assignment capture/ACL + editor modes + multi-user authorized access, zero unauthorized paths.
