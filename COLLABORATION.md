@@ -29,6 +29,8 @@ Project: **[PhotoBunker New — Development](https://github.com/users/1troitsky/
 
 **Codex выдаёт ChatGPT Issue** только если её зависимости интегрированы, scope достаточно ясен, продуктовые решения по этой функции приняты, можно провести тесты и выполнен узкий read-only legacy-check. В Issue обязателен раздел `Legacy evidence` с точными путями старого репозитория и решением `REUSE / ADAPT / REFERENCE / REJECT`; отсутствие такого раздела означает, что Issue ещё не Ready. Вопросы, которые относятся к поздним стадиям (например, key recovery), не блокируют UI foundation. Вопросы технической реализации Codex решает в рамках контрактов; значимые изменения продуктовых правил согласует с владельцем.
 
+Эта проверка выполняется **для каждой Issue, а не один раз на весь проект и не по памяти чата**. Codex читает релевантные локальные файлы старого проекта; ChatGPT повторно читает перечисленные пути через GitHub. Месяц прежней разработки не объявляется мусором: рабочие assets, UX, контракты, алгоритмы и тесты сохраняются после проверки, а подтверждённо дефектные связанные части не переносятся.
+
 ## 5. Цикл по задаче
 
 1. **Codex** выполняет **узкий R2-01 setup** (workspace + локальный production build/import rules, HTTPS preview, test harness, Project, `.gitignore`; **НЕ интегрирует PostgreSQL/Garage в этом Issue**). Затем передаёт ChatGPT **R2-02 Ready**. R2-03 включает anonymous key-only Create/Restore и pairing без email/password, R2-04 — Dexie/OPFS/crypto, R2-05 — Garage/DB sync.

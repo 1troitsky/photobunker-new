@@ -29,7 +29,9 @@ PhotoBunker — защищённое фотоприложение: камера,
 
 **Codex не подчинён ChatGPT и не ограничен ролью пассивного рецензента.** Он вправе настраивать инфраструктуру, писать тесты и исправлять код. ChatGPT не назначает Codex задачи и не навязывает ему лишние процедуры. Правила подробнее — [COLLABORATION.md](COLLABORATION.md), [AGENTS.md](AGENTS.md), [CHATBOT-AGENTS.md](CHATBOT-AGENTS.md).
 
-## Исторические источники — справочные, не обязательные для каждой задачи
+## Старый PhotoBunker — обязательная read-only сверка для каждой задачи
+
+Старый `1troitsky/photobunker` не изменяется и не переносится целиком, но **не игнорируется**. Перед переводом каждой Issue в `Ready` Codex читает релевантную старую реализацию и записывает в Issue точные пути и решения `REUSE / ADAPT / REFERENCE / REJECT`. ChatGPT обязан открыть эти пути через GitHub перед написанием кода. Так повторно используются проверенные assets, UX, алгоритмы и тесты, а новый baseline остаётся нормативным источником требований.
 
 - **[Аудит 28.10.2026 — AUDIT-20261028.md](https://github.com/1troitsky/photobunker/blob/main/docs/AUDIT-20261028.md)** — исторический диагноз; требования «не повторять» уже внесены в [07 Quality](docs/07-QUALITY-AND-RELEASE.md).
 - **[Legacy CHECKLIST.md](https://github.com/1troitsky/photobunker/blob/main/docs/CHECKLIST.md)** — исторический источник; актуальные обязательные требования **полностью выделены** в [13 — Product Acceptance Baseline](docs/13-PRODUCT-ACCEPTANCE-BASELINE.md).
