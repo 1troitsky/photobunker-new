@@ -28,9 +28,9 @@
 
 | Scenario | Minimum proof |
 | --- | --- |
-| Identity | Account create/sign-in, safe recovery, 2 devices, logout, account switch, no stale decrypted UI |
+| Identity | **R2-03:** email/verified registration and recover, first trusted device no confirmation deadlock, 2 devices pairing/recovery secret, mid-registration reload/retry, password reset ≠ photo key, account switch no stale decrypted UI |
 | Camera | Actual iPhone/Android browser permission, take 3 photos, airplane mode, reload, view local gallery, system gallery unchanged |
-| Crypto | No plaintext after save in IDB/OPFS/cache/logs; decrypt on authorized device; corrupt/invalid data denied |
+| Crypto | Dexie/IndexedDB sensitive fields encrypted, OPFS encrypted blob with encrypted IDB fallback; no plaintext after save in cache/logs; readback on authorized device, corrupt/invalid data denied; actual Safari capability/persist denied |
 | Storage policy | Modes 2 and 3, mode 1 UI disabled and server rejects unauthorized selection; edit replacement no persistent orphan; storage-full rollback |
 | Sync/S3 | Offline queue, durable retry after browser restart, lost ACK replay exactly once, quota, tombstone prevents resurrection, read-back/restore |
 | Assignments | 2 accounts, invitation/role transitions, status workflow, snapshot retention mode, denied actor, stale revision |
@@ -39,7 +39,7 @@
 | Photo Browser | Grid/List/Tree; 1–20 assignments as specified, same membership and per-photo ACL, no bearer leakage, ZIP only permitted |
 | PIN | App lock, delete preflight, emergency offline/online, crash mid-wipe, key removal, truthful cloud confirmation |
 | PWA | Fresh install, reload/offline, low-storage, background/resume, safe-area, 320px mobile, desktop, RU/EN |
-| Operations | Garage encrypted objects + key recovery, **24h–45d expiry**, indexed scheduler / batch deletion jobs, cascade purge originals/edits/WebP thumbnail/metadata/shares, local cleanup after resume, rollback |
+| Operations | Garage encrypted objects + key recovery, **24h–45d expiry**, indexed scheduler / batch deletion jobs, cascade purge originals/edits/WebP thumbnail/metadata/shares, **last trusted server time + clock rollback fail closed**, local cleanup after resume, rollback |
 
 ## 4. Release fail/stop policy
 
