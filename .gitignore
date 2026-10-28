@@ -47,3 +47,21 @@ Thumbs.db
 *.log
 *.tmp
 *.swp
+
+# R2-03 Laravel backend local state
+/apps/api/vendor/
+/apps/api/.env
+/apps/api/.env.*
+!/apps/api/.env.example
+/apps/api/bootstrap/cache/*.php
+/apps/api/storage/logs/*
+/apps/api/storage/framework/cache/*
+/apps/api/storage/framework/sessions/*
+/apps/api/storage/framework/views/*
+/apps/api/database/*.sqlite
+
+!/apps/api/bootstrap/cache/.gitkeep
+!/apps/api/storage/logs/.gitkeep
+!/apps/api/storage/framework/sessions/.gitkeep
+!/apps/api/storage/framework/views/.gitkeep
+!/apps/api/storage/framework/cache/data/.gitkeep

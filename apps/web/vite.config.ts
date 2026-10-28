@@ -4,11 +4,19 @@ import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const identityProxy = process.env.PHOTOBUNKER_IDENTITY_PROXY
+
 export default defineConfig({
   plugins: [
     vue(),
     VitePWA({
+      injectRegister: false,
       registerType: 'autoUpdate',
+      workbox: {
+        inlineWorkboxRuntime: true,
+        skipWaiting: true,
+        clientsClaim: true,
+      },
       manifest: {
         id: '/',
         name: 'PhotoBunker',
@@ -28,11 +36,14 @@ export default defineConfig({
     }),
   ],
   preview: {
+    proxy: identityProxy ? { '/identity/v2': { target: identityProxy } } : undefined,
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Permissions-Policy': 'camera=(self), geolocation=(self)',
       'Referrer-Policy': 'no-referrer',
       'X-Content-Type-Options': 'nosniff',
+      'Cross-Origin-Resource-Policy': 'same-origin',
+      'Content-Security-Policy': "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; worker-src 'self'; trusted-types photobunker-pwa; require-trusted-types-for 'script'",
     },
   },
   test: {

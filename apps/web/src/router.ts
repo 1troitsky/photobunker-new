@@ -2,18 +2,18 @@ import { createRouter, createWebHistory } from 'vue-router'
 import FoundationView from './features/foundation/ui/FoundationView.vue'
 
 const WelcomeView = () => import('./features/ui-preview/ui/WelcomeView.vue')
-const AccountPreviewView = () => import('./features/ui-preview/ui/AccountPreviewView.vue')
+const IdentityPage = () => import('./features/identity/ui/IdentityPage.vue')
 const AppShell = () => import('./features/ui-preview/ui/AppShell.vue')
 const MainScreens = () => import('./features/ui-preview/ui/MainScreens.vue')
 
-/* UI-only canonical routes. No network/auth/store guards or startup hooks. */
+/* Shell always opens without blocking HTTP; Identity v2 is initialized lazily. */
 export const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/', redirect: '/welcome' },
     { path: '/welcome', name: 'welcome', component: WelcomeView },
-    { path: '/account/create', name: 'account-create-preview', component: AccountPreviewView },
-    { path: '/account/restore', name: 'account-restore-preview', component: AccountPreviewView },
+    { path: '/account/create', name: 'account-create', component: IdentityPage },
+    { path: '/account/restore', name: 'account-restore', component: IdentityPage },
     {
       path: '/',
       component: AppShell,

@@ -25,15 +25,16 @@ test('all eleven preview routes render on production bundle, including after rel
   }
 })
 
-test('anonymous Create/Restore have no credentials input or fake success', async ({ page }) => {
+test('anonymous Create/Restore use only PB2, never email/password fields', async ({ page }) => {
   await page.goto('/welcome')
   await page.getByRole('link', { name: /Create new account|Создать новый аккаунт/i }).click()
   await expect(page).toHaveURL(/\/account\/create$/)
-  await expect(page.locator('input')).toHaveCount(0)
+  await expect(page.locator('input[type=email], input[type=password]')).toHaveCount(0)
   await expect(page.getByText(/Recovery Key|ключ восстановления/i).first()).toBeVisible()
   await page.getByRole('link', { name: /Restore access|Восстановить доступ/i }).click()
   await expect(page).toHaveURL(/\/account\/restore$/)
-  await expect(page.locator('input')).toHaveCount(0)
+  await expect(page.locator('input[type=email], input[type=password]')).toHaveCount(0)
+  await expect(page.locator('textarea')).toHaveCount(1)
 })
 
 test('dock navigates five primary screens with camera center and no messaging runtime', async ({ page }) => {
