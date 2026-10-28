@@ -33,7 +33,7 @@
 2. Legacy encrypted original/preview/thumbnail/version **not** mandatory package; only explicitly necessary derivatives in budget with lifecycle.
 3. Photo local encrypted only and no system gallery, separate metadata DB, background S3 sync — mandatory.
 4. Checklists §3/4/6/10 and references to chat, Messenger, voice, LiveKit excluded from new release; do not create hidden work through generic checklist compliance.
-5. Checklist 2015(?) [sic] — all source dates should be derived from actual GitHub; do not turn historical status checklist into assertion that a function works.
+5. Исторический checklist не является подтверждением того, что функции реально работают; даты, статусы и результаты проверять по источнику, а не предполагать.
 
 ## Old-audit P0 -> hard preventive gates
 
