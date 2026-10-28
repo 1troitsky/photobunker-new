@@ -1,0 +1,45 @@
+# Dependencies / build products
+/node_modules/
+/vendor/
+/dist/
+/build/
+/coverage/
+/.phpunit.cache/
+/.cache/
+/.vite/
+/.next/
+/.nuxt/
+
+# Laravel / local state
+/.phpunit.result.cache
+/bootstrap/cache/*.php
+/storage/logs/*
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/database/*.sqlite
+/public/storage
+
+# Sensitive configuration (keep documented examples)
+/.env
+/.env.*
+!/.env.example
+!/.env.testing.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+id_rsa*
+*.recovery
+*.secret
+
+# Local development artifacts
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log
+*.tmp
+*.swp
