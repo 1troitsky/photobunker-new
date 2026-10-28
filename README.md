@@ -47,6 +47,13 @@
 - [09 — Operations](docs/09-OPERATIONS.md): инфраструктура, восстановление и эксплуатация.
 - [10 — Карта исходного чеклиста](docs/10-CHECKLIST-MAP.md): что переносим и что не входит в новую версию.
 
+## Текущая подготовка GitHub
+
+- **Roadmap:** [R2-00…R2-25](docs/08-ROADMAP.md) — 26 независимых результатов с зависимостями и критериями.
+- **Issues:** [полный backlog #1–#26](https://github.com/1troitsky/photobunker-new/issues) создан, все задачи пока открыты; ни одна не является автоматически Ready.
+- **GitHub Projects v2:** **НЕ СОЗДАН / НЕ ПОДКЛЮЧЁН** — используемый GitHub connector не имеет операций Projects v2. Владелец создаёт доску **PhotoBunker New — Development** в [своих Projects](https://github.com/users/1troitsky/projects) и добавляет все 26 Issues; поля и статусы описаны в [COLLABORATION.md](COLLABORATION.md). После этого ссылку и реальный статус нужно записать здесь и в COLLABORATION.md. Не считать Issues уже находящимися на Project.
+- **Реализация/PR/CI:** **НЕ НАЧИНАЛИСЬ**. Архитектурные OPEN ST не закрыты произвольно; разработка только после явного разрешения владельца и Ready gate.
+
 ## Правила совместной разработки
 
 - **[AGENTS.md](AGENTS.md)** — обязательные правила всех агентов.
