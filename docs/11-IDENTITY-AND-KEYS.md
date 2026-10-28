@@ -1,59 +1,71 @@
-# 11. Identity, доверенные устройства и восстановление ключей
+# 11. Anonymous key-only Identity, trusted devices and key recovery
 
-**Статус: технический baseline для R2-03/R2-04, 28.10.2026.** Это **нормативный контракт первого релиза**, не утверждение, что реализация уже существует или прошла security audit. Codex проверяет криптопротокол и UX на реальных устройствах перед переводом зависимых задач в Ready. Изменение пользовательских обещаний требует решения владельца; выбор библиотек/DTO внутри требований ведёт Codex.
+**Status: normative technical baseline for R2-03/R2-04, 28.10.2026.** PhotoBunker v1 has no email, phone number, username/password login, password reset or identity-provider dependency. The application creates a private pseudonymous account controlled by one high-entropy **Account Recovery Key**. Losing that key and every enrolled trusted device means permanent loss of the account and encrypted data. No support or server-side bypass exists.
 
-## 1. Пользователь — главная сущность идентификации, НЕ монолит всего продукта
+This is a privacy-oriented pseudonymous identity, not a promise of network anonymity: hosting and network operators can still observe ordinary connection metadata unless a separate anonymity layer is added later.
 
-**User / Account** — стабильная глобальная идентичность (`user_id` UUID/ULID; окончательное имя таблицы определяется серверным контрактом). Не зависит от email, username, тарифа, мобильного устройства и подписок. `Profile` — публичное представление личности; `Device` — отдельное доверенное устройство; `Session` — конкретная аутентификация. Смена email/профиля не должна менять `user_id` и связи с Photo/Team/Assignment.
+## 1. Stable account identity without personal identifiers
 
-Модули **Photo, Assignment, Team, Card, Browser** ссылаются на `user_id` и ограниченные способности (`capabilities`) через Identity/Authorization API, но **не используют** прямые внутренние модели/таблицы другого модуля. Нет циклических зависимостей и гигантской `User`-модели со всеми настройками системы.
+`Account` has a server-generated opaque `accountId` and an account authentication public key. `Profile`, `Device` and `Session` are separate records. A display name/handle is optional profile data and is never a login credential.
 
-### Расширяемость без преждевременных интеграций
+Photo, Assignment, Team, Card and Browser refer to `accountId` and capabilities through the public Identity/Authorization API. Billing or Messenger may be separate future modules, but they cannot become startup dependencies and must not reuse photo encryption keys. Messenger/Matrix/RTC are outside the current release.
 
-- **Billing/Subscription** в будущем — отдельный модуль: subscription owner может быть User или Team, тариф/платёж/срок не хранить в Photo/Camera; сервис `EntitlementPort` сообщает права на платные возможности по account/team scope. Никаких обязательных SDK/платежей в первом релизе.
-- **Messenger** в будущем — отдельный подключаемый модуль с собственными данными, privacy/keys и жизненным циклом; использует `user_id`/Device/ACL, но Identity shell и PhotoBunker **никогда** не ждут подключения Messenger. В текущем scope никаких Matrix/RTC/чата и hidden messaging initializers.
-- Добавление Gallery/Notes/новых продуктов не меняет регистрацию и ключи существующих пользователей и не требует изменения схемы других модулей. Domain contracts версионируются, тестируются на совместимость.
+The one user-visible recovery key encodes a version, non-secret account locator, at least 256 random secret bits and a checksum in a human-safe form. The exact encoding and cryptographic primitives require Codex review and versioned test vectors before R2-03. The raw secret is never sent to the server, logged, placed in URLs, analytics, localStorage or persistent browser caches.
 
-## 2. Вход в первом релизе: конкретный пользовательский сценарий
+## 2. Key hierarchy — no single content key for every photo
 
-**Технический baseline v1:** email + пароль для создания аккаунта/входа, подтверждение email по одноразовой короткоживущей ссылке; reset пароля через email. Пароль аутентифицирует **сервисную учётную запись**, **не** является самостоятельным ключом расшифрования фото. Серверная авторизация, rate limits, secure session cookies/CSRF и защита от enumeration обязательны. Смена пароля сама по себе **не** теряет фото и **не** предоставляет ключи новому устройству.
+- **Account signing keypair:** proves account control by signing short-lived server challenges. The server stores only the public key.
+- **Account Key Encryption Key (AKEK):** wraps data-encryption keys; it never encrypts photo bytes directly.
+- **Per-asset DEK:** every photo asset, edited rendition, thumbnail and independently shared object receives a fresh random AEAD data key. Sensitive metadata uses a separately scoped key/envelope. A compromised asset key must not reveal unrelated assets.
+- **Recovery envelope:** the Recovery Key derives a wrapping key that encrypts a versioned account key package containing the private account signing material and AKEK. The server stores ciphertext only.
+- **Device envelope:** each trusted device has its own keypair and local envelope for the account key package. Device keys and recovery keys are separate.
 
-**Passkeys/SSO** можно добавить позже как отдельный вход через Identity provider adapter; не требуется включать WebAuthn в первую UI/crypto реализацию. Клиент хранит только ограниченные session references, не секреты в localStorage. Не смешивать `email verified` и `trusted device`.
+Every encrypted envelope includes an algorithm/version, key ID, account ID, asset/photo ID, purpose, revision and required lifetime context as authenticated data. Rotation is versioned: replacing a recovery key or device envelope does not require encrypting all photo bytes again; AKEK rotation re-wraps DEKs rather than reusing one global content key.
 
-## 3. Первый доверенный device без ошибки «устройство не подтверждено»
+Do not invent a custom AEAD or KDF. Algorithms, browser support, envelope serialization, nonces, rotation and test vectors must pass an explicit security review before encrypted storage work becomes Ready.
 
-Состояния регистрации: `pending_account` → `email_verified` → `keys_created` → `first_device_enrolled` → `ready`; отдельные `needs_recovery`, `revoked`, `failed_retryable`. Переходы идут по idempotency key, server-owned account/device proof и CAS; никакое частичное состояние не трактуется как `ready`.
+## 3. Account creation and first trusted device
 
-1. Пользователь создаёт учётную запись; сервер возвращает только ограниченный регистрационный сеанс. Возможны retry/resend подтверждения и cancel без дублей.
-2. После подтверждения email браузер генерирует **криптографически случайный** root content key в WebCrypto. Приватный ключевой материал **не отправляется открытым на сервер**. Контракты wrapping и криптопримитивы утверждает Codex после threat review; не писать самодельную криптографию.
-3. Создаётся **первое** устройство и локальный защищённый envelope, позволяющий этому браузеру открыть root key. Бэкенд **атомарно идемпотентно** связывает verified account, первый device proof и bootstrap status — **не требует одобрения ещё не существующего trusted device**.
-4. Создаётся независимый **recovery secret** с высокой энтропией (минимум 256 бит из CSPRNG), предлагается пользователю как recovery phrase/key с подтверждением хранения. Root key шифруется отдельным ключом, полученным из recovery secret, и только **зашифрованный recovery envelope** сохраняется на сервере.
-5. Статус `ready` возможен лишь после доказанной возможности расшифровать локальный и recovery envelopes тестовым unlock. При отказе сервера/reload клиент **продолжает** ту же регистрацию по idempotency key, без генерации второго несовместимого root. При утрате ключа до завершения bootstrap виден честный recovery/restart flow с явным предупреждением; нельзя молча создавать новый identity и терять фото.
-6. Только после готовности trust chain разрешены создание encrypted фото и вход на другие устройства. Shell/Sign in/Recover должны показываться без ожидания сетевых запросов; серверный вход требует сеть, offline access к уже разрешённым данным — локальный gate.
+Bootstrap states: `pending` → `account_keys_created` → `first_device_enrolled` → `ready`; also `needs_recovery`, `revoked`, `failed_retryable`. Every transition uses an idempotency key, proof-of-possession and CAS. A partial state is never treated as ready.
 
-**Защита ключей**: фраза/секрет восстановления не хранится сервером, в логах, IndexedDB, localStorage, analytics или URL. Браузерный storage не эквивалент аппаратному Secure Enclave; невозможность гарантировать защиту от OS/root/browser compromise — часть threat model. Локальный ключ должен быть защищён механизмом, доступным в PWA, и независим от обычного UI PIN. Не обещать, что произвольный PIN делает root key криптографически безопасным.
+1. The client generates the Recovery Key, account signing keypair, AKEK and first device keypair locally.
+2. It builds and locally verifies the encrypted recovery and device envelopes before claiming success.
+3. The server atomically creates the opaque account, stores the account public key and encrypted recovery envelope, and enrolls the first device. The first device never waits for approval from another device.
+4. The user must save and confirm the single Recovery Key before the bootstrap is considered complete. The application clearly states that there is no email/password reset and no administrative recovery.
+5. Lost ACK, reload or retry continues the same bootstrap with the same operation ID and keys. It must never create a second incompatible account silently.
+6. The account becomes `ready` only after the client proves it can unlock both recovery and first-device envelopes and the server verifies a signed challenge.
 
-## 4. Второе устройство и recovery
+The public shell and Create/Restore screens render without waiting for HTTP. Creating or restoring an account requires a network connection; an already enrolled device may unlock authorized local ciphertext offline.
 
-**Новый device по умолчанию UNTRUSTED**, даже при правильном email/password. Для доступа к существующим encrypted фото нужно одно из:
-- **Pairing с действующим trusted device:** короткоживущий однократный challenge + out-of-band проверка/подтверждение; root/decryption capability передаётся **только в зашифрованном envelope на публичный ключ нового устройства**, с проверкой владельца, привязкой к device identity и replay resistance.
-- **Recovery phrase:** пользователь аутентифицируется в аккаунте, вводит phrase локально на новом устройстве, клиент получает server-stored **encrypted** recovery envelope, проверяет integrity, расшифровывает root и создаёт новый device envelope. Сервер не получает phrase/выведенный recovery key/открытый root.
+## 4. Sign in, restoration and a second device
 
-Подтверждение нового устройства **не** должно ждать авторизации тем же новым устройством — это повторяет прежний deadlock. Ошибка pairing/интернета возвращает recoverable state без потери действующего устройства. Восстановление password через email восстанавливает **вход**, но **не расшифрование данных**. Если все trusted devices и recovery phrase утрачены, старые E2EE-фото криптографически невосстановимы; интерфейс предупреждает об этом до начала съёмки.
+There is no password sign-in. A trusted device authenticates by signing a fresh, short-lived, single-use server challenge, then receives a bounded secure session cookie. CSRF protection, replay resistance, rate limits and abuse controls remain mandatory.
 
-При удалении/отзыве устройства сессии и новые server-read grants закрываются; криптографическая ротация ключей/старые offline copies имеют ограничения, которые нужно тестировать, а не обещать удалённое стирание выключенного устройства.
+On a new device the user chooses one of two paths:
 
-## 5. Переключение аккаунтов
+- **Enter the Account Recovery Key:** its locator retrieves the encrypted recovery envelope; the secret decrypts it locally. The client signs a server challenge and enrolls a new device envelope. The server never receives the secret, derived wrapping key, AKEK or private signing key.
+- **Pair with an existing trusted device:** a short-lived one-time challenge and explicit out-of-band confirmation transfer the account key package only as an envelope encrypted to the new device public key.
 
-Каждая browser profile может содержать несколько accounts, но разделы OPFS и IndexedDB индексируются по **неизменному accountId и deviceId**. При switch/logout немедленно уничтожить runtime references на расшифрованные bytes/ключи и object URLs, отменить или игнорировать stale tasks/responses, reset Pinia UI, scoped sync workers/outbox/policy. **Не уничтожать автоматически** ciphertext другого аккаунта. Вновь выбранный аккаунт требует своего unlock и rights verification, данные чужого аккаунта не появляются даже на один frame.
+Failed, replayed, expired or revoked challenges do not damage existing devices. The new device must not approve itself. A user with an active trusted device may rotate/export a new Recovery Key after explicit confirmation; old recovery envelopes are revoked without changing existing photo ciphertext.
 
-## 6. Обязательная acceptance R2-03
+If the Recovery Key and all trusted devices are gone, restoration is impossible. The UI must state this before the first photo is captured and must never offer a fake support reset.
 
-- Create / verify / sign in / sign out / recover / change password, **частичная регистрация на каждом шаге** и повтор после reload/network failure.
-- Первый device bootstrap без «unconfirmed device» deadlock; correct account/session binding.
-- Второй device через **pairing** и через **recovery phrase**, negative wrong/replayed/expired/revoked proof, lost-device flow.
-- Two accounts in one browser, stale async callbacks, reboot, offline unlock, encrypted photo readback; нет plaintext root/phrase в IndexedDB/OPFS/logs.
-- Недоступный сервер не блокирует public shell и логин-экран; не обещать полноценный новый Sign in offline.
-- Из независимых тестов Codex: orphan bootstrap/duplicates, corrupt recovery envelope, lost ack/resend, cryptographic vectors and version migrations.
+## 5. Browser device-key protection and account switching
 
-**Приоритет:** сделать эти контракты до начала R2-03 и особенно R2-04. Не откладывать recovery «на потом» и не строить доступ к фото без пути восстановления.
+The PWA cannot promise Secure Enclave protection. The selected implementation should prefer non-extractable WebCrypto device keys persisted by structured clone where supported, protected by strict CSP/Trusted Types and minimal same-origin code. Capability and recovery tests are mandatory. An App Lock PIN is a separate UI gate and must not be represented as the Recovery Key or sole protection of the account key package.
+
+OPFS and IndexedDB are scoped by immutable `accountId` and `deviceId`. Account switch/logout immediately clears runtime plaintext, decrypted surfaces, object URLs and Pinia state; cancels or rejects stale tasks/responses; and stops scoped workers/outboxes. It does not silently delete another account's ciphertext. Returning to an account requires its enrolled device proof or the Recovery Key.
+
+Revoking a device closes sessions and future server reads. Already downloaded offline ciphertext and keys cannot be remotely erased while a device is disconnected; this limitation must be stated honestly and tested.
+
+## 6. Mandatory R2-03 acceptance
+
+- Create account, save/confirm key, first-device enrollment and signed session; failure/reload/lost ACK at every bootstrap phase.
+- Restore on a new device with the one Recovery Key and through pairing; wrong/checksum-invalid/replayed/expired/revoked proofs fail closed.
+- Regression: first device never shows an impossible “confirm from another device” gate.
+- Recovery-key rotation from an existing trusted device and explicit permanent-loss UX when no key/device exists.
+- Two accounts in one browser, account switch, stale callbacks, reboot and offline unlock with no cross-account frame or key exposure.
+- Per-asset DEKs, versioned envelopes, corruption/tampering tests and key-rotation test vectors.
+- No raw Recovery Key, account private key, AKEK or plaintext DEK in logs, URLs, analytics, localStorage, IndexedDB or OPFS.
+
+R2-03 and especially R2-04 cannot be marked Ready until Codex reviews the protocol and executable test vectors. R2-01/R2-02 UI work does not depend on that review.

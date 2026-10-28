@@ -10,7 +10,7 @@
 
 ## 1.1. Минимальный вход — R2-03, не ждать полноценного Welcome
 
-**R2-02** показывает работающие маршруты **Create account / Sign in / Recover** с явными демоданными и маркировкой UI preview. **R2-03** реализует эти действия на реальном backend, включая email confirmation, partial registration retry, первый trusted device, recovery secret, pairing и переключение аккаунтов. **R2-21** оставляет развёрнутый Welcome (четыре реальные преимущества), визуальные improvements и дополнительные Settings; он **не является dependency для первого входа/камеры**. Конкретный контракт [11](11-IDENTITY-AND-KEYS.md).
+**R2-02** показывает маршруты **Create account / Restore access** с явными демоданными и маркировкой UI preview. **R2-03** реализует key-only account: создание/подтверждение единственного Recovery Key, первый trusted device, восстановление ключом или pairing и переключение аккаунтов. Никаких email/password/reset. **R2-21** оставляет развёрнутый Welcome, визуальную полировку и Settings; он не является dependency для первого входа/камеры. Контракт [11](11-IDENTITY-AND-KEYS.md).
 
 ## 2. Обязательные состояния для каждого экрана
 

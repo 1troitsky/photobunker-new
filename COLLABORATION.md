@@ -14,14 +14,14 @@
 
 - [README](README.md) и [13 Product Baseline](docs/13-PRODUCT-ACCEPTANCE-BASELINE.md) — нормативный полный scope нового приложения; legacy ссылки исключительно для исторической проверки;
 - [08 Roadmap](docs/08-ROADMAP.md) — **единственный** план и контрольные точки;
-- [03 Storage](docs/03-PHOTO-STORAGE.md) — режимы, thumbnails, S3, TTL 24ч–45д; [11 Identity](docs/11-IDENTITY-AND-KEYS.md) — login/device/recovery; [12 Local Storage/Time](docs/12-CLIENT-STORAGE-AND-TRUSTED-TIME.md) — Dexie/OPFS/trusted clock;
+- [03 Storage](docs/03-PHOTO-STORAGE.md) — режимы, thumbnails, S3, TTL 24ч–45д; [11 Identity](docs/11-IDENTITY-AND-KEYS.md) — anonymous key-only account/device/recovery; [12 Local Storage/Time](docs/12-CLIENT-STORAGE-AND-TRUSTED-TIME.md) — Dexie/OPFS/trusted clock;
 - [AGENTS](AGENTS.md), [CHATBOT-AGENTS](CHATBOT-AGENTS.md) — правила технической работы;
 - Issues — scope и acceptance, GitHub Project — состояние/очередь, PR — diff, review, tests;
 - [07 Quality](docs/07-QUALITY-AND-RELEASE.md) — реальная production проверка.
 
 ## 3. Project и WIP
 
-Project: **PhotoBunker New — Development** с Issues #1–#26. Статусы **Backlog → Ready → In Progress → Review → Integrated → Accepted**, также **Blocked/Cancelled**. По необходимости поля Priority P0/P1/P2, Phase, Risk, Owner. Виды: Board и Roadmap. **Codex** с GitHub CLI/другими доступными средствами подготавливает Projects v2, добавляет все Issues и выставляет статусы. Если Project пока не существует, это организационная задача Codex; не представлять доску созданной.
+Project: **[PhotoBunker New — Development](https://github.com/users/1troitsky/projects/14)** с Issues #1–#26. Статусы **Backlog → Ready → In Progress → Review → Integrated → Accepted**, также **Blocked/Cancelled**. По необходимости поля Priority P0/P1/P2, Phase, Risk, Owner. Codex ведёт актуальные статусы через GitHub API; Issue #2/R2-01 переведена в In Progress 28.10.2026.
 
 **WIP:** ChatGPT не берёт более одного активного Issue, Codex руководит выдачей следующих задач и тестированием с учётом своих ограниченных лимитов. Дубли Issue и конкурирующие roadmap не создавать.
 
@@ -31,7 +31,7 @@ Project: **PhotoBunker New — Development** с Issues #1–#26. Статусы 
 
 ## 5. Цикл по задаче
 
-1. **Codex** выполняет **узкий R2-01 setup** (workspace + production build, CI/import rules, HTTPS preview, test harness, Project, `.gitignore`; **НЕ интегрирует PostgreSQL/Garage в этом Issue**). Затем передаёт ChatGPT **R2-02 Ready**. R2-03 включает реальную регистрацию/Sign in/Recover, R2-04 — Dexie/OPFS/crypto, R2-05 — Garage/DB sync.
+1. **Codex** выполняет **узкий R2-01 setup** (workspace + production build, CI/import rules, HTTPS preview, test harness, Project, `.gitignore`; **НЕ интегрирует PostgreSQL/Garage в этом Issue**). Затем передаёт ChatGPT **R2-02 Ready**. R2-03 включает anonymous key-only Create/Restore и pairing без email/password, R2-04 — Dexie/OPFS/crypto, R2-05 — Garage/DB sync.
 2. **ChatGPT** разрабатывает код в отдельной ветке и создаёт один **Draft PR** с `Closes #N`. Если окружение позволяет — запускает доступные проверки, но не дублирует весь цикл Codex и не обязан самостоятельно строить полноценную тестовую инфраструктуру.
 3. **Codex** читает полный diff, проверяет безопасность, архитектуру и production build, выполняет unit/integration/E2E/hardware tests, **сам допиливает/исправляет PR при необходимости**, либо отправляет ChatGPT конкретную следующую задачу. Повторяет тесты после своих исправлений. PR остаётся один.
 4. После review и зелёных обязательных гейтов **Codex интегрирует только в пределах разрешения владельца на merge**. Никаких незапрошенных изменений `main`, force push или auto-merge.

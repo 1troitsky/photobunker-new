@@ -18,7 +18,7 @@
 
 - **Новый проект, не массовый перенос legacy.** Новый [самостоятельный product baseline](docs/13-PRODUCT-ACCEPTANCE-BASELINE.md) — нормативный источник требований. Старый PhotoBunker — только исторический reference для test vectors и потенциально пригодных частей кода; Codex оценивает пригодность/риски. Огромные Vue stores, plaintext prototype, Matrix/RTC/чаты исключены.
 - **UI-first + production-first:** R2-01 — фундамент/production build и проверяемый HTTPS preview, R2-02 — пять экранов для первой приёмки владельца; не ждать завершения всех 26 Issues. Выпускать и тестировать реальный `build`, не только dev.
-- **Identity-first без блокировки UI:** стабильный User/Account ID — центральная идентификация, Profile/Device/Session/keys отдельно, независимые будущие Billing/Messenger modules (не реализовывать сейчас). Email/password + verified email, first-device bootstrap без deadlock, pairing и recovery secret до R2-04, минимальные Create account/Sign in/Recover уже в R2-03. См. [11](docs/11-IDENTITY-AND-KEYS.md).
+- **Anonymous key-only Identity:** никаких email, телефона, username/password или server reset. Единственный Account Recovery Key содержит locator+секрет; trusted devices используют challenge signatures. Потеря ключа и всех устройств необратима. Account wrapping key только оборачивает отдельные per-asset DEK и никогда не шифрует весь архив напрямую. См. [11](docs/11-IDENTITY-AND-KEYS.md).
 - **Local-first:** shell не ждёт HTTP; capture → encrypt → durable Dexie/IndexedDB photo metadata/journal/outbox + OPFS ciphertext (encrypted IndexedDB Blob fallback) → Garage S3 sync **позже, не в R2-01**. Pinia — ephemeral UI. Browser storage capabilities/persist, trusted time and clock rollback tested per [12](docs/12-CLIENT-STORAGE-AND-TRUSTED-TIME.md).
 - **Фото только зашифровано при постоянной локальной записи**, не попадает в системные Photos/DCIM, приватные metadata в DB защищены. Ключи, PIN, GPS, фото, EXIF и токены не протекают в logs, URLs, analytics, plaintext caches.
 - **Режимы задания:** 1 — camera bytes без дополнительного сжатия, видимый disabled; 2 — compressed original + separate edit; 3 — compressed master replaced after edit, default. Выбранный режим фиксируется при capture, старые assets заменяются crash-safe.
@@ -27,6 +27,7 @@
 - **Фото, Photo Card, Note, Assignment, Team и Photo Browser — разные сущности и scopes.** Сервер проверяет ACL/TTL; PIN блокировки, локального удаления и emergency — разные механизмы. Доступ/удаление нельзя подтверждать прежде фактического источника истины.
 - **Модульные границы:** domain/application/infrastructure/ui с публичными контрактами; no cyclic feature imports, no UI raw crypto/S3/DB SDK, no giant shared store. CI должен ловить нарушения.
 - **Production security/UX:** mobile + desktop, RU/EN, offline, restart, permission denied/storage full, same/different accounts, revoke/expiry. Не называть непроверенное production-ready. Избегать destructive legacy migration.
+- **Legacy isolation:** репозиторий `1troitsky/photobunker` и любой каталог `/_old/**` только для чтения. Никогда не редактировать, stage, commit, format или переносить их содержимое массово; `/_old/` обязан быть в `.gitignore`.
 
 ## 3. Распределение работы и право исправления
 
