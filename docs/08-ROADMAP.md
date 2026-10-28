@@ -14,6 +14,8 @@
 
 **Проект создаётся целиком заранее:** полный backlog Issues формируется сразу для всех фаз. `Ready` — только проверенная следующая работа без OPEN решений. Статусы, WIP и передача между тремя участниками — в `COLLABORATION.md`.
 
+**GitHub Project:** board planned: `PhotoBunker New — Development`, `https://github.com/users/1troitsky/projects`. **Пока не создан/не подключён через доступный интеграционный интерфейс.** Issues реально созданы, но поле Status в Project нельзя считать заполненным до ручного добавления. См. [COLLABORATION.md](../COLLABORATION.md).
+
 **Review gate:** отдельная ветка и Draft PR, production build/contract tests/target e2e, diff, security evidence. `Integrated` после review и merge Codex; `Accepted` только после проверки владельцем на устройстве.
 
 ## 2. Открытые продуктовые решения — обязательный gate перед реализации зависимой функции
@@ -24,36 +26,36 @@
 
 ## 3. Фазы и полный backlog
 
-IDs стабильны; каждому соответствует **отдельный Issue**, критерии и зависимости. Не создавать дополнительную очередь в другом документе. P0 — продуктовый блокер, P1 — обязательное расширение основной функции, P2 — поздняя полировка/дополнения.
+IDs стабильны; каждому соответствует **отдельный Issue**, ссылки в первой колонке, критерии и зависимости. Не создавать дополнительную очередь в другом документе. P0 — продуктовый блокер, P1 — обязательное расширение основной функции, P2 — поздняя полировка/дополнения.
 
 | ID | Фаза | Пункт | Priority | Зависит от / gate |
 | --- | --- | --- | --- | --- |
-| R2-00 | Foundation | Зафиксировать OPEN storage/security решения, требующие одобрения | P0 | Владелец |
-| R2-01 | Foundation | Репозиторий/монорепо, Laravel 13, prod build, modular boundaries CI | P0 | выбран framework/storage adapter в R2-00 |
-| R2-02 | Foundation | UI/design system, пять основных экранов, production navigation с fixture-only UI preview | P0 | R2-01, утверждение UX владельцем |
-| R2-03 | Foundation | Account/Device identity, session/recovery, независимый от сети shell | P0 | R2-01, security decisions R2-00 |
-| R2-04 | Storage | Encrypted local photo & metadata store, crash journal, outbox, account scopes | P0 | R2-03; ST-04/09 |
-| R2-05 | Storage | Idempotent encrypted S3 sync, readback, quota, TTL, orphan GC | P0 | R2-04; ST-09/14 |
-| R2-06 | Capture | Camera/capture/photo compression policies modes 2/3, mode 1 disabled, no system gallery | P0 | R2-02/04; ST-08 |
-| R2-07 | Photos | Gallery, photo metadata, NAME-ID, preview/cache budget, GPS | P0 | R2-05/06; ST-05/06 |
-| R2-08 | Assignments | Assignment CRUD, statuses, revision, retention mode selection | P0 | R2-03/04, contract design |
-| R2-09 | Assignments | Teams, contacts, invitations, roles/grants, profile | P1 | R2-08 |
-| R2-10 | Assignments | Assignment-bound capture, versioned policy, photo ACL, photo review | P0 | R2-07/08/09 |
-| R2-11 | Editor | Editor tools and safe image replacement modes 2/3 | P0 | R2-07/10; ST-07/08 |
-| R2-12 | Metadata | Independent Photo/Assignment Notes, permissions, offline lifecycle | P1 | R2-08/10 |
-| R2-13 | Card | Photo Card independent identity/metadata/TTL/access scopes | P0 | R2-07/10/11 |
-| R2-14 | Card | Encrypted share/export, privacy mask, revoke/download scope | P0 | R2-13; ST-10 |
-| R2-15 | Browser | Protected multi-assignment Browser collection + ACL, TTL | P0 | R2-10/13 |
-| R2-16 | Browser | Finder-like Grid/List/Tree, search, sort, selection | P1 | R2-15 |
-| R2-17 | Browser | Scoped download and ZIP, quota/streaming, dynamic rights | P1 | R2-14/16; ST-10 |
-| R2-18 | Security | App Lock PIN optional, configured attempts/cooldown, account/device scope | P0 | R2-03 |
-| R2-19 | Security | Local Delete PIN, backup/recovery preflight, exact-device cleanup | P0 | R2-05/18; ST-04/09 |
-| R2-20 | Security | Emergency PIN, immediate lock + signed durable server intent, crash/retry | P0 | R2-19; independent threat review |
-| R2-21 | UX | Welcome, profiles/settings, theme, RU/EN, accessible production UI | P0 | R2-02/18 |
-| R2-22 | Extensions | Geo-based gallery filters, map opt-in, non-blocking GPS | P2 | R2-07/10 |
-| R2-23 | Assurance | Independent security, fault injection and release E2E hardening | P0 | P0 core modules R2-03–21 |
-| R2-24 | Delivery | Staging/prod deployment, backup-restore, rollback, mobile PWA acceptance | P0 | R2-23 |
-| R2-25 | Extensions | Recommendations/avatars/quality polish (no fake features) | P2 | R2-09/21 |
+| [R2-00](https://github.com/1troitsky/photobunker-new/issues/1) | Foundation | Зафиксировать OPEN storage/security решения, требующие одобрения | P0 | Владелец |
+| [R2-01](https://github.com/1troitsky/photobunker-new/issues/2) | Foundation | Репозиторий/монорепо, Laravel 13, prod build, modular boundaries CI | P0 | выбран framework/storage adapter в R2-00 |
+| [R2-02](https://github.com/1troitsky/photobunker-new/issues/3) | Foundation | UI/design system, пять основных экранов, production navigation с fixture-only UI preview | P0 | R2-01, утверждение UX владельцем |
+| [R2-03](https://github.com/1troitsky/photobunker-new/issues/4) | Foundation | Account/Device identity, session/recovery, независимый от сети shell | P0 | R2-01, security decisions R2-00 |
+| [R2-04](https://github.com/1troitsky/photobunker-new/issues/5) | Storage | Encrypted local photo & metadata store, crash journal, outbox, account scopes | P0 | R2-03; ST-04/09 |
+| [R2-05](https://github.com/1troitsky/photobunker-new/issues/6) | Storage | Idempotent encrypted S3 sync, readback, quota, TTL, orphan GC | P0 | R2-04; ST-09/14 |
+| [R2-06](https://github.com/1troitsky/photobunker-new/issues/7) | Capture | Camera/capture/photo compression policies modes 2/3, mode 1 disabled, no system gallery | P0 | R2-02/04; ST-08 |
+| [R2-07](https://github.com/1troitsky/photobunker-new/issues/8) | Photos | Gallery, photo metadata, NAME-ID, preview/cache budget, GPS | P0 | R2-05/06; ST-05/06 |
+| [R2-08](https://github.com/1troitsky/photobunker-new/issues/9) | Assignments | Assignment CRUD, statuses, revision, retention mode selection | P0 | R2-03/04, contract design |
+| [R2-09](https://github.com/1troitsky/photobunker-new/issues/10) | Assignments | Teams, contacts, invitations, roles/grants, profile | P1 | R2-08 |
+| [R2-10](https://github.com/1troitsky/photobunker-new/issues/11) | Assignments | Assignment-bound capture, versioned policy, photo ACL, photo review | P0 | R2-07/08/09 |
+| [R2-11](https://github.com/1troitsky/photobunker-new/issues/12) | Editor | Editor tools and safe image replacement modes 2/3 | P0 | R2-07/10; ST-07/08 |
+| [R2-12](https://github.com/1troitsky/photobunker-new/issues/13) | Metadata | Independent Photo/Assignment Notes, permissions, offline lifecycle | P1 | R2-08/10 |
+| [R2-13](https://github.com/1troitsky/photobunker-new/issues/14) | Card | Photo Card independent identity/metadata/TTL/access scopes | P0 | R2-07/10/11 |
+| [R2-14](https://github.com/1troitsky/photobunker-new/issues/15) | Card | Encrypted share/export, privacy mask, revoke/download scope | P0 | R2-13; ST-10 |
+| [R2-15](https://github.com/1troitsky/photobunker-new/issues/16) | Browser | Protected multi-assignment Browser collection + ACL, TTL | P0 | R2-10/13 |
+| [R2-16](https://github.com/1troitsky/photobunker-new/issues/17) | Browser | Finder-like Grid/List/Tree, search, sort, selection | P1 | R2-15 |
+| [R2-17](https://github.com/1troitsky/photobunker-new/issues/18) | Browser | Scoped download and ZIP, quota/streaming, dynamic rights | P1 | R2-14/16; ST-10 |
+| [R2-18](https://github.com/1troitsky/photobunker-new/issues/19) | Security | App Lock PIN optional, configured attempts/cooldown, account/device scope | P0 | R2-03 |
+| [R2-19](https://github.com/1troitsky/photobunker-new/issues/20) | Security | Local Delete PIN, backup/recovery preflight, exact-device cleanup | P0 | R2-05/18; ST-04/09 |
+| [R2-20](https://github.com/1troitsky/photobunker-new/issues/21) | Security | Emergency PIN, immediate lock + signed durable server intent, crash/retry | P0 | R2-19; independent threat review |
+| [R2-21](https://github.com/1troitsky/photobunker-new/issues/22) | UX | Welcome, profiles/settings, theme, RU/EN, accessible production UI | P0 | R2-02/18 |
+| [R2-22](https://github.com/1troitsky/photobunker-new/issues/23) | Extensions | Geo-based gallery filters, map opt-in, non-blocking GPS | P2 | R2-07/10 |
+| [R2-23](https://github.com/1troitsky/photobunker-new/issues/24) | Assurance | Independent security, fault injection and release E2E hardening | P0 | P0 core modules R2-03–21 |
+| [R2-24](https://github.com/1troitsky/photobunker-new/issues/25) | Delivery | Staging/prod deployment, backup-restore, rollback, mobile PWA acceptance | P0 | R2-23 |
+| [R2-25](https://github.com/1troitsky/photobunker-new/issues/26) | Extensions | Recommendations/avatars/quality polish (no fake features) | P2 | R2-09/21 |
 
 **Правило:** P0 задачи допускают параллельное проектирование, но не должны интегрироваться в обход своих зависимостей. Релиз **не** обязан включать P2; продуктовый владелец решает, необходим ли P1 browser ZIP и Notes в первой поставке. Нельзя считать P1/P2 «готовыми» до acceptance.
 
