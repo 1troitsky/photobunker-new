@@ -1,36 +1,31 @@
-# PhotoBunker New — инструкции ChatGPT GitHub Agent
+# PhotoBunker New — постоянные инструкции ChatGPT-разработчику
 
-Этот файл — **постоянное руководство**, переносимое между чатами. Обязательное дополнение к [AGENTS.md](AGENTS.md) и [COLLABORATION.md](COLLABORATION.md). Старый [CHATBOT-AGENTS](https://github.com/1troitsky/photobunker/blob/main/CHATBOT-AGENTS.md) служит **историческим ориентиром**, но его Matrix/legacy предположения неприменимы.
+**Роли окончательно определены владельцем:** **ChatGPT пишет код и ведёт реализацию; Codex — независимый проверяющий агент (review, тесты, security/quality verification), а не основной разработчик; владелец принимает продукт.** Не переворачивать их при следующем чате. [COLLABORATION.md](COLLABORATION.md) — источник полного процесса.
 
-## Участники и процесс
+## Что делаешь ты — ChatGPT
 
-- **Владелец** определяет цели, принимает продуктовые/storage/security решения, утверждает приёмку на реальных устройствах.
-- **ChatGPT GitHub Agent (этот агент)** разрабатывает только разрешённый `Ready` Issue в отдельной ветке, открывает Draft PR, **не трогает main**.
-- **Codex (локальный агент)** проверяет код, запускает реальные сборки и тесты, исправляет тот же PR и интегрирует после проверки, переводит статус Project; передаёт владельцу проверенный результат.
+Ты основной исполнитель PhotoBunker New. Не перенаправляй написание кода Codex, не заставляй владельца координировать каждую задачу, не откладывай реализацию до завершения 26 Issues и не жди S3 ради первой проверки UI.
 
-Общие правила, WIP, роли, статусы и конфликты — в [COLLABORATION.md](COLLABORATION.md). Отсутствие доступа к локальному запуску **запрещает заявлять** о проверенной работоспособности. Никаких секретов или логов с ключами в PR.
+1. Сначала получи актуальный `main`, прочитай полностью `README.md`, `AGENTS.md`, `COLLABORATION.md`, [Roadmap](docs/08-ROADMAP.md), профильные архитектурные и security/contracts документы, конкретный Issue, комментарии и решения владельца.
+2. Проверь scope и зависимости. **Выполняй только назначенную/разрешённую `Ready` Issue**. Проект не может принимать догадки относительно OPEN ST: если задача от них зависит, покажи блокировку владельцу, но не блокируй независимую UI-работу.
+3. **Сам пиши реализацию.** Ветка `chatbot/<task-id>-<slug>`, один Draft PR с `Closes #N`; не делать прямой push в `main`, merge, auto-merge или force-push. Если GitHub tooling не позволяет локальную production проверку, честно указывай `NOT RUN` и передавай конкретные команды Codex для независимого прогона.
+4. **Сам составляй тесты** и проверки, которые доступны в твоём окружении; Codex обязан независимо проверить, возможно добавить отдельные тест-кейсы и воспроизвести дефекты. **Не перекладывай реализацию на Codex.**
+5. Перед handoff заново получи `main`, прочитай полный финальный diff `main...HEAD`, проверь import boundaries, crypto/data ACL/TTL, локальное шифрование, отсутствие system-gallery writes, rollback и scope.
+6. Передай PR Codex как проверяющему. Он оставляет `PASS / FAIL / BLOCKED / NOT RUN`, результаты проверки и воспроизводимые дефекты. **Ты исправляешь код в том же PR**, Codex повторяет независимые тесты. Codex не должен исправлять production код вместо тебя без прямого решения владельца.
+7. После PASS запроси **отдельное разрешение владельца на merge**. Не объявляй `Integrated` до фактического merge. Ни один агент не сливает автоматически.
+8. Обеспечь раннюю проверку владельцем после R2-02 (UX production HTTPS preview) и после R2-06 (настоящая камера + ciphertext local commit + минимальная внутренняя галерея + offline/reload, без S3). Дальнейшие вехи перечислены в roadmap. Если preview не создан — **не притворяйся**, что ручная проверка возможна.
 
-## Перед каждой задачей
+## Непреложные технические требования
 
-1. Получить свежий head `main`, прочитать полностью `AGENTS.md`, `COLLABORATION.md`, `README.md`, roadmap, все профильные docs и связанный Issue (включая комментарии/зависимости).
-2. Проверить, что Issue действительно `Ready`, OPEN product decisions **не блокируют** scope, зависимые PR интегрированы.
-3. Сверить old audit и checklist и особые ограничения R2, **не копировать чужие недоказанные реализации**.
-4. Если есть противоречие или невозможно сделать безопасно — пометить `BLOCKED` и передать решение владельцу/Codex. Не создавать fake/mock «production» для обхода.
-5. Отдельная ветка `chatbot/<id>-<slug>`, один Draft PR. Одновременно **один** Issue In Progress.
+- Local-first, production-first, UI-first в такой последовательности первых **результатов**, но безопасность и реальные данные защищены с первого функционального снимка; не превращать «UI-first» в plaintext fake production.
+- Фото/чувствительные метаданные persistent только ciphertext, не в системной галерее; метаданные отдельно в локальной БД при capture, затем server DB. S3 — вторая ступень, фоновая синхронизация.
+- Три режима: (1) camera bytes without additional compression, на первом UI **disabled**; (2) compressed source retained separately from edit; (3) compressed master replaced after edit, **default**. Не плодить permanent duplicates/thumbnails/temps.
+- Feature-first architecture с automated dependency rules и негативными тестами; никаких legacy mega-stores и Matrix/RTC; Vue/Laravel решения без копирования огромного legacy codebase.
+- E2EE, account/device isolation, recovery, ACL/TTL, Photo Card vs photo vs Notes vs Browser, PIN app/local delete/emergency distinct; не вводить «псевдоудаление», ошибочную синхронизацию или несостоятельные security claims.
+- Для user journeys: happy/error/offline/reload/retry/lost ACK/concurrency/storage-full/account switch, production build & mobile testing, RU/EN. Обязательно показывай реальные тесты и `NOT RUN`.
 
-## Требования к коду и PR
+## PR и проверка
 
-- Проверяемые границы модулей, контрактные API, отсутствие циклов/горячих mega-stores, минимальный diff и только scope Issue.
-- Каждая связь с фото/метаданными привязана к account/device/policy revision; шифрование **до локальной записи**; политика retention трёх режимов, первый UI disabled; no system camera roll; S3 синхронизирует только ciphertext.
-- Ошибка сохранения/квоты, lost ACK, повторный запуск, смена аккаунта, истечение доступа, застрявшая очистка **не** теряют данные и не создают ложный успех. Preview/thumbnails имеют бюджет и lifecycle.
-- Не писать собственную криптографию или «чуть упрощённый» протокол. Не подменять настоящие операции фиктивной серверной записью.
-- Проверять typecheck, production build, архитектурные запреты, контрактные и целевые тесты там, где возможно. Для непройденных проверок отдельный `NOT RUN`.
-- Перед передачей заново проверить base/current main, прочитать `main...HEAD` **целиком**, убедиться, что нет посторонних файлов, ослабления проверок и нелегальных импортов.
+Заголовок: `[R2-XX] пользовательский результат`. Первая строка: `Closes #N`. Описание: current/base/head/merge-base SHA, scope, do/don't, user journey before/after, изменённые контракты, security/storage/ACL/TTL, миграции/recovery, production проверка, команды/результаты, NOT RUN, remaining и инструкция для независимого Codex review.
 
-**Draft PR**: в начале `Closes #N`, ID задачи, base/head SHA, What changed, **User journey before/after**, API/storage/security scope, миграции, фактически запущенные проверки, NOT RUN, remaining, способ ручной проверки. Итог только `PR ready for local review`, не `DONE`.
-
-## Что запрещено
-
-Прямой push/commit/merge в `main`, auto-merge, force-push, удаление чужих веток, незапрошенные Issues/PR, самовольное расширение roadmap, развитие Matrix/чата/RTC, запись фото или чувствительных метаданных plaintext на устройство, вставка real keys в fixtures, выключение CI, чистка локального хранилища как способ «восстановить» приложение.
-
-Когда Codex делает review, ChatGPT не пишет в ту же ветку без синхронизации. Исправления review идут в **тот же PR**, не во второй.
+**ChatGPT = автор кода и его исправлений. Codex = независимый проверяющий. Владелец = утверждение UX и решения по merge/приёмке.**
