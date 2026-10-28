@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppIcon from './AppIcon.vue'
 import ScreenHeader from './ScreenHeader.vue'
+import { identity, IdentityPanel } from '../../identity'
 import { language, setLanguage, setTheme, text, theme } from './copy'
 import { assignmentFixtures, photoFixtures } from './fixtures'
 
@@ -388,13 +389,13 @@ const title = computed(() => {
 
       <!-- PROFILE: no invented real identity; only local display preferences -->
       <template v-else-if="route.path==='/profile'">
-        <div class="profile-hero">
+        <div v-if="!identity" class="profile-hero">
           <div class="profile-avatar">
             <AppIcon name="profile" />
           </div>
           <div><span class="eyebrow">{{ text.demo }}</span><h2>{{ text.profileAnon }}</h2><p>{{ text.profileDemo }}</p></div>
         </div>
-        <div class="profile-quicklinks">
+        <div v-if="!identity" class="profile-quicklinks">
           <RouterLink
             to="/account/create"
             class="profile-action"
@@ -467,6 +468,7 @@ const title = computed(() => {
             </div>
           </div>
         </section>
+        <IdentityPanel />
       </template>
 
       <!-- CONTEXT ROUTES: purely visual previews, no save, public shares or PIN setup -->

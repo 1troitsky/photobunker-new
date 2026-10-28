@@ -1,0 +1,37 @@
+/* R2-03 Identity views only; no global auth state stored in CSS/localStorage. */
+.identity-form {display:grid;gap:12px;width:100%;margin:18px 0;}
+.identity-form label {font-size:13px;color:var(--secondary);font-weight:600;}
+.identity-form textarea,.identity-form input:not([type=checkbox]),.identity-pair-request input {
+ width:100%;border:1px solid var(--border);background:var(--background);color:var(--text);
+ border-radius:12px;padding:13px;min-height:48px;font-size:14px;overflow-wrap:anywhere;
+}
+.identity-form textarea {resize:vertical;font-family:ui-monospace,SFMono-Regular,monospace;font-size:12px;}
+.identity-confirm {display:flex;align-items:flex-start;gap:12px;line-height:1.5;min-height:44px;}
+.identity-confirm input {margin:4px 0;width:20px;height:20px;flex:0 0 20px;accent-color:var(--accent);}
+.identity-mode {width:100%;justify-content:space-around;margin-top:14px;}
+.identity-mode button {flex:1;min-width:0;white-space:normal;}
+.identity-fingerprint {background:var(--accent-dim);padding:15px;border-radius:12px;overflow-wrap:anywhere;}
+.identity-fingerprint strong {display:block;font-family:monospace;margin:7px 0;font-size:17px;}
+.identity-fingerprint small {display:block;font-family:monospace;color:var(--muted);font-size:11px;}
+.identity-error {color:#dc6a66;background:#dc6a6615;border:1px solid #dc6a6655;padding:13px;border-radius:10px;font-size:12px;overflow-wrap:anywhere;}
+.identity-panel {margin-top:24px;padding:23px;background:var(--surface);border:1px solid var(--border);border-radius:17px;}
+.identity-panel h2 {font-size:20px;margin:0 0 9px;}
+.identity-panel h3 {font-size:15px;margin-bottom:12px;}
+.identity-summary {display:flex;gap:13px;align-items:center;padding:16px;background:var(--accent-dim);border-radius:13px;margin:18px 0;}
+.identity-summary > svg {color:var(--accent);}
+.identity-summary > div {display:grid;gap:5px;min-width:0;flex:1;}
+.identity-summary strong {font-size:13px;}
+.identity-summary small {color:var(--muted);overflow-wrap:anywhere;font-size:10px;font-family:monospace;}
+.identity-actions {display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.identity-actions p {width:100%;color:var(--secondary);}
+.identity-settings-group {border-top:1px solid var(--border);padding-top:17px;margin-top:17px;}
+.identity-section-heading {display:flex;align-items:center;justify-content:space-between;}
+.identity-device-row {display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid var(--border);}
+.identity-device-row span {flex:1;min-width:170px;display:flex;gap:8px;align-items:center;overflow-wrap:anywhere;}
+.identity-device-row span svg {color:var(--accent);}
+.identity-device-row small {font-family:monospace;font-size:10px;overflow-wrap:anywhere;}
+.identity-device-row button,.identity-pair-request button {min-height:44px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:var(--panel);color:var(--text);}
+.identity-pair-request {padding:12px 0;display:grid;gap:10px;border-top:1px solid var(--border);}
+.identity-pair-request > span {font-family:monospace;font-weight:700;color:var(--accent);}
+.identity-pair-request label {font-size:12px;color:var(--secondary);}
+@media(max-width:390px) {.identity-panel{padding:13px}.identity-summary{flex-wrap:wrap}.identity-actions a{width:100%}}
