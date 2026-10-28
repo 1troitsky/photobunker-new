@@ -118,7 +118,7 @@ Cross-module failure tests, independent security review, production build E2E, r
 - **Gate D**: Card/Browser scopes/TTL/revoke independent, no data leaks/false public grants.
 - **Gate E**: PIN destructive flows and backup/restore/recovery tested, release checklist and owner acceptance.
 
-В каждой Issue должны быть: цель, scope, dependencies, acceptance и failure paths; детали установки и локальной тестовой проверки определяет Codex. **ChatGPT реализует основную массу задач; Codex ставит зависимости, выдаёт Issues, проверяет и может исправлять/допиливать код в том же PR.**
+В каждой Issue должны быть: цель, scope, dependencies, acceptance, failure paths и подготовленный Codex раздел `Legacy evidence` с точными read-only путями и решением `REUSE / ADAPT / REFERENCE / REJECT`; детали установки и локальной тестовой проверки определяет Codex. **ChatGPT реализует основную массу задач; Codex ставит зависимости, выдаёт Issues, проверяет и может исправлять/допиливать код в том же PR.**
 
 ## 6. Вне scope
 
