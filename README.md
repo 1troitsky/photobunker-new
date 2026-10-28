@@ -23,7 +23,7 @@ PhotoBunker — защищённое фотоприложение: камера,
 
 | Участник | Обязанности |
 | --- | --- |
-| **Владелец** | Продуктовые решения, приоритеты, ручные проверки на телефоне/desktop, разрешения merge/release |
+| **Владелец** | Продуктовые решения, приоритеты, ручные проверки на телефоне/desktop и разрешение выпуска; технически проверенные PR Codex сливает по постоянному разрешению без запроса на каждый merge |
 | **Codex** | Технический координатор **с доступом к окружению**: установка зависимостей, локальные проверки, Project/production preview, выдача ChatGPT Ready Issues, code review, тесты **и самостоятельная доработка того же PR** при необходимости |
 | **ChatGPT** | **Основная масса реализации по Issue** благодаря доступным лимитам: код, ветка, один Draft PR, передача Codex; проверки по доступным инструментам, без обязанности дублировать тестовое окружение Codex |
 
@@ -53,7 +53,7 @@ PhotoBunker — защищённое фотоприложение: камера,
 
 ## Текущее состояние GitHub и следующий шаг
 
-[Issues #1–#26](https://github.com/1troitsky/photobunker-new/issues) добавлены в **[PhotoBunker New — Development](https://github.com/users/1troitsky/projects/14)** со стадиями Backlog/Ready/In Progress/Review/Integrated/Accepted/Blocked/Cancelled. R2-01 выполняется Codex; после его проверки R2-02 переводится в Ready и передаётся ChatGPT. ChatGPT работает в отдельной ветке и передаёт Draft PR; Codex проверяет, тестирует и допиливает. Никаких самостоятельных merge в `main` без согласованного разрешения владельца.
+[Issues #1–#26](https://github.com/1troitsky/photobunker-new/issues) добавлены в **[PhotoBunker New — Development](https://github.com/users/1troitsky/projects/14)** со стадиями Backlog/Ready/In Progress/Review/Integrated/Accepted/Blocked/Cancelled. ChatGPT работает в отдельной ветке и передаёт Draft PR; Codex проверяет, тестирует, допиливает, самостоятельно сливает технически готовый PR в `main`, обновляет Project и выдаёт следующую Ready Issue. ChatGPT сам merge не выполняет.
 
 ## Локальная разработка
 
