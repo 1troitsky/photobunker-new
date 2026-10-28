@@ -5,18 +5,18 @@ import {identity,onIdentityCleanup} from '../../identity'
 import {language} from '../../ui-preview'
 import {openLocalPhotoVault,claimName} from '../../local-storage'
 import {flushPhotoSync,onPhotoSync} from '../../photo-sync'
-import {localGallery,remoteHeaders,hydratePhoto} from '../application/library'
+import {localGallery,remoteHeaders,hydratePhoto,remoteMetadata} from '../application/library'
 import type {CloudPhoto} from '../../local-storage'
 import GalleryThumbnail from './GalleryThumbnail.vue'
 import {checkMetadata} from '../domain/metadata'
-import {startGrantedGps,requestGps,captureGps,gpsStatus,stopGps,setGpsEnabled} from '../infrastructure/location'
+import {startGrantedGps,requestGps,captureGps,gpsStatus,stopGps,setGpsEnabled,subscribeGps} from '../infrastructure/location'
 
 type Row={id:string;nameId:string|null;title:string;capturedAt:number;expiresAt:number;
   state:'local'|'syncing'|'synced'|'retry'|'expired';remote?:CloudPhoto;loaded:boolean}
 const router=useRouter(),ru=computed(()=>language.value==='ru')
 const rows=ref<Row[]>([]),loading=ref(false),cloudBusy=ref(false),error=ref(''),query=ref('')
 const layout=ref<'grid'|'list'>('grid'),editing=ref(''),editTitle=ref(''),saving=ref(false)
-const gps=ref(gpsStatus()),gpsAllowed=ref(true)
+const gps=ref(gpsStatus()),gpsAllowed=ref(gpsStatus()!=='disabled')
 let generation=0,stopped=false
 const txt=computed(()=>ru.value?{
   heading:'Фотографии',sub:'Приватная галерея · только зашифрованные материалы',capture:'Камера',
@@ -83,19 +83,20 @@ async function refresh(){
     }
     const merged=new Map(rows.value.map(row=>[row.id,row]))
     for(const p of remote){
-      if(p.expiresAt<=Date.now()||merged.has(p.photoId))continue
+      if(merged.has(p.photoId))continue
       merged.set(p.photoId,{id:p.photoId,title:'',nameId:p.nameId,capturedAt:0,
         expiresAt:p.expiresAt,state:'synced',remote:p,loaded:false})
     }
     rows.value=[...merged.values()].sort((a,b)=>b.capturedAt-a.capturedAt||a.id.localeCompare(b.id))
-    // Hydrate a small bounded batch; further items hydrate when opened.
-    for(const p of remote.filter(p=>!rows.value.find(r=>r.id===p.photoId)?.loaded).slice(0,4)){
+    // Read only encrypted metadata for list labels. Full-size ciphertext is
+    // downloaded only when the user opens that photo.
+    for(const p of remote.filter(p=>!rows.value.find(r=>r.id===p.photoId)?.loaded).slice(0,12)){
       if(!scoped(token,active.accountId,active.deviceId))return
-      try{await hydratePhoto(p);const local=await localGallery()
+      try{const metadata=await remoteMetadata(p)
         if(!scoped(token,active.accountId,active.deviceId))return
-        const byId=new Map(local.map(i=>[i.header.photoId,mapping(i)]))
-        rows.value=rows.value.map(row=>byId.get(row.id)??row)
-      }catch{/* keep cloud placeholder, never claim local save */}
+        rows.value=rows.value.map(row=>row.id===p.photoId
+          ?{...row,title:metadata.title??'',capturedAt:metadata.capturedAt}:row)
+      }catch{/* keep cloud placeholder; never claim local persistence */}
     }
   }catch{if(scoped(token,active.accountId,active.deviceId))error.value=txt.value.cloudError}
   finally{if(scoped(token,active.accountId,active.deviceId))cloudBusy.value=false}
@@ -134,55 +135,140 @@ async function addGps(row:Row){
 function toggleGps(){
   gpsAllowed.value=!gpsAllowed.value;setGpsEnabled(gpsAllowed.value)
   if(gpsAllowed.value)startGrantedGps()
-  gps.value=gpsStatus()
 }
-function request(){requestGps();gps.value=gpsStatus()}
-let offSync:()=>void=()=>{}
+function request(){requestGps()}
+let offSync:()=>void=()=>{},offGps:()=>void=()=>{}
 function focus(){if(!document.hidden){startGrantedGps();void refresh()}}
 onMounted(()=>{
-  stopped=false;startGrantedGps();gps.value=gpsStatus();offSync=onPhotoSync(ev=>{
+  stopped=false;startGrantedGps();offGps=subscribeGps(value=>{
+    gps.value=value;gpsAllowed.value=value!=='disabled'
+  });offSync=onPhotoSync(ev=>{
     const r=rows.value.find(x=>x.id===ev.photoId);if(r)r.state=ev.state
+    if(ev.state==='synced')void refresh()
   })
   void refresh();window.addEventListener('focus',focus);window.addEventListener('online',focus)
 })
-onUnmounted(()=>{stopped=true;dispose();release();offSync();window.removeEventListener('focus',focus);window.removeEventListener('online',focus)})
+onUnmounted(()=>{stopped=true;dispose();release();offSync();offGps();window.removeEventListener('focus',focus);window.removeEventListener('online',focus)})
 watch(identity,(a,b)=>{if(a?.accountId!==b?.accountId||a?.deviceId!==b?.deviceId){dispose();if(a){startGrantedGps();void refresh()}}})
 function date(n:number){return n?new Intl.DateTimeFormat(ru.value?'ru-RU':'en-US',{dateStyle:'medium',timeStyle:'short'}).format(n):''}
 </script>
 <template>
-  <section class="gallery-root" data-testid="encrypted-gallery">
+  <section
+    class="gallery-root"
+    data-testid="encrypted-gallery"
+  >
     <header class="gallery-header">
       <div><h2>{{ txt.heading }}</h2><p>{{ txt.sub }}</p></div>
-      <RouterLink to="/camera" class="primary-button">{{ txt.capture }}</RouterLink>
+      <RouterLink
+        to="/camera"
+        class="primary-button"
+      >{{ txt.capture }}</RouterLink>
     </header>
     <template v-if="!identity">
-      <div class="gallery-empty"><p>{{ txt.locked }}</p>
-        <RouterLink to="/account/create" class="subtle-button">{{ txt.create }}</RouterLink>
-        <RouterLink to="/account/restore" class="subtle-button">{{ txt.restore }}</RouterLink>
+      <div class="gallery-empty">
+        <p>{{ txt.locked }}</p>
+        <RouterLink
+          to="/account/create"
+          class="subtle-button"
+        >{{ txt.create }}</RouterLink>
+        <RouterLink
+          to="/account/restore"
+          class="subtle-button"
+        >{{ txt.restore }}</RouterLink>
       </div>
     </template>
     <template v-else>
       <div class="gallery-controls">
-        <input v-model="query" type="search" :aria-label="txt.search" :placeholder="txt.search">
-        <button type="button" class="subtle-button" :aria-pressed="layout==='grid'" @click="layout='grid'">{{ txt.grid }}</button>
-        <button type="button" class="subtle-button" :aria-pressed="layout==='list'" @click="layout='list'">{{ txt.list }}</button>
-        <button type="button" class="subtle-button" :disabled="cloudBusy||loading" @click="refresh">{{ txt.refresh }}</button>
-        <button type="button" class="subtle-button" :disabled="identity.offline" @click="flushPhotoSync(true)">{{ txt.sync }}</button>
+        <input
+          v-model="query"
+          type="search"
+          :aria-label="txt.search"
+          :placeholder="txt.search"
+        >
+        <button
+          type="button"
+          class="subtle-button"
+          :aria-pressed="layout==='grid'"
+          @click="layout='grid'"
+        >
+          {{ txt.grid }}
+        </button>
+        <button
+          type="button"
+          class="subtle-button"
+          :aria-pressed="layout==='list'"
+          @click="layout='list'"
+        >
+          {{ txt.list }}
+        </button>
+        <button
+          type="button"
+          class="subtle-button"
+          :disabled="cloudBusy||loading"
+          @click="refresh"
+        >
+          {{ txt.refresh }}
+        </button>
+        <button
+          type="button"
+          class="subtle-button"
+          :disabled="identity.offline"
+          @click="flushPhotoSync(true)"
+        >
+          {{ txt.sync }}
+        </button>
       </div>
       <div class="gallery-gps">
         <span>{{ txt.gps }} · {{ gps }}</span>
-        <button type="button" class="subtle-button" @click="toggleGps">{{ gpsAllowed?txt.gpsOff:txt.gpsOn }}</button>
-        <button v-if="gpsAllowed" type="button" class="subtle-button" @click="request">{{ txt.gpsGrant }}</button>
+        <button
+          type="button"
+          class="subtle-button"
+          @click="toggleGps"
+        >
+          {{ gpsAllowed?txt.gpsOff:txt.gpsOn }}
+        </button>
+        <button
+          v-if="gpsAllowed"
+          type="button"
+          class="subtle-button"
+          @click="request"
+        >
+          {{ txt.gpsGrant }}
+        </button>
       </div>
-      <p v-if="loading" role="status">{{ txt.loading }}</p>
-      <div v-else-if="!filtered.length" class="gallery-empty">
+      <p
+        v-if="loading"
+        role="status"
+      >
+        {{ txt.loading }}
+      </p>
+      <div
+        v-else-if="!filtered.length"
+        class="gallery-empty"
+      >
         <h3>{{ txt.empty }}</h3><p>{{ txt.emptyHint }}</p>
       </div>
-      <div v-else :class="['gallery-items',layout]" role="list">
-        <article v-for="item in filtered" :key="item.id" class="gallery-item" role="listitem">
-          <button type="button" class="gallery-photo" :aria-label="txt.open+' '+(item.nameId??item.id)" @click="open(item)">
-            <GalleryThumbnail v-if="item.loaded" :photo-id="item.id" :label="item.title||item.nameId||''"/>
-            <span v-else class="gallery-cloud-symbol" aria-hidden="true">▧</span>
+      <div
+        v-else
+        :class="['gallery-items',layout]"
+        role="list"
+      >
+        <article
+          v-for="item in filtered"
+          :key="item.id"
+          class="gallery-item"
+          role="listitem"
+        >
+          <button
+            type="button"
+            class="gallery-photo"
+            :aria-label="txt.open+' '+(item.nameId??item.id)"
+            @click="open(item)"
+          >
+            <GalleryThumbnail
+              :photo-id="item.id"
+              :label="item.title||item.nameId||''"
+            />
           </button>
           <div class="gallery-info">
             <strong>{{ item.title||item.nameId||txt.pending }}</strong>
@@ -190,19 +276,61 @@ function date(n:number){return n?new Intl.DateTimeFormat(ru.value?'ru-RU':'en-US
             <small>{{ date(item.capturedAt) }}</small>
             <span class="gallery-state">{{ item.remote&&!item.loaded?txt.remote:labels[item.state] }}</span>
             <div class="gallery-actions">
-              <button type="button" :disabled="!item.loaded" @click="startEdit(item)">{{ txt.edit }}</button>
-              <button type="button" :disabled="!item.loaded||!gpsAllowed" @click="addGps(item)">{{ txt.gpsSave }}</button>
+              <button
+                type="button"
+                :disabled="!item.loaded"
+                @click="startEdit(item)"
+              >
+                {{ txt.edit }}
+              </button>
+              <button
+                type="button"
+                :disabled="!item.loaded||!gpsAllowed"
+                @click="addGps(item)"
+              >
+                {{ txt.gpsSave }}
+              </button>
             </div>
           </div>
         </article>
       </div>
-      <form v-if="editing" class="gallery-editor" @submit.prevent="save">
-        <label>{{ txt.title }}<input v-model="editTitle" type="text" maxlength="160" autocomplete="off"></label>
-        <button type="submit" :disabled="saving">{{ txt.save }}</button>
-        <button type="button" @click="editing=''">{{ txt.cancel }}</button>
+      <form
+        v-if="editing"
+        class="gallery-editor"
+        @submit.prevent="save"
+      >
+        <label>{{ txt.title }}<input
+          v-model="editTitle"
+          type="text"
+          maxlength="160"
+          autocomplete="off"
+        ></label>
+        <button
+          type="submit"
+          :disabled="saving"
+        >
+          {{ txt.save }}
+        </button>
+        <button
+          type="button"
+          @click="editing=''"
+        >
+          {{ txt.cancel }}
+        </button>
       </form>
-      <p v-if="cloudBusy" role="status">{{ txt.syncing }}</p>
-      <p v-if="error" role="alert" class="identity-error">{{ error }}</p>
+      <p
+        v-if="cloudBusy"
+        role="status"
+      >
+        {{ txt.syncing }}
+      </p>
+      <p
+        v-if="error"
+        role="alert"
+        class="identity-error"
+      >
+        {{ error }}
+      </p>
     </template>
   </section>
 </template>

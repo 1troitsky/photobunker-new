@@ -55,16 +55,26 @@ final class PhotoMetadataController extends Controller{
     return $this->sync->json(DB::transaction(function()use($p,$d,$o){
       $row=DB::table('photo_records')->where('id',$p->id)->lockForUpdate()->first();
       abort_if($row->state!=='active'||$row->expires_at<=PhotoSync::nowMs(),410);
+      $manifest=json_encode($o['manifest'],JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+      $byOperation=DB::table('photo_objects')->where('operation_id',$d['operationId'])->first();
+      if($byOperation){
+        abort_unless($byOperation->id===$o['assetId']&&$byOperation->photo_id===$p->id&&
+          $byOperation->revision===$o['revision']&&$byOperation->sha256===$o['sha256']&&
+          $byOperation->bytes===$o['bytes']&&$byOperation->manifest_json===$manifest,409);
+        return ['state'=>$row->metadata_asset_id===$o['assetId']?'active':'pending'];
+      }
       $existing=DB::table('photo_objects')->where('id',$o['assetId'])->first();
       if($existing){abort_unless($existing->photo_id===$p->id&&$existing->revision===$o['revision']&&
-        $existing->sha256===$o['sha256']&&$existing->bytes===$o['bytes'],409);
+        $existing->sha256===$o['sha256']&&$existing->bytes===$o['bytes']&&
+        $existing->manifest_json===$manifest&&$existing->operation_id===$d['operationId'],409);
         return ['state'=>$row->metadata_asset_id===$o['assetId']?'active':'pending'];
       }
       abort_unless((int)$row->metadata_revision===$d['expectedRevision'],409);
       DB::table('photo_objects')->insert(['id'=>$o['assetId'],'photo_id'=>$p->id,
         'kind'=>'metadata','revision'=>$o['revision'],'bytes'=>$o['bytes'],'sha256'=>$o['sha256'],
-        'manifest_json'=>json_encode($o['manifest'],JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR),
+        'manifest_json'=>$manifest,
         'object_key'=>$this->sync->objectKey($p->account_id,$p->id,$o['assetId']),
+        'operation_id'=>$d['operationId'],
         'state'=>'pending','created_at'=>now(),'updated_at'=>now()]);
       return ['state'=>'pending'];
     },3));

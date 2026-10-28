@@ -6,7 +6,7 @@ import ScreenHeader from './ScreenHeader.vue'
 import { identity, IdentityPanel } from '../../identity'
 import { StorageDiagnostics } from '../../local-storage'
 import { CameraScreen } from '../../camera'
-import GalleryScreen from '../../gallery/ui/GalleryScreen.vue'
+import {GalleryScreen} from '../../gallery'
 import { language, setLanguage, setTheme, text, theme } from './copy'
 import { assignmentFixtures, photoFixtures } from './fixtures'
 

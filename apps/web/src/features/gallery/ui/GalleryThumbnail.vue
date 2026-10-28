@@ -26,9 +26,21 @@ watch(()=>[props.photoId,identity.value?.accountId,identity.value?.deviceId],()=
 onUnmounted(()=>{clear();release()})
 </script>
 <template>
-  <img v-if="url" :src="url" :alt="label??''" loading="lazy" decoding="async"
-    referrerpolicy="no-referrer" class="gallery-thumb-image" @error="broken">
-  <span v-else class="gallery-thumb-placeholder" aria-hidden="true">▧</span>
+  <img
+    v-if="url"
+    :src="url"
+    :alt="label??''"
+    loading="lazy"
+    decoding="async"
+    referrerpolicy="no-referrer"
+    class="gallery-thumb-image"
+    @error="broken"
+  >
+  <span
+    v-else
+    class="gallery-thumb-placeholder"
+    aria-hidden="true"
+  >▧</span>
 </template>
 <style scoped>
 .gallery-thumb-image,.gallery-thumb-placeholder{width:100%;height:100%;object-fit:cover;display:grid;place-items:center}

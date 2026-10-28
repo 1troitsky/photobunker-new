@@ -3,7 +3,7 @@ import {computed,nextTick,onMounted,onUnmounted,ref,shallowRef,watch} from 'vue'
 import {useRouter} from 'vue-router'
 import {identity,onIdentityCleanup} from '../../identity'
 import {language} from '../../ui-preview'
-import {startGrantedGps,requestGps,gpsStatus} from '../../gallery'
+import {startGrantedGps} from '../../gallery'
 import {BrowserCamera,captureError,openCaptureSession,DEFAULT_TTL_DAYS} from '../index'
 import type {CaptureMode,Facing,CaptureProgress,CaptureSession} from '../index'
 

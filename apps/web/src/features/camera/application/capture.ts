@@ -66,7 +66,7 @@ export class CaptureSession{
     this.check(ticket)
     this.pending={...ids,jpeg:converted.blob,policy,method,
       ...(thumbnail?{thumbnail,thumbnailAssetId:crypto.randomUUID()}: {}),gps,
-      ...(reserved??{}),
+      ...(reserved?{nameId:reserved.nameId,leaseId:reserved.leaseId,nameNumber:reserved.number}:{}),
       sourceWidth:converted.sourceWidth,sourceHeight:converted.sourceHeight,
       outputWidth:converted.outputWidth,outputHeight:converted.outputHeight,
       capturedAt:metadata.capturedAt,expiresAt:metadata.expiresAt}

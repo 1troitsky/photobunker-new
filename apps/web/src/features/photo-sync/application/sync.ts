@@ -95,6 +95,7 @@ async function syncMetadata(row:OutboxEntry,accountId:string,deviceId:string):Pr
     bound(accountId,deviceId)
     if(existing.metadataAssetId===data.asset.assetId){
       await vault.acknowledgeMetadata(row.operationId,data.asset.assetId)
+      publish({photoId:row.photoId,state:await vault.syncState(row.photoId)})
       return
     }
     const {ciphertext,manifest,...asset}=data.asset
@@ -116,11 +117,17 @@ async function syncMetadata(row:OutboxEntry,accountId:string,deviceId:string):Pr
     }
     bound(accountId,deviceId)
     await vault.acknowledgeMetadata(row.operationId,data.asset.assetId)
+    publish({photoId:row.photoId,state:await vault.syncState(row.photoId)})
   }catch(e){
     const code=e instanceof Error?e.message:'sync.metadata_failed'
     if(code==='sync.account_changed')return
-    if(code==='sync.http_410')await vault.revokeFromServer(row.photoId)
-    else await vault.failDelivery(row.operationId,code).catch(()=>{})
+    if(code==='sync.http_410'){
+      await vault.revokeFromServer(row.photoId)
+      publish({photoId:row.photoId,state:'expired'})
+    }else{
+      await vault.failDelivery(row.operationId,code).catch(()=>{})
+      publish({photoId:row.photoId,state:'retry',error:code})
+    }
   }
 }
 
@@ -149,6 +156,7 @@ async function execute(force=false):Promise<void>{
         await runOne(snapshot,accountId,deviceId)
         const header=await vault.readHeader(row.photoId)
         if(header && (!header.nameId||header.namePending)){try{await claimName(row.photoId,header.nameId??null,header.leaseId,header.nameNumber)}catch{/* retry on gallery refresh */}}
+        publish({photoId:row.photoId,state:await vault.syncState(row.photoId)})
       }catch(e){
         if((e instanceof Error && e.message==='sync.account_changed')||!identity.value)return
         await vault.failDelivery(row.operationId,'sync.local_read_failed').catch(()=>{})

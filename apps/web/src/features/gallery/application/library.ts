@@ -20,8 +20,9 @@ export async function remoteHeaders():Promise<CloudPhoto[]>{
   let cursor:string|null=null
   for(let page=0;page<200;page++){
     guard(accountId,deviceId)
-    const path=cursor?'/list?after='+cursor+'&limit=50':'/list'
-    const answer=await received<{photos:CloudPhoto[];nextCursor:string|null}>(path)
+    const path:string=cursor?'/list?after='+cursor+'&limit=50':'/list'
+    const answer:{photos:CloudPhoto[];nextCursor:string|null}=
+      await received<{photos:CloudPhoto[];nextCursor:string|null}>(path)
     guard(accountId,deviceId)
     if(!Array.isArray(answer.photos))throw Error('gallery.bad_server_list')
     for(const item of answer.photos){
@@ -49,6 +50,24 @@ export async function cloudCiphertext(photoId:string,asset:CloudAsset):Promise<B
     .map(x=>x.toString(16).padStart(2,'0')).join('')
   if(hash!==asset.sha256)throw Error('gallery.cloud_digest')
   return blob
+}
+/** Decrypt the current metadata only in memory for the cloud gallery list. */
+export async function remoteMetadata(photo:CloudPhoto):Promise<ReturnType<typeof checkMetadata>>{
+  const assets=await manifests(photo.photoId)
+  const asset=assets.find(item=>item.kind==='metadata'&&item.assetId===photo.metadataAssetId)
+  if(!asset)throw Error('gallery.cloud_metadata_missing')
+  const ciphertext=await cloudCiphertext(photo.photoId,asset)
+  const clear=await openLocalPhotoVault().decryptRemote(photo.photoId,
+    asset as CloudAsset&{kind:'metadata'},ciphertext)
+  const decoded=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(await clear.arrayBuffer())) as {
+    version?:unknown;capturedAt?:unknown;data?:unknown
+  }
+  if(decoded.version!==1||!Number.isSafeInteger(decoded.capturedAt))
+    throw Error('gallery.cloud_metadata_invalid')
+  const metadata=checkMetadata(decoded.data)
+  if(metadata.capturedAt!==decoded.capturedAt||metadata.expiresAt!==photo.expiresAt)
+    throw Error('gallery.cloud_metadata_mismatch')
+  return metadata
 }
 export async function hydratePhoto(photo:CloudPhoto):Promise<boolean>{
   const current=identity.value

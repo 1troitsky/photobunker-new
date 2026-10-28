@@ -28,7 +28,8 @@ export function checkMetadata(value:unknown):PhotoMetadataV1{
   if(!compression||compression.version!==1||compression.mime!=='image/jpeg'||
     compression.quality!==0.90||compression.maxEdge!==4096||compression.maxPixels!==12500000)
     throw Error('gallery.compression_invalid')
-  if(v.title!==undefined&&(typeof v.title!=='string'||v.title.length>160||/[\u0000-\u001f]/.test(v.title)))
+  if(v.title!==undefined&&(typeof v.title!=='string'||v.title.length>160||
+    [...v.title].some(character=>character.charCodeAt(0)<32)))
     throw Error('gallery.title_invalid')
   if(v.gps!==undefined&&v.gps!==null)checkFix(v.gps)
   if(v.gpsStatus!==undefined&&!['pending','unavailable','denied','disabled','ready'].includes(v.gpsStatus as string))

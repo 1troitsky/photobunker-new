@@ -294,7 +294,7 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
       await writeCiphertext(backend,path,cipher.blob,this.scope)
       const reloaded=await readCiphertext(backend,path)
       await decryptAsset(cipher.manifest,reloaded,key,this.scope,()=>this.check())
-      await db.transaction('rw',db.photos,db.assets,db.outbox,db.journal,db.tombstones,async()=>{
+      await db.transaction('rw',[db.photos,db.assets,db.outbox,db.journal,db.tombstones],async()=>{
         this.check()
         const current=await db.photos.get(photoKey(this.scope,photoId))
         invalid(!!current&&current.state==='local'&&current.revision===photo.revision&&
@@ -447,8 +447,12 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     if(!photo||photo.state!=='local')return 'expired'
     if(!this.time.status().trusted)return 'local'
     if(this.time.now()>=photo.expiresAt)return 'expired'
-    const task=await db.outbox.get(this.scope.accountId+'/'+photo.operationId)
-    return task?.state==='acknowledged'?'synced':task?.state==='retry'?'retry':'local'
+    const tasks=await db.outbox.where('accountId').equals(this.scope.accountId)
+      .filter(task=>task.photoId===photoId&&task.state!=='cancelled').toArray()
+    if(tasks.some(task=>task.state==='retry'))return 'retry'
+    if(tasks.some(task=>task.state!=='acknowledged'))return 'local'
+    const original=tasks.find(task=>task.operationId===photo.operationId)
+    return original?.state==='acknowledged'?'synced':'local'
   }
   /** Remote E2EE object: validate scope/digest before opening only in volatile memory. */
   async decryptRemote(photoId:string,asset:{assetId:string;kind:'thumbnail'|'metadata';revision:number;
@@ -537,7 +541,7 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
         thumbnailAssetId:thumbnails[0]?.asset.assetId,expiresAt:photo.expiresAt,
         state:'local',revision:photo.metadataRevision,operationId:photo.photoId,
         ...(photo.nameId?{nameId:photo.nameId,namePending:false}:{namePending:true})}
-      await db.transaction('rw',db.photos,db.assets,db.outbox,db.journal,db.tombstones,async()=>{
+      await db.transaction('rw',[db.photos,db.assets,db.outbox,db.journal,db.tombstones],async()=>{
         this.check()
         if(await db.tombstones.get(stored.key))throw Error('gallery.tombstoned')
         if(await db.photos.get(stored.key))throw Error('gallery.cloud_conflict')
@@ -604,15 +608,15 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
       this.check()
       await deleteCiphertext(item.backend,item.storageKey)
     }
-    await db.transaction('rw',db.photos,db.assets,db.outbox,db.thumbnailCache,async()=>{
+    await db.transaction('rw',[db.photos,db.assets,db.outbox,db.thumbnailCache],async()=>{
       this.check()
       for(const item of assets)await db.assets.delete(item.key)
       await db.thumbnailCache.where('[accountId+photoId]').equals([this.scope.accountId,photoId]).delete()
       const photo=await db.photos.get(key)
-      if(photo){
-        await db.outbox.delete(this.scope.accountId+'/'+photo.operationId)
-        await db.photos.delete(key)
-      }
+      const operations=await db.outbox.where('accountId').equals(this.scope.accountId)
+        .filter(row=>row.photoId===photoId).primaryKeys()
+      await db.outbox.bulkDelete(operations)
+      if(photo)await db.photos.delete(key)
     })
   }
   async reconcile():Promise<void>{

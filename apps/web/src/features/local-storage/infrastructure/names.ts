@@ -1,6 +1,7 @@
 import {acquireStorageKeys,photoRequest} from '../../identity'
 import {openLocalPhotoVault} from './vault'
 import {db} from './database'
+import type {NameLeaseRow} from './database'
 function formatName(prefix:string,n:number):string{
   if(!/^[A-Z]{4}$/.test(prefix)||!Number.isInteger(n)||n<1||n>9999)throw Error('gallery.name_invalid')
   return prefix+String(n).padStart(4,'0')
@@ -8,7 +9,7 @@ function formatName(prefix:string,n:number):string{
 type Range={id:string;prefix:string;first:number;last:number;next:number}
 const encoder=new TextEncoder(),decoder=new TextDecoder()
 type LeaseBody={id:string;prefix:string;first:number;last:number;next:number}
-async function unpack(row:Awaited<ReturnType<typeof db.nameLeases.get>>):Promise<Range|null>{
+async function unpack(row:NameLeaseRow|undefined):Promise<Range|null>{
   if(!row||row.ciphertext.size===0)return null
   const keys=acquireStorageKeys()
   const secret=await keys.open(row.leaseId,'name-lease-v1',row.wrappedDEK)

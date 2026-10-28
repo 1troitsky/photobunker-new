@@ -29,6 +29,9 @@ return new class extends Migration {
       $t->unsignedInteger('metadata_revision')->default(1);
       $t->index(['account_id','state','expires_at','id'],'gallery_active_cursor');
     });
+    Schema::table('photo_objects',function(Blueprint $t){
+      $t->uuid('operation_id')->nullable()->unique();
+    });
     // Pre-existing R2-05 active photos have metadata but no dedicated pointer.
     foreach(DB::table('photo_records')->whereNull('metadata_asset_id')->select('id')->cursor() as $p){
       $asset=DB::table('photo_objects')->where('photo_id',$p->id)->where('kind','metadata')
@@ -37,6 +40,9 @@ return new class extends Migration {
     }
   }
   public function down():void {
+    Schema::table('photo_objects',function(Blueprint $t){
+      $t->dropUnique(['operation_id']);$t->dropColumn('operation_id');
+    });
     Schema::table('photo_records',function(Blueprint $t){
       $t->dropIndex('gallery_active_cursor');$t->dropColumn(['metadata_asset_id','metadata_revision']);
     });
