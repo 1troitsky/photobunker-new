@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Обязательные правила
+    url: https://github.com/1troitsky/photobunker-new/blob/main/AGENTS.md
+    about: Сначала изучите общий scope, storage/crypto решения и процесс.
+  - name: Единый roadmap
+    url: https://github.com/1troitsky/photobunker-new/blob/main/docs/08-ROADMAP.md
+    about: Новая задача должна иметь стабильный ID/фазу и не дублировать backlog.
