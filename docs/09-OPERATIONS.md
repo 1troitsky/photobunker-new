@@ -1,11 +1,11 @@
 # 09. Development & operations contracts
 
-**Статус:** проектные требования; выбор провайдера S3, домена, платёжного тарифного плана и окружения пока OPEN.
+**Статус:** согласованные storage lifecycle invariants. **Начальный S3 backend — Garage** (S3-compatible adapter), фото живёт **24ч–45д**, миниатюра WebP ≤320px, отдельного постоянного preview нет. Домены/тарифы/развёртывание — инженерные детали Codex.
 
 ## 1. Предлагаемая инфраструктура
 
 - Laravel 13 + PostgreSQL и очереди, хранение metadata/policy/access/revisions и серверных sync receipts.
-- S3-compatible private object storage (self-hosted Garage или managed provider — **не утверждено**); encrypted photo assets only.
+- S3-compatible private object storage: **Garage — первоначальный backend** через заменяемый S3 adapter; **только encrypted** photo/thumbnail/derivative objects. Подмена внешним S3 не меняет domain API.
 - PWA/web frontend с IndexedDB/OPFS (конкретный storage adapter определить до реализации); build output служит как production artifacts за Nginx/HTTPS, **никогда не dev server для release**.
 - CI изолированным test stack, не подключается к реальным пользовательским данным, не имеет production secrets.
 - Структурированные логи с correlation/operation ids без photo bytes, GPS, descriptions, keys/PIN и credentials.
@@ -18,11 +18,21 @@
 
 ## 3. Asset inventory и storage budget
 
-S3 object и локальный asset всегда имеют photoId, owner, purpose, revision, digest/length, TTL, job state. Уменьшать число долгоживущих копий. Managed cleanup jobs идемпотентны, наблюдаемы по количеству orphan objects, failed deletes, bytes pending, queue lag; все metrics privacy-preserving.
+S3 object и локальный asset всегда имеют photoId, owner, purpose, revision, digest/length, `expires_at`, job state. **TTL задаётся заданием в пределах 24 часов — 45 дней и фиксируется для фото при capture**, не продлевается редакторским сохранением. Если снимок без задания — рабочее техническое значение 45 дней; отсчёт от capture time. Оригинал, master, отдельная edited copy, единственная WebP thumbnail ≤320px, shares, exports, metadata/Photo DB rows, caches и временные assets удаляются по expiry. Нет постоянного отдельного preview. Metrics privacy-preserving.
 
-Storage quota: на устройстве и сервере separately; before compression/upload reserve/check available budget; report full/low-storage without losing old correct asset. Never delete sole unsynced photo automatically. Local-cache eviction for confirmed synchronized assets **только после утверждения ST-04/ST-09** и принятого key/device restore pathway.
+Storage quota: на устройстве и сервере отдельно; резервировать/check budget перед тяжёлой обработкой, не терять действующий неистёкший asset. Не удалять единственное **неистёкшее** несинхронизированное фото из-за нехватки места; **истёкшее** удаляется независимо от upload status. Досрочное eviction локальных ещё действительных synced copies — после утверждённого recovery contract ST-04; TTL ST-09 уже утверждён.
 
-S3 backups/replication/legal deletion semantics — отдельное решение. Сами объекты на одном серверном диске **не** backup; claims of physical secure deletion must be qualified.
+S3 versioning, object-lock, replication и backups **не должны незаметно продлевать доступный период хранения**. Codex проверяет настройки Garage, жизненный цикл snapshots/backup и документирует физические гарантии; объект в одном серверном volume не является backup. Не обещать физический secure erase в точную секунду, если провайдер/диск/офлайн-устройство этого не гарантирует.
+
+
+## 3.1. Недорогое автоматическое удаление без полного сканирования
+
+1. В PostgreSQL индексировать `photos(expires_at, id)` для активных снимков (вариант partial-index по статусу на усмотрение Codex). Не запускать отдельный таймер на каждый файл.
+2. **Один системный cron / Laravel Scheduler с периодом 1 минута** запускает лёгкий query по `expires_at <= now()`, **limit/batch + стабильная пагинация**; большая нагрузка обрабатывается queue workers с ограниченной конкуренцией. Не сканировать всю таблицу и не делать дешифрование при sweep.
+3. Истёкшая фотография **сразу перестаёт читаться** через серверную ACL/TTL, Card/Browser/download/Share. Идемпотентный delete job удаляет объекты Garage (включая thumb, original, edit, share, temporary), фиксирует подтверждения, удаляет связанные Photo/Metadata/Note/Card/индексы в БД и очищает технический tombstone после завершения безопасного retry window.
+4. Worker ретраит 5xx/timeout/backoff и проводит reconciliation для orphan objects и jobs. Поздний upload/retry не может восстановить expired фото. Нет бессрочных orphan objects или приватных metadata в tombstones.
+5. На клиенте expiry проверяется при каждом чтении, запуске/возобновлении, в ограниченном maintenance cycle: скрыть photo и очистить локальные ciphertext, metadata, thumbnail cache. **Закрытая offline PWA не может гарантированно исполнить фоновый cron**, поэтому cleanup выполнится при следующей активности. Принудительная серверная очистка не означает физического стирания у отключённого пользователя.
+6. Codex тестирует 24h, 45d, boundary timestamps, редактирование перед expiry, lost ACK, S3 outage, expired unsynced photo, скачивание по старой signed link, повторный запуск и отсутствие оставшихся blobs/DB records. Наблюдать `expired_pending_deletion`, delete retry age, orphan bytes и lag, **не логировать чувствительные metadata**.
 
 ## 4. Delivery and rollback
 
