@@ -8,7 +8,9 @@ use App\Http\Controllers\PhotoMetadataController;
 use App\Http\Controllers\PhotoNamesController;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('identity/v2')->middleware('throttle:40,1')->group(function () {
+// Keep identity and photo traffic in independent limiter buckets. A photo
+// upload must never consume the recovery/login budget for the same client IP.
+Route::prefix('identity/v2')->middleware('throttle:40,1,identity')->group(function () {
     Route::get('/csrf', [IdentityController::class,'csrf']);
     Route::post('/prepare', [IdentityController::class,'prepare']);
     Route::post('/challenges', [IdentityController::class,'challenge']);
@@ -28,7 +30,7 @@ Route::prefix('identity/v2')->middleware('throttle:40,1')->group(function () {
 
 
 // Same-origin authenticated account/device sessions, CSRF and no public S3 URLs.
-Route::prefix('photos/v1')->middleware('throttle:100,1')->group(function () {
+Route::prefix('photos/v1')->middleware('throttle:100,1,photos')->group(function () {
     Route::get('/list', [GalleryController::class,'index']);
     Route::post('/names/reserve', [PhotoNamesController::class,'reserve']);
     Route::post('/names/claim', [PhotoNamesController::class,'claim']);
