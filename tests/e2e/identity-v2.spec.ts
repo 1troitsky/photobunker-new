@@ -32,6 +32,15 @@ test('R2-03 concurrent tabs reserve exactly one pending account',async({context}
     first.getByRole('button',{name:/Generate Recovery Key|Создать ключ восстановления/i}).click(),
     second.getByRole('button',{name:/Generate Recovery Key|Создать ключ восстановления/i}).click(),
   ])
+  // Click resolves after dispatch, while PB2 generation and the IndexedDB
+  // reservation continue asynchronously. Wait for the observable outcome in
+  // both tabs instead of sampling the DOM during the shared "Working" state.
+  await expect.poll(async()=>
+    await first.locator('#identity-key').count()+await second.locator('#identity-key').count(),
+  ).toBe(1)
+  await expect.poll(async()=>
+    await first.getByRole('alert').count()+await second.getByRole('alert').count(),
+  ).toBe(1)
   async function generatedKey(page:typeof first):Promise<string>{
     const input=page.locator('#identity-key')
     return await input.count()===1?input.inputValue():''
@@ -41,5 +50,4 @@ test('R2-03 concurrent tabs reserve exactly one pending account',async({context}
     generatedKey(second),
   ])
   expect(values.filter(value=>value.startsWith('PB2.'))).toHaveLength(1)
-  expect(await first.getByRole('alert').count()+await second.getByRole('alert').count()).toBe(1)
 })

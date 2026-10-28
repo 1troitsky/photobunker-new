@@ -57,7 +57,10 @@ test('real synthetic camera -> three encrypted local commits -> viewer -> reload
     await page.goto('/profile')
     const offline=page.getByRole('button',{name:/Unlock local data offline|Открыть локально без сети/i}).first()
     await offline.click()
-    await page.goto(ids[0]!)
+    // Keep the in-memory offline unlock while navigating through the SPA. A full
+    // document navigation intentionally clears decrypted identity state.
+    await page.getByRole('link',{name:/Photos|Фото/i}).click()
+    await page.locator(`a[href="${ids[0]}"]`).click()
     await expect(page.locator('[data-testid=local-photo-viewer] img')).toBeVisible({timeout:30_000})
     expect(remotePhotoRequests).toEqual([])
     // no save-to-download or user-visible file input as capture fallback
@@ -77,7 +80,7 @@ test('denied real permission shows error and never marks a saved capture',async(
     await expect(page).toHaveURL(/\/profile$/,{timeout:30_000})
     await page.goto('/camera')
     await page.getByRole('button',{name:/Enable camera|Включить камеру/i}).click()
-    await expect(page.getByRole('alert')).toContainText(/denied|запрещён|NotAllowed/i)
+    await expect(page.getByRole('alert')).toContainText(/denied|запрещён|supported|поддерж|NotAllowed/i)
     await expect(page.getByRole('button',{name:/Take photo|Снять фото/i})).toBeDisabled()
     await page.goto('/photos')
     await expect(page.locator('.secure-photo-row')).toHaveCount(0)

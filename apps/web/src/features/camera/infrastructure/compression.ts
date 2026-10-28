@@ -38,25 +38,45 @@ function jpegCanvas(canvas:HTMLCanvasElement):Promise<Blob>{
   })
 }
 export type Compressed=Readonly<{blob:Blob;sourceWidth:number;sourceHeight:number;outputWidth:number;outputHeight:number}>
+type DecodedImage=Readonly<{source:CanvasImageSource;width:number;height:number;close:()=>void}>
+async function decodeImage(source:Blob):Promise<DecodedImage>{
+  if(typeof createImageBitmap==='function'){
+    try{
+      const bitmap=await createImageBitmap(source)
+      return{source:bitmap,width:bitmap.width,height:bitmap.height,close:()=>bitmap.close()}
+    }catch{/* Safari and some camera codecs need the HTML image decoder fallback. */}
+  }
+  if(typeof Image==='undefined'||typeof URL.createObjectURL!=='function')throw new Error('camera.decode_failed')
+  const objectUrl=URL.createObjectURL(source),image=new Image()
+  try{
+    await new Promise<void>((resolve,reject)=>{
+      image.onload=()=>resolve()
+      image.onerror=()=>reject(new Error('camera.decode_failed'))
+      image.src=objectUrl
+    })
+    if(image.naturalWidth<1||image.naturalHeight<1)throw new Error('camera.decode_failed')
+    return{source:image,width:image.naturalWidth,height:image.naturalHeight,
+      close:()=>URL.revokeObjectURL(objectUrl)}
+  }catch(error){URL.revokeObjectURL(objectUrl);throw error}
+}
 export async function compressCapture(source:Blob,check:()=>void):Promise<Compressed>{
   check()
   if(source.size<1||source.size>128*1024*1024)throw new Error('camera.source_too_large')
-  let bitmap:ImageBitmap
-  try{bitmap=await createImageBitmap(source)}catch{throw new Error('camera.decode_failed')}
+  const decoded=await decodeImage(source)
   const canvas=document.createElement('canvas')
   try{
     check()
-    const {width,height}=geometry(bitmap.width,bitmap.height)
+    const {width,height}=geometry(decoded.width,decoded.height)
     canvas.width=width;canvas.height=height
     const context=canvas.getContext('2d',{alpha:false})
     if(!context)throw new Error('camera.canvas_unavailable')
     context.fillStyle='#fff';context.fillRect(0,0,width,height)
-    context.drawImage(bitmap,0,0,width,height)
+    context.drawImage(decoded.source,0,0,width,height)
     check()
     const encoded=await jpegCanvas(canvas)
     check()
     const blob=await stripJpegMetadata(encoded)
     check()
-    return{blob,sourceWidth:bitmap.width,sourceHeight:bitmap.height,outputWidth:width,outputHeight:height}
-  }finally{bitmap.close();canvas.width=0;canvas.height=0}
+    return{blob,sourceWidth:decoded.width,sourceHeight:decoded.height,outputWidth:width,outputHeight:height}
+  }finally{decoded.close();canvas.width=0;canvas.height=0}
 }

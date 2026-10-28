@@ -16,12 +16,13 @@ const MAX_PENDING_MS=5*60*1000
 
 /** No network upload/camera SDK; all persistence goes through R2-04 public module. */
 export class CaptureSession{
+  private readonly compressor:Compressor
   private readonly vault=openLocalPhotoVault()
   private readonly owner=identity.value?.accountId
   private readonly device=identity.value?.deviceId
   private pending:PendingCapture|null=null
   private generation=0
-  constructor(private readonly compressor:Compressor){}
+  constructor(compressor:Compressor){this.compressor=compressor}
   readonly time:TimeAuthority=this.vault.time
   get hasPending():boolean{return Boolean(this.pending)}
   get currentPendingId(){return this.pending?.photoId??null}

@@ -4,10 +4,14 @@ type ImageCaptureApi=new(track:MediaStreamTrack)=>{takePhoto():Promise<Blob>}
 function stopped(stream:MediaStream){stream.getTracks().forEach(track=>track.stop())}
 /** Pure lifecycle adapter. No demo capture, no save-to-Photos or input[type=file]. */
 export class BrowserCamera{
+  private readonly video:HTMLVideoElement
+  private readonly acquire:(options:MediaStreamConstraints)=>Promise<MediaStream>
   private stream:MediaStream|null=null
   private generation=0
-  constructor(private readonly video:HTMLVideoElement,private readonly acquire:
-    (options:MediaStreamConstraints)=>Promise<MediaStream>=(c)=>navigator.mediaDevices.getUserMedia(c)){}
+  constructor(video:HTMLVideoElement,acquire:
+    (options:MediaStreamConstraints)=>Promise<MediaStream>=(c)=>navigator.mediaDevices.getUserMedia(c)){
+    this.video=video;this.acquire=acquire
+  }
   get active(){return this.stream?.getVideoTracks().some(x=>x.readyState==='live')??false}
   stop():void{
     this.generation++
@@ -23,7 +27,7 @@ export class BrowserCamera{
     try{
       stream=await this.acquire({audio:false,video:{facingMode:{ideal:facing},
         width:{ideal:1920},height:{ideal:1080}}})
-    }catch(e){if(token!==this.generation)throw new Error('camera.cancelled');throw e}
+    }catch(e){if(token!==this.generation)throw new Error('camera.cancelled',{cause:e});throw e}
     if(token!==this.generation){stopped(stream);throw new Error('camera.cancelled')}
     const track=stream.getVideoTracks()[0]
     if(!track || track.readyState!=='live'){stopped(stream);throw new Error('camera.no_track')}
@@ -50,12 +54,13 @@ export class BrowserCamera{
         if(token!==this.generation)throw new Error('camera.cancelled')
         if(blob.size>0)return{blob,method:'image-capture'}
       }catch(e){
-        if(token!==this.generation)throw new Error('camera.cancelled')
+        if(token!==this.generation)throw new Error('camera.cancelled',{cause:e})
         // Some browsers implement ImageCapture but reject it for video tracks.
         if(e instanceof DOMException && e.name==='NotAllowedError')throw e
       }
     }
     if(token!==this.generation)throw new Error('camera.cancelled')
+    if(track.readyState!=='live')throw new Error('camera.not_ready')
     if(this.video.readyState<2 || this.video.videoWidth<1 || this.video.videoHeight<1)
       throw new Error('camera.frame_unavailable')
     const canvas=document.createElement('canvas')
@@ -75,6 +80,7 @@ export function captureError(error:unknown):string{
     if(error.name==='NotAllowedError'||error.name==='PermissionDeniedError')return 'camera.permission_denied'
     if(error.name==='NotFoundError'||error.name==='DevicesNotFoundError')return 'camera.no_device'
     if(error.name==='NotReadableError'||error.name==='TrackStartError')return 'camera.device_busy'
+    if(error.name==='NotSupportedError'||error.name==='SecurityError')return 'camera.insecure_or_unsupported'
     if(error.name==='QuotaExceededError')return 'storage.quota_exceeded'
     if(error.name==='AbortError')return 'camera.cancelled'
   }

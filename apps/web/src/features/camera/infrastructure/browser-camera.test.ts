@@ -53,4 +53,14 @@ describe('R2-06 camera lifecycle',()=>{
     await expect(capture).rejects.toThrow('camera.cancelled')
     expect(f.track.stop).toHaveBeenCalledOnce()
   })
+  it('does not fall back to a stopped track after ImageCapture rejects',async()=>{
+    const f=fixture()
+    vi.stubGlobal('window',{ImageCapture:class{async takePhoto(){
+      Object.defineProperty(f.track,'readyState',{value:'ended'})
+      throw new DOMException('not available','NotSupportedError')
+    }}})
+    const camera=new BrowserCamera(f.video,async()=>f.stream)
+    await camera.start('environment')
+    await expect(camera.take()).rejects.toThrow('camera.not_ready')
+  })
 })

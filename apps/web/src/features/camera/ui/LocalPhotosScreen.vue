@@ -34,16 +34,13 @@ const release=onIdentityCleanup(dispose)
 function timestamp(value:number):string{return new Intl.DateTimeFormat(language.value==='ru'?'ru-RU':'en-US',{dateStyle:'medium',timeStyle:'short'}).format(value)}
 async function load(force=false){
   const ticket=++generation,active=identity.value
-  rows.value=[];error.value='';locked.value=false
+  error.value='';locked.value=false
   if(!active){loading.value=false;return}
-  loading.value=true;refreshing.value=force
+  loading.value=rows.value.length===0;refreshing.value=force||rows.value.length>0
   try{
     const vault=openLocalPhotoVault()
-    const current=vault.time.status()
-    if(!current.trusted){
-      if(force||!active.offline)await vault.time.refreshFromServer()
-      else await vault.time.restoreFromStorage()
-    }
+    if(!vault.time.status().trusted)await vault.time.restoreFromStorage()
+    if(!vault.time.status().trusted&&(force||!active.offline))await vault.time.refreshFromServer()
     if(!vault.time.status().trusted)throw new Error('time.untrusted')
     // No image assets are decrypted for the list; only encrypted per-photo metadata.
     await vault.reconcile()
@@ -77,32 +74,92 @@ watch(identity,(a,b)=>{if(a?.accountId!==b?.accountId||a?.deviceId!==b?.deviceId
 </script>
 
 <template>
-  <section class="secure-photo-list" data-testid="local-photo-list">
+  <section
+    class="secure-photo-list"
+    data-testid="local-photo-list"
+  >
     <header class="local-photos-header">
       <div><h2>{{ copy.title }}</h2><p>{{ copy.explanation }}</p></div>
-      <RouterLink to="/camera" class="primary-button">{{ copy.camera }}</RouterLink>
+      <RouterLink
+        to="/camera"
+        class="primary-button"
+      >{{ copy.camera }}</RouterLink>
     </header>
     <template v-if="!identity">
-      <div class="secure-empty" role="status"><p>{{ copy.login }}</p>
-        <RouterLink to="/account/create" class="subtle-button">{{ copy.create }}</RouterLink>
-        <RouterLink to="/account/restore" class="subtle-button">{{ copy.restore }}</RouterLink>
+      <div
+        class="secure-empty"
+        role="status"
+      >
+        <p>{{ copy.login }}</p>
+        <RouterLink
+          to="/account/create"
+          class="subtle-button"
+        >{{ copy.create }}</RouterLink>
+        <RouterLink
+          to="/account/restore"
+          class="subtle-button"
+        >{{ copy.restore }}</RouterLink>
       </div>
     </template>
     <template v-else>
       <div class="secure-list-tools">
-        <label class="sr-only" for="photo-local-filter">{{ ru?'Найти по ID':'Filter by ID' }}</label>
-        <input id="photo-local-filter" v-model="filter" type="search" :placeholder="ru?'Поиск по ID':'Search by ID'"
-          :disabled="locked||loading" />
-        <button type="button" class="subtle-button" :disabled="loading" @click="load(true)">{{ copy.refresh }}</button>
+        <label
+          class="sr-only"
+          for="photo-local-filter"
+        >{{ ru?'Найти по ID':'Filter by ID' }}</label>
+        <input
+          id="photo-local-filter"
+          v-model="filter"
+          type="search"
+          :placeholder="ru?'Поиск по ID':'Search by ID'"
+          :disabled="locked||loading"
+        >
+        <button
+          type="button"
+          class="subtle-button"
+          :disabled="loading||refreshing"
+          @click="load(true)"
+        >
+          {{ copy.refresh }}
+        </button>
       </div>
-      <p v-if="loading" role="status">{{ copy.loading }}</p>
-      <div v-else-if="locked" class="secure-empty" role="alert">
-        <h2>{{ copy.locked }}</h2><button type="button" class="primary-button" :disabled="refreshing" @click="load(true)">{{ copy.reload }}</button>
+      <p
+        v-if="loading"
+        role="status"
+      >
+        {{ copy.loading }}
+      </p>
+      <div
+        v-else-if="locked"
+        class="secure-empty"
+        role="alert"
+      >
+        <h2>{{ copy.locked }}</h2><button
+          type="button"
+          class="primary-button"
+          :disabled="refreshing"
+          @click="load(true)"
+        >
+          {{ copy.reload }}
+        </button>
       </div>
-      <div v-else-if="visible.length" class="secure-photo-rows" role="list">
-        <RouterLink v-for="item in visible" :key="item.header.photoId" role="listitem" class="secure-photo-row"
-          :to="'/photos/'+item.header.photoId" :aria-label="copy.view+' '+item.header.photoId">
-          <div class="ciphertext-icon" aria-hidden="true">▧</div>
+      <div
+        v-else-if="visible.length"
+        class="secure-photo-rows"
+        role="list"
+      >
+        <RouterLink
+          v-for="item in visible"
+          :key="item.header.photoId"
+          role="listitem"
+          class="secure-photo-row"
+          :to="'/photos/'+item.header.photoId"
+          :aria-label="copy.view+' '+item.header.photoId"
+        >
+          <div
+            class="ciphertext-icon"
+            aria-hidden="true"
+          >▧</div>
           <div class="secure-photo-summary"><strong>{{ timestamp(item.metadata.capturedAt) }}</strong>
             <small>{{ item.header.photoId }}</small>
             <span>{{ copy.mode }} {{ item.metadata.mode }} · {{ copy.retention }} {{ timestamp(item.header.expiresAt) }}</span>
@@ -110,8 +167,20 @@ watch(identity,(a,b)=>{if(a?.accountId!==b?.accountId||a?.deviceId!==b?.deviceId
           <span class="secure-local-label">{{ copy.local }}</span>
         </RouterLink>
       </div>
-      <div v-else class="secure-empty" role="status"><h2>{{ copy.empty }}</h2><p>{{ copy.emptyHint }}</p></div>
-      <p v-if="error" role="alert" class="identity-error">{{ error }}</p>
+      <div
+        v-else
+        class="secure-empty"
+        role="status"
+      >
+        <h2>{{ copy.empty }}</h2><p>{{ copy.emptyHint }}</p>
+      </div>
+      <p
+        v-if="error"
+        role="alert"
+        class="identity-error"
+      >
+        {{ error }}
+      </p>
     </template>
   </section>
 </template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed,nextTick,onMounted,onUnmounted,ref,watch} from 'vue'
+import {computed,nextTick,onMounted,onUnmounted,ref,shallowRef,watch} from 'vue'
 import {useRouter} from 'vue-router'
 import {identity,onIdentityCleanup} from '../../identity'
 import {language} from '../../ui-preview'
@@ -12,7 +12,8 @@ const started=ref(false),starting=ref(false),processing=ref(false),grid=ref(fals
 const facing=ref<Facing>('environment'),mode=ref<CaptureMode>(3),ttl=ref(DEFAULT_TTL_DAYS)
 const status=ref(''),error=ref(''),savedId=ref(''),savedCount=ref(0),clock=ref('unknown')
 const router=useRouter()
-let controller:BrowserCamera|null=null,session:CaptureSession|null=null,mounted=false
+let controller:BrowserCamera|null=null,mounted=false
+const session=shallowRef<CaptureSession|null>(null)
 const copy=computed(()=>ru.value?{
   start:'Включить камеру',flip:'Сменить камеру',stop:'Остановить камеру',shutter:'Снять фото',photos:'Фото',
   auth:'Сначала создайте или восстановите анонимный аккаунт.',create:'Создать аккаунт',restore:'Восстановить',
@@ -25,6 +26,7 @@ const copy=computed(()=>ru.value?{
   pending:'Не удалось сохранить: исходный кадр находится только в оперативной памяти. Повторите запись.',
   offline:'Без доверенного времени снимок не будет считаться сохранённым.',back:'К фотографиям',
   error:'Не удалось выполнить действие:',ready:'Камера готова',busy:'Обработка…',invalid:'Нужен новый снимок',
+  label:'Камера PhotoBunker',retentionLabel:'Срок хранения в днях',
 }:{
   start:'Enable camera',flip:'Switch camera',stop:'Stop camera',shutter:'Take photo',photos:'Photos',
   auth:'Create or recover an anonymous account before capturing.',create:'Create account',restore:'Recover',
@@ -37,6 +39,7 @@ const copy=computed(()=>ru.value?{
   pending:'Save failed. This captured frame exists only in memory. Retry the save.',
   offline:'Without trusted time, the photo cannot be marked saved.',back:'To photos',
   error:'Action failed:',ready:'Camera is ready',busy:'Processing…',invalid:'Retake a new photo',
+  label:'PhotoBunker camera',retentionLabel:'Retention days',
 })
 const errorText=computed(()=>{
   const key=error.value
@@ -65,7 +68,8 @@ function stop(){
   controller?.stop();started.value=false;starting.value=false;clearFreeze()
 }
 function dispose(){
-  stop();session?.cancel();session=null;savedId.value=''
+  stop();session.value?.cancel();session.value=null
+  processing.value=false;status.value='';error.value='';savedId.value='';savedCount.value=0;clock.value='unknown'
 }
 const release=onIdentityCleanup(dispose)
 function hidden(){if(document.hidden)dispose()}
@@ -73,7 +77,7 @@ function leaving(){dispose()}
 onMounted(()=>{
   mounted=true
   if(video.value)controller=new BrowserCamera(video.value)
-  if(identity.value)session=openCaptureSession()
+  if(identity.value)session.value=openCaptureSession()
   void prepareTime()
   document.addEventListener('visibilitychange',hidden)
   window.addEventListener('pagehide',leaving)
@@ -90,32 +94,32 @@ watch(identity,async(next,previous)=>{
       await nextTick()
       if(!mounted||!identity.value||!video.value)return
       controller=new BrowserCamera(video.value)
-      try{session=openCaptureSession();void prepareTime()}catch{/* show identity state */}
+      try{session.value=openCaptureSession();void prepareTime()}catch{/* show identity state */}
     }
   }
 })
 async function prepareTime(){
-  if(!session&&identity.value)session=openCaptureSession()
-  if(!session)return
-  const source=session
+  if(!session.value&&identity.value)session.value=openCaptureSession()
+  if(!session.value)return
+  const source=session.value
   await source.prepareTime()
-  if(!mounted||session!==source)return
+  if(!mounted||session.value!==source)return
   clock.value=source.time.status().trusted?'trusted':'locked'
 }
 async function revalidate(){
   error.value=''
-  if(!session&&identity.value)session=openCaptureSession()
-  if(!session)return
+  if(!session.value&&identity.value)session.value=openCaptureSession()
+  if(!session.value)return
   try{
-    await session.time.refreshFromServer()
-    clock.value=session.time.status().trusted?'trusted':'locked'
+    await session.value.time.refreshFromServer()
+    clock.value=session.value.time.status().trusted?'trusted':'locked'
   }catch(e){clock.value='locked';error.value=captureError(e)}
 }
 async function start(){
   if(!identity.value||!controller||starting.value||processing.value)return
   error.value='';status.value='';starting.value=true
   try{
-    if(!session)session=openCaptureSession()
+    if(!session.value)session.value=openCaptureSession()
     await controller.start(facing.value);started.value=true;void prepareTime()
   }
   catch(e){error.value=captureError(e);started.value=false}
@@ -137,49 +141,87 @@ function progress(value:CaptureProgress){
   if(value==='encrypting')status.value=copy.value.saving
 }
 async function shutter(){
-  if(!controller||!session||!started.value||processing.value||session.hasPending)return
+  if(!controller||!session.value||!started.value||processing.value||session.value.hasPending)return
   processing.value=true;error.value='';savedId.value='';status.value=copy.value.compressing
   // Immediate in-memory shutter freeze; never persisted into a browser cache or file.
   freeze()
   try{
     const source=await controller.take()
-    const record=await session.prepare(source.blob,source.method,mode.value,ttl.value,progress)
+    const record=await session.value.prepare(source.blob,source.method,mode.value,ttl.value,progress)
     savedId.value=record.photoId;savedCount.value++;status.value=copy.value.saved
     clock.value='trusted'
   }catch(e){error.value=captureError(e);status.value=''}
   finally{processing.value=false;clearFreeze()}
 }
 async function retry(){
-  if(!session?.hasPending||processing.value)return
+  if(!session.value?.hasPending||processing.value)return
   processing.value=true;error.value=''
   try{
-    const record=await session.retry(progress)
+    const record=await session.value.retry(progress)
     savedId.value=record.photoId;savedCount.value++;status.value=copy.value.saved
   }catch(e){error.value=captureError(e);status.value=''}
   finally{processing.value=false;clearFreeze()}
 }
-function resetPending(){session?.cancel();session=identity.value?openCaptureSession():null;savedId.value='';status.value='';error.value=''}
+function resetPending(){session.value?.cancel();session.value=identity.value?openCaptureSession():null;savedId.value='';status.value='';error.value=''}
 const viewSaved=()=>savedId.value?router.push('/photos/'+savedId.value):undefined
 </script>
 
 <template>
-  <section class="live-camera" data-testid="production-camera" aria-label="PhotoBunker camera">
-    <div v-if="!identity" class="capture-gate" role="status">
+  <section
+    class="live-camera"
+    data-testid="production-camera"
+    :aria-label="copy.label"
+  >
+    <div
+      v-if="!identity"
+      class="capture-gate"
+      role="status"
+    >
       <h2>{{ copy.auth }}</h2>
-      <RouterLink to="/account/create" class="primary-button">{{ copy.create }}</RouterLink>
-      <RouterLink to="/account/restore" class="subtle-button">{{ copy.restore }}</RouterLink>
+      <RouterLink
+        to="/account/create"
+        class="primary-button"
+      >{{ copy.create }}</RouterLink>
+      <RouterLink
+        to="/account/restore"
+        class="subtle-button"
+      >{{ copy.restore }}</RouterLink>
     </div>
     <template v-else>
       <div class="capture-policy">
         <h2>{{ copy.policy }}</h2>
         <fieldset :disabled="processing">
-          <legend class="sr-only">{{ copy.policy }}</legend>
-          <label class="capture-mode disabled"><input type="radio" :checked="false" disabled name="capture-mode"><span>{{ copy.mode1 }}</span></label>
-          <label class="capture-mode"><input v-model.number="mode" type="radio" name="capture-mode" :value="2"><span>{{ copy.mode2 }}</span></label>
-          <label class="capture-mode"><input v-model.number="mode" type="radio" name="capture-mode" :value="3"><span>{{ copy.mode3 }}</span></label>
+          <legend class="sr-only">
+            {{ copy.policy }}
+          </legend>
+          <label class="capture-mode disabled"><input
+            type="radio"
+            :checked="false"
+            disabled
+            name="capture-mode"
+          ><span>{{ copy.mode1 }}</span></label>
+          <label class="capture-mode"><input
+            v-model.number="mode"
+            type="radio"
+            name="capture-mode"
+            :value="2"
+          ><span>{{ copy.mode2 }}</span></label>
+          <label class="capture-mode"><input
+            v-model.number="mode"
+            type="radio"
+            name="capture-mode"
+            :value="3"
+          ><span>{{ copy.mode3 }}</span></label>
           <label class="capture-retention">{{ copy.ttl }}
-            <select v-model.number="ttl" aria-label="Retention days">
-              <option v-for="day in 45" :key="day" :value="day">{{ day }}</option>
+            <select
+              v-model.number="ttl"
+              :aria-label="copy.retentionLabel"
+            >
+              <option
+                v-for="day in 45"
+                :key="day"
+                :value="day"
+              >{{ day }}</option>
             </select>
           </label>
         </fieldset>
@@ -187,45 +229,147 @@ const viewSaved=()=>savedId.value?router.push('/photos/'+savedId.value):undefine
       <div class="camera-preview real-camera-preview">
         <div class="camera-preview-top">
           <span class="status-pill">{{ started?copy.ready:copy.notReady }} · {{ clock==='trusted'?'UTC ✓':copy.offline }}</span>
-          <button type="button" class="icon-button on-dark" :aria-label="ru?'Сетка':'Grid'" :aria-pressed="grid" @click="grid=!grid">
+          <button
+            type="button"
+            class="icon-button on-dark"
+            :aria-label="ru?'Сетка':'Grid'"
+            :aria-pressed="grid"
+            @click="grid=!grid"
+          >
             <span aria-hidden="true">#</span>
           </button>
         </div>
         <div class="camera-viewfinder real-viewfinder">
-          <video ref="video" playsinline autoplay muted class="live-video" :hidden="!started"/>
-          <canvas ref="frozen" class="frozen-frame" :hidden="!processing" aria-hidden="true"/>
-          <div v-if="grid" class="viewfinder-grid" aria-hidden="true"/>
-          <div v-if="!started" class="camera-offline">
+          <video
+            ref="video"
+            playsinline
+            autoplay
+            muted
+            class="live-video"
+            :hidden="!started"
+          />
+          <canvas
+            ref="frozen"
+            class="frozen-frame"
+            :hidden="!processing"
+            aria-hidden="true"
+          />
+          <div
+            v-if="grid"
+            class="viewfinder-grid"
+            aria-hidden="true"
+          />
+          <div
+            v-if="!started"
+            class="camera-offline"
+          >
             <h2>{{ copy.notReady }}</h2>
-            <button type="button" class="primary-button" :disabled="starting" @click="start">
+            <button
+              type="button"
+              class="primary-button"
+              :disabled="starting"
+              @click="start"
+            >
               {{ starting?copy.busy:copy.start }}
             </button>
           </div>
-          <span class="viewfinder-corner top-left"/><span class="viewfinder-corner top-right"/>
-          <span class="viewfinder-corner bottom-left"/><span class="viewfinder-corner bottom-right"/>
+          <span class="viewfinder-corner top-left" /><span class="viewfinder-corner top-right" />
+          <span class="viewfinder-corner bottom-left" /><span class="viewfinder-corner bottom-right" />
         </div>
         <div class="camera-actions">
-          <RouterLink to="/photos" class="camera-side-action"><span aria-hidden="true">▧</span><small>{{ copy.photos }}</small></RouterLink>
-          <button type="button" class="shutter-button" :disabled="!started || processing || !!session?.hasPending"
-            :aria-label="copy.shutter" @click="shutter"><span/></button>
-          <button type="button" class="camera-side-action capture-flip" :disabled="processing || starting"
-            :aria-label="copy.flip" @click="flip"><span aria-hidden="true">⇄</span><small>{{ copy.flip }}</small></button>
+          <RouterLink
+            to="/photos"
+            class="camera-side-action"
+          ><span aria-hidden="true">▧</span><small>{{ copy.photos }}</small></RouterLink>
+          <button
+            type="button"
+            class="shutter-button"
+            :disabled="!started || processing || !!session?.hasPending"
+            :aria-label="copy.shutter"
+            @click="shutter"
+          >
+            <span />
+          </button>
+          <button
+            type="button"
+            class="camera-side-action capture-flip"
+            :disabled="processing || starting"
+            :aria-label="copy.flip"
+            @click="flip"
+          >
+            <span aria-hidden="true">⇄</span><small>{{ copy.flip }}</small>
+          </button>
         </div>
         <div class="camera-secondary-actions">
-          <button v-if="started" type="button" class="subtle-button" :disabled="processing" @click="stop">{{ copy.stop }}</button>
-          <button type="button" class="subtle-button" :disabled="processing" @click="revalidate">{{ copy.clock }}</button>
+          <button
+            v-if="started"
+            type="button"
+            class="subtle-button"
+            :disabled="processing"
+            @click="stop"
+          >
+            {{ copy.stop }}
+          </button>
+          <button
+            type="button"
+            class="subtle-button"
+            :disabled="processing"
+            @click="revalidate"
+          >
+            {{ copy.clock }}
+          </button>
         </div>
-        <p class="camera-hint">{{ copy.confirm }}</p>
+        <p class="camera-hint">
+          {{ copy.confirm }}
+        </p>
       </div>
-      <div v-if="status" role="status" class="camera-feedback">{{ status }} <span v-if="savedCount">({{ savedCount }})</span></div>
-      <div v-if="error" role="alert" class="camera-feedback error">{{ errorText }}</div>
-      <div v-if="session?.hasPending" class="camera-retry">
+      <div
+        v-if="status"
+        role="status"
+        class="camera-feedback"
+      >
+        {{ status }} <span v-if="savedCount">({{ savedCount }})</span>
+      </div>
+      <div
+        v-if="error"
+        role="alert"
+        class="camera-feedback error"
+      >
+        {{ errorText }}
+      </div>
+      <div
+        v-if="session?.hasPending"
+        class="camera-retry"
+      >
         <p>{{ copy.pending }}</p>
-        <button type="button" :disabled="processing" class="primary-button" @click="retry">{{ copy.retry }}</button>
-        <button type="button" :disabled="processing" class="subtle-button" @click="resetPending">{{ copy.invalid }}</button>
+        <button
+          type="button"
+          :disabled="processing"
+          class="primary-button"
+          @click="retry"
+        >
+          {{ copy.retry }}
+        </button>
+        <button
+          type="button"
+          :disabled="processing"
+          class="subtle-button"
+          @click="resetPending"
+        >
+          {{ copy.invalid }}
+        </button>
       </div>
-      <div v-if="savedId" class="camera-saved-actions">
-        <button type="button" class="primary-button" @click="viewSaved">{{ copy.open }}</button>
+      <div
+        v-if="savedId"
+        class="camera-saved-actions"
+      >
+        <button
+          type="button"
+          class="primary-button"
+          @click="viewSaved"
+        >
+          {{ copy.open }}
+        </button>
       </div>
     </template>
   </section>

@@ -15,11 +15,13 @@ const copy=computed(()=>ru.value?{
   locked:'Недоступно: заблокирован аккаунт, время недостоверно или файл повреждён.',
   local:'Только на устройстве · без облака',noSave:'Изображение не сохраняется в Photos/DCIM.',
   account:'Откройте аккаунт, чтобы просмотреть фотографию.',
+  image:'Приватная фотография',
 }:{
   title:'Protected local viewer',back:'Back to photos',loading:'Decrypting on this device…',
   locked:'Unavailable: account locked, untrusted time or corrupt ciphertext.',
   local:'On this device only · no cloud sync',noSave:'No system Photos/DCIM writes.',
   account:'Unlock your account to view this photo.',
+  image:'Private photograph',
 })
 function clear(){
   ticket++
@@ -57,16 +59,42 @@ watch(id,()=>{void show()})
 watch(identity,()=>{void show()})
 </script>
 <template>
-  <section class="protected-viewer" data-testid="local-photo-viewer">
-    <nav class="viewer-nav"><RouterLink to="/photos" class="subtle-button">{{ copy.back }}</RouterLink><span>{{ copy.local }}</span></nav>
+  <section
+    class="protected-viewer"
+    data-testid="local-photo-viewer"
+  >
+    <nav class="viewer-nav">
+      <RouterLink
+        to="/photos"
+        class="subtle-button"
+      >{{ copy.back }}</RouterLink><span>{{ copy.local }}</span>
+    </nav>
     <h2>{{ copy.title }}</h2>
     <div class="viewer-stage">
-      <p v-if="loading" role="status">{{ copy.loading }}</p>
-      <p v-else-if="error" role="alert">{{ error }}</p>
-      <img v-else-if="url" :src="url" alt="Private photograph" referrerpolicy="no-referrer" decoding="async"
-        @error="failDecode"/>
+      <p
+        v-if="loading"
+        role="status"
+      >
+        {{ copy.loading }}
+      </p>
+      <p
+        v-else-if="error"
+        role="alert"
+      >
+        {{ error }}
+      </p>
+      <img
+        v-else-if="url"
+        :src="url"
+        :alt="copy.image"
+        referrerpolicy="no-referrer"
+        decoding="async"
+        @error="failDecode"
+      >
     </div>
-    <p class="viewer-note">{{ copy.noSave }}</p>
+    <p class="viewer-note">
+      {{ copy.noSave }}
+    </p>
   </section>
 </template>
 <style scoped>
