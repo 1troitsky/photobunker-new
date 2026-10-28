@@ -4,15 +4,15 @@
 
 ## 1. Предлагаемая инфраструктура
 
-- Laravel + PostgreSQL и очереди — **цель серверных стадий R2-03/R2-05**. **R2-01 включает только workspace/toolchain, CI, тестовый harness и production HTTPS preview**, без подключения настоящей PostgreSQL или Garage (чтобы не задерживать первую UI-проверку).
+- Laravel + PostgreSQL и очереди — **цель серверных стадий R2-03/R2-05**. **R2-01 включает только workspace/toolchain, локальный тестовый harness и production HTTPS preview**, без подключения настоящей PostgreSQL или Garage (чтобы не задерживать первую UI-проверку).
 - S3-compatible private object storage: **Garage — первоначальный backend** через заменяемый S3 adapter; **только encrypted** photo/thumbnail/derivative objects. Подмена внешним S3 не меняет domain API.
 - PWA/web frontend: [Dexie/IndexedDB](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md) для metadata/journal/outbox, **OPFS ciphertext Blob** с encrypted IndexedDB Blob fallback и capability probes Safari/iOS; Pinia ephemeral UI. `navigator.storage.persist()` best-effort. Build output serve over HTTPS, **никогда dev server для release**.
-- CI изолированным test stack, не подключается к реальным пользовательским данным, не имеет production secrets.
+- Локальный test stack изолирован, не подключается к реальным пользовательским данным и не имеет production secrets.
 - Структурированные логи с correlation/operation ids без photo bytes, GPS, descriptions, keys/PIN и credentials.
 
 ## 1.1. Очерёдность интеграций
 
-**R2-01:** Codex workspace, .gitignore, production build, CI/import-boundary tests, test harness, GitHub Project и HTTPS preview — **без PostgreSQL/Garage**. **R2-02:** ChatGPT UI, Codex production testing, владелец first UX acceptance. **R2-03:** real Identity + backend и recovery. **R2-04:** client local encrypted storage + Safari capability. **R2-05:** Garage ciphertext sync и PostgreSQL storage metadata/reconciliation/expiry jobs. Не создавайте dependencies setup от будущего S3 bucket.
+**R2-01:** Codex workspace, .gitignore, локальный production build/import-boundary tests, test harness, GitHub Project и HTTPS preview — **без PostgreSQL/Garage**. **R2-02:** ChatGPT UI, Codex production testing, владелец first UX acceptance. **R2-03:** real Identity + backend и recovery. **R2-04:** client local encrypted storage + Safari capability. **R2-05:** Garage ciphertext sync и PostgreSQL storage metadata/reconciliation/expiry jobs. Не создавайте dependencies setup от будущего S3 bucket.
 
 ## 2. Среды и конфигурация
 

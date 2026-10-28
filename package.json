@@ -1,0 +1,34 @@
+{
+  "name": "photobunker-new",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@10.20.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.20.0"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @photobunker/web dev",
+    "build": "pnpm --filter @photobunker/web build && node tools/release/check-bundle.mjs",
+    "preview": "pnpm --filter @photobunker/web preview",
+    "typecheck": "pnpm --filter @photobunker/web typecheck",
+    "lint": "eslint .",
+    "test:unit": "pnpm --filter @photobunker/web test:unit",
+    "test:architecture": "node tools/architecture/check.mjs apps/web/src && node tools/architecture/verify-negative.mjs",
+    "test:browser": "playwright test",
+    "test": "pnpm test:architecture && pnpm test:unit",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.56.1",
+    "eslint": "10.13.0",
+    "eslint-plugin-vue": "10.12.0",
+    "globals": "17.13.0",
+    "typescript-eslint": "8.72.1"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}

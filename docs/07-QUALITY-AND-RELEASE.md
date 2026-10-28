@@ -28,7 +28,7 @@
 
 | Scenario | Minimum proof |
 | --- | --- |
-| Identity | **R2-03:** email/verified registration and recover, first trusted device no confirmation deadlock, 2 devices pairing/recovery secret, mid-registration reload/retry, password reset ≠ photo key, account switch no stale decrypted UI |
+| Identity | **R2-03:** anonymous key-only create/restore, first device without confirmation deadlock, signed challenge, 2 devices pairing/Recovery Key, partial bootstrap reload/retry, permanent-loss UX, account switch without stale decrypted UI |
 | Camera | Actual iPhone/Android browser permission, take 3 photos, airplane mode, reload, view local gallery, system gallery unchanged |
 | Crypto | Dexie/IndexedDB sensitive fields encrypted, OPFS encrypted blob with encrypted IDB fallback; no plaintext after save in cache/logs; readback on authorized device, corrupt/invalid data denied; actual Safari capability/persist denied |
 | Storage policy | Modes 2 and 3, mode 1 UI disabled and server rejects unauthorized selection; edit replacement no persistent orphan; storage-full rollback |

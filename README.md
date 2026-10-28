@@ -1,6 +1,6 @@
 # PhotoBunker — новая версия
 
-**Состояние на 28.10.2026:** архитектурные инварианты **APPROVED**, 26 Issues подготовлены; **реализация ещё не начата**. Следующее действие — Codex выполняет **узкий R2-01 (workspace/production build/CI/Project/preview, без Garage и PostgreSQL интеграции)** и выдаёт ChatGPT первую Ready Issue.
+**Состояние на 28.10.2026:** архитектурные инварианты **APPROVED**, реализация начата. Codex выполняет **R2-01**: создан Vue/TypeScript PWA workspace, локальный production build/test harness и GitHub Project; внешний HTTPS preview остаётся последним deployment gate перед передачей R2-02 ChatGPT. Garage и PostgreSQL не входят в R2-01.
 
 PhotoBunker — защищённое фотоприложение: камера, локальная галерея, задания и команды, редактор, Photo Card, защищённый Photo Browser, три независимых PIN-сценария. Мобильное PWA и desktop. **Мессенджера/Matrix/чатов/звонков в этой версии нет.**
 
@@ -13,7 +13,7 @@ PhotoBunker — защищённое фотоприложение: камера,
 3. **Режимы хранения по заданию:** (1) источник без дополнительного сжатия, **disabled в UI**; (2) сохранять сжатый исходник отдельно от редакторской версии; (3) сжатый master заменять при сохранении редакторской версии, **default**, также без задания.
 4. **Миниатюра:** максимум одна зашифрованная **WebP до 320px** по длинной стороне на фото, отправляется в S3, на устройстве ограниченный зашифрованный кэш; отдельные постоянные previews не хранить.
 5. **TTL всех фотографий: от 24 часов до 45 дней по заданию.** При создании фиксируется срок `expires_at`. По истечении закрывается доступ; очищаются originals, masters, edits, thumbnails, файлы/ссылки share/export, кэш и относящиеся к фото строки БД/metadata. Сервис Laravel Scheduler + cron + batch queue удаляет истёкшее с индексом `expires_at`; локальный клиент удаляет просроченное при следующем доступном запуске. Не оставлять данные бессрочно и не выдавать ошибочную мгновенную гарантию очистки отключённого офлайн-телефона.
-6. **Identity и расширяемость:** стабильный User/Account ID, самостоятельные Device/Session/Profile и Authorization; будущие подписки (User/Team billing owner) и Messenger подключаются отдельными модулями через Identity API. **Мессенджер не включён** в текущий продукт и не участвует в старте приложения. Email/password+email verification; first trusted device bootstrap, pairing/recovery phrase и account switching определены в [11](docs/11-IDENTITY-AND-KEYS.md).
+6. **Anonymous key-only Identity:** никаких email, телефона и паролей. Приложение выдаёт один Account Recovery Key; trusted devices входят по подписанному challenge, новое устройство восстанавливается ключом или pairing. Потеря ключа и всех устройств означает окончательную потерю доступа. Account wrapping key оборачивает отдельные per-asset DEK. [11](docs/11-IDENTITY-AND-KEYS.md).
 7. **Browser storage:** Dexie/IndexedDB — metadata/journal/outbox, OPFS — ciphertext photo assets с encrypted IndexedDB Blob fallback, Pinia только ephemeral UI state. Safari/iOS capability+persist проверяется в R2-04. [12](docs/12-CLIENT-STORAGE-AND-TRUSTED-TIME.md).
 8. **Security и trusted time:** доступы Card, photo, original, download, Note и Browser независимы, ACL/TTL проверяются сервером и локальной криптографией; App lock PIN / local delete PIN / emergency PIN — разные механизмы. Серверное время авторитетно, клиент хранит last trusted time, подозрительный clock rollback блокирует офлайн-доступ до серверной сверки.
 
@@ -23,8 +23,8 @@ PhotoBunker — защищённое фотоприложение: камера,
 
 | Участник | Обязанности |
 | --- | --- |
-| **Владелец** | Продуктовые решения, приоритеты, ручные проверки на телефоне/desktop, разрешения merge/release |
-| **Codex** | Технический координатор **с доступом к окружению**: установка зависимостей, Project/CI/production preview, выдача ChatGPT Ready Issues, code review, тесты **и самостоятельная доработка того же PR** при необходимости |
+| **Владелец** | Продуктовые решения, приоритеты, ручные проверки на телефоне/desktop и разрешение выпуска; технически проверенные PR Codex сливает по постоянному разрешению без запроса на каждый merge |
+| **Codex** | Технический координатор **с доступом к окружению**: установка зависимостей, локальные проверки, Project/production preview, выдача ChatGPT Ready Issues, code review, тесты **и самостоятельная доработка того же PR** при необходимости |
 | **ChatGPT** | **Основная масса реализации по Issue** благодаря доступным лимитам: код, ветка, один Draft PR, передача Codex; проверки по доступным инструментам, без обязанности дублировать тестовое окружение Codex |
 
 **Codex не подчинён ChatGPT и не ограничен ролью пассивного рецензента.** Он вправе настраивать инфраструктуру, писать тесты и исправлять код. ChatGPT не назначает Codex задачи и не навязывает ему лишние процедуры. Правила подробнее — [COLLABORATION.md](COLLABORATION.md), [AGENTS.md](AGENTS.md), [CHATBOT-AGENTS.md](CHATBOT-AGENTS.md).
@@ -53,4 +53,18 @@ PhotoBunker — защищённое фотоприложение: камера,
 
 ## Текущее состояние GitHub и следующий шаг
 
-[Issues #1–#26](https://github.com/1troitsky/photobunker-new/issues) уже созданы; **их наличие не означает, что они готовы к реализации**. Создание/привязка доски GitHub Projects v2 ещё **не подтверждены** в этом репозитории. **Codex** через доступные ему инструменты создаёт/настраивает `PhotoBunker New — Development`, готовит инфраструктуру, затем **выдаёт ChatGPT первую конкретную Ready Issue**. ChatGPT работает в отдельной ветке и передаёт Draft PR; Codex проверяет, тестирует и допиливает. Никаких самостоятельных merge в `main` без согласованного разрешения владельца.
+[Issues #1–#26](https://github.com/1troitsky/photobunker-new/issues) добавлены в **[PhotoBunker New — Development](https://github.com/users/1troitsky/projects/14)** со стадиями Backlog/Ready/In Progress/Review/Integrated/Accepted/Blocked/Cancelled. ChatGPT работает в отдельной ветке и передаёт Draft PR; Codex проверяет, тестирует, допиливает, самостоятельно сливает технически готовый PR в `main`, обновляет Project и выдаёт следующую Ready Issue. ChatGPT сам merge не выполняет.
+
+## Локальная разработка
+
+Требуются Node 22 и зафиксированный Corepack/pnpm 10.20.0. Из корня репозитория:
+
+```sh
+corepack enable pnpm
+pnpm install --frozen-lockfile
+pnpm check
+pnpm exec playwright install chromium
+pnpm test:browser
+```
+
+`pnpm check` запускает lint, typecheck, архитектурный positive/negative gate, unit tests и проверку production PWA bundle. `pnpm test:browser` запускает собранный bundle через `vite preview`, не dev server.

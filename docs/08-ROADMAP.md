@@ -1,6 +1,6 @@
 # 08. PhotoBunker New — единый Implementation Roadmap
 
-**Версия:** проект плана для реализации, 2026-10-28. **Статус: подготовлено; начало разработки только после подтверждения владельцем и закрытия блокирующих OPEN решений.** Это **единственный roadmap** нового проекта. Операционный статус каждого Issue — в GitHub Project, не в таблице ниже.
+**Версия:** 2026-10-28. **Статус: APPROVED; реализация начата с R2-01 по прямому решению владельца 28.10.2026.** Это единственный roadmap нового проекта. Операционный статус каждого Issue — в GitHub Project, не в таблице ниже.
 
 ## 0. Цель и критерий
 
@@ -14,9 +14,9 @@
 
 **Проект создаётся целиком заранее:** полный backlog Issues формируется сразу для всех фаз. `Ready` — только проверенная следующая работа без OPEN решений. Статусы, WIP и передача между тремя участниками — в `COLLABORATION.md`.
 
-**GitHub Project:** `PhotoBunker New — Development` **ещё не создан / не связан с Issues** (проверка на 28.10.2026). **Codex создаёт и заполняет Project в R2-01** с доступным ему GitHub CLI/полномочиями. 26 Issues существуют, но статус Project не считается заполненным до подтверждения. См. [COLLABORATION.md](../COLLABORATION.md).
+**GitHub Project:** **[PhotoBunker New — Development](https://github.com/users/1troitsky/projects/14)** создан 28.10.2026, Issues #1–#26 добавлены, Status настроен как Backlog/Ready/In Progress/Review/Integrated/Accepted/Blocked/Cancelled. R2-01 — In Progress; остальные задачи начинают в Backlog до прохождения Ready gate.
 
-**Рабочий цикл:** **Codex** подготавливает зависимости, GitHub Project/CI/production preview и **выдаёт ChatGPT Ready Issue**. **ChatGPT** делает объёмную реализацию и Draft PR; **Codex** проверяет diff, запускает/дописывает тесты и **при необходимости дорабатывает тот же PR**, затем согласованно интегрирует после разрешения владельца. `Accepted` — только после ручной проверки владельцем. Благодаря лимитам ChatGPT исполняет большую часть Issues, но техническим координатором остаётся Codex.
+**Рабочий цикл:** **Codex** подготавливает зависимости, локальные проверки, GitHub Project/production preview и **выдаёт ChatGPT Ready Issue**. **ChatGPT** делает объёмную реализацию и Draft PR; **Codex** проверяет diff, запускает/дописывает тесты, **при необходимости дорабатывает тот же PR**, затем самостоятельно сливает технически готовый PR в `main`, обновляет Project и выдаёт следующую Ready Issue. `Accepted` — только после ручной проверки владельцем. Благодаря лимитам ChatGPT исполняет большую часть Issues, но техническим координатором остаётся Codex.
 
 ## 1.1. Codex организует и проверяет, ChatGPT реализует по Issues, владелец принимает
 
@@ -38,7 +38,7 @@
 
 **Очередность исполнения внутри R2-1: сначала R2-04 → R2-06 (минимальная локальная галерея в scope R2-06) → R2-05 → R2-07.** R2-06 не должен зависеть от S3 и remote API; R2-07 может включать полный cloud-backed gallery после R2-05. Ранний encrypted local capture зависит от утверждённого security/key contract, но **не** от выбора конкретного S3-провайдера.
 
-**Приёмка:** Codex **проверяет, тестирует, исправляет или дополняет код** в том же PR, самостоятельно решая, что рациональнее сделать локально, а что выдать ChatGPT как адресную задачу. **Merge только в рамках разрешения владельца**; на пользовательских вехах владелец лично проверяет UX и может вернуть блок с замечаниями. Нет требования заставлять ChatGPT заново выполнять всю тестовую работу Codex. Не требовать у владельца ручную проверку после каждой мелкой Issue. Результаты пишутся в GitHub Project/Issue/PR, а не теряются в чате.
+**Приёмка:** Codex **проверяет, тестирует, исправляет или дополняет код** в том же PR, самостоятельно решая, что рациональнее сделать локально, а что выдать ChatGPT как адресную задачу. После успешных обязательных проверок Codex сливает PR по постоянному разрешению владельца; на пользовательских вехах владелец лично проверяет UX и может вернуть блок с замечаниями. Нет требования заставлять ChatGPT заново выполнять всю тестовую работу Codex. Не требовать у владельца ручную проверку после каждой мелкой Issue. Результаты пишутся в GitHub Project/Issue/PR, а не теряются в чате.
 
 ## 2. Открытые продуктовые решения — обязательный gate перед реализации зависимой функции
 
@@ -53,9 +53,9 @@ IDs стабильны; каждому соответствует **отдель
 | ID | Фаза | Пункт | Priority | Зависит от / gate |
 | --- | --- | --- | --- | --- |
 | [R2-00](https://github.com/1troitsky/photobunker-new/issues/1) | Foundation | Проверить инварианты, выбрать недостающие **только для ближайшей Issue** технические решения | P0 | Codex + владелец лишь по существенным вопросам |
-| [R2-01](https://github.com/1troitsky/photobunker-new/issues/2) | Foundation | **Codex setup:** workspace, Vue/TS, production build, CI/import boundaries, test harness, `.gitignore`, Project, HTTPS preview; **никакой интеграции PostgreSQL/Garage** | P0 | Архитектура APPROVED; R2-00 не gate для UI |
+| [R2-01](https://github.com/1troitsky/photobunker-new/issues/2) | Foundation | **Codex setup:** workspace, Vue/TS, локальный production build/import boundaries, test harness, `.gitignore`, Project, HTTPS preview; **никакой интеграции PostgreSQL/Garage** | P0 | Архитектура APPROVED; R2-00 не gate для UI |
 | [R2-02](https://github.com/1troitsky/photobunker-new/issues/3) | Foundation | UI/design system, пять основных экранов, production navigation с fixture-only UI preview | P0 | R2-01, утверждение UX владельцем |
-| [R2-03](https://github.com/1troitsky/photobunker-new/issues/4) | Foundation | **Create account/Sign in/Recover + verified email, trusted first device, encrypted recovery secret, new device pairing, session isolation** | P0 | R2-01/02; [11 Identity/Keys](11-IDENTITY-AND-KEYS.md) + Codex crypto/security review, не ждать R2-21 |
+| [R2-03](https://github.com/1troitsky/photobunker-new/issues/4) | Foundation | **Anonymous key-only Create/Restore, trusted first device, signed challenges, one Recovery Key, new-device pairing, session isolation** | P0 | R2-01/02; [11 Identity/Keys](11-IDENTITY-AND-KEYS.md) + Codex crypto/security review, не ждать R2-21 |
 | [R2-04](https://github.com/1troitsky/photobunker-new/issues/5) | Storage | **Dexie/IndexedDB metadata/outbox**, OPFS encrypted blobs + encrypted IDB Blob fallback, trusted-time rollback policy, crash journal | P0 | R2-03; [11](11-IDENTITY-AND-KEYS.md) + [12](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md); Safari real-device capability gates |
 | [R2-05](https://github.com/1troitsky/photobunker-new/issues/6) | Storage | Idempotent encrypted S3 sync, readback, TTL, orphan GC; **scheduled batch deletion** | P0 | R2-04; Garage/24ч–45д TTL/thumb policy утверждены |
 | [R2-06](https://github.com/1troitsky/photobunker-new/issues/7) | Capture | Camera/capture/photo compression policies modes 2/3, mode 1 disabled, no system gallery; **minimal local photo list/view for first real manual test** | P0 | R2-02/03/04; ST-08; **not R2-05** |
@@ -73,7 +73,7 @@ IDs стабильны; каждому соответствует **отдель
 | [R2-18](https://github.com/1troitsky/photobunker-new/issues/19) | Security | App Lock PIN optional, configured attempts/cooldown, account/device scope | P0 | R2-03 |
 | [R2-19](https://github.com/1troitsky/photobunker-new/issues/20) | Security | Local Delete PIN, backup/recovery preflight, exact-device cleanup | P0 | R2-05/18; ST-04 recovery, TTL утверждён |
 | [R2-20](https://github.com/1troitsky/photobunker-new/issues/21) | Security | Emergency PIN, immediate lock + signed durable server intent, crash/retry | P0 | R2-19; independent threat review |
-| [R2-21](https://github.com/1troitsky/photobunker-new/issues/22) | UX | **Full Welcome visual/copy polish**, profile/settings, themes, RU/EN, accessibility; **не реализация login/recover** | P0 | R2-02/03/18; базовые auth screens уже в R2-03 |
+| [R2-21](https://github.com/1troitsky/photobunker-new/issues/22) | UX | **Full Welcome visual/copy polish**, profile/settings, themes, RU/EN, accessibility; **не реализация key-only Create/Restore** | P0 | R2-02/03/18; базовые identity screens уже в R2-03 |
 | [R2-22](https://github.com/1troitsky/photobunker-new/issues/23) | Extensions | Geo-based gallery filters, map opt-in, non-blocking GPS | P2 | R2-07/10 |
 | [R2-23](https://github.com/1troitsky/photobunker-new/issues/24) | Assurance | Independent security, fault injection and release E2E hardening | P0 | P0 core modules R2-03–21 |
 | [R2-24](https://github.com/1troitsky/photobunker-new/issues/25) | Delivery | Staging/prod deployment, backup-restore, rollback, mobile PWA acceptance | P0 | R2-23 |
@@ -84,7 +84,7 @@ IDs стабильны; каждому соответствует **отдель
 ## 4. Фазы по результату
 
 ### R2-0 Foundation: R2-00–03
-**R2-01 только минимальный frontend/CI/Project/HTTPS preview**, не Garage/PostgreSQL. **R2-02** — пять экранов и первая ручная UX-проверка, не ждать backend. **R2-03** — реальная Create account/Sign in/Recover + first device/recovery по [11](11-IDENTITY-AND-KEYS.md), до камеры; shell не блокирует HTTP. Codex подготавливает, выдаёт ChatGPT задачи, тестирует и допиливает. UI preview без серверного поведения допускается **только явно отмеченный** и не выдаётся за готовую функцию. Начальные gates проверяют production camera capability независимо от dev flags и import-boundary негативными примерами.
+**R2-01 только минимальный frontend/локальные проверки/Project/HTTPS preview**, не Garage/PostgreSQL. **R2-02** — пять экранов и первая ручная UX-проверка. **R2-03** — anonymous key-only Create/Restore + first device/pairing по [11](11-IDENTITY-AND-KEYS.md), без email/password/reset; shell не блокирует HTTP. Codex подготавливает, выдаёт ChatGPT задачи, тестирует и допиливает. UI preview без server behavior допускается только явно отмеченный. Начальные gates проверяют production camera capability независимо от dev flags и import-boundary негативными примерами.
 
 ### R2-1 Storage and capture: R2-04–07
 **Execution: R2-04 → R2-06 → R2-05 → R2-07.** Ранний просмотр локального фото входит в R2-06; ждать полного S3 и галереи для первого теста камеры запрещено. Реальная камера, encrypted local files + metadata DB, durable background S3 sync, ограниченные derived assets, галерея, GPS/NAME-ID. **Конечный результат:** offline photo survives reload and safe sync, no system gallery, no plaintext at rest.
@@ -109,8 +109,8 @@ Cross-module failure tests, independent security review, production build E2E, r
 
 ## 5. Stage gates: нельзя двигаться дальше без
 
-- **Gate A (после R2-02):** архитектура APPROVED; CI и import-boundaries реально проверены, production HTTPS preview работает; владелец проверил UI на телефоне/desktop **без Garage/PostgreSQL**.
-- **Gate Identity/Keys (после R2-03):** first trusted device bootstrap, email verified, login/reset/recover/pairing, two accounts, partial retry — тесты Codex PASS, без device-unconfirmed deadlock.
+- **Gate A (после R2-02):** архитектура APPROVED; локальные обязательные проверки и import-boundaries реально выполнены, production HTTPS preview работает; владелец проверил UI на телефоне/desktop **без Garage/PostgreSQL**.
+- **Gate Identity/Keys (после R2-03):** key-only bootstrap, Recovery Key confirm/restore, signed challenge, pairing, two accounts and partial retry — тесты Codex PASS, без device-unconfirmed deadlock и global content key.
 - **Gate Browser Storage/Time (после R2-04):** Safari OPFS/fallback/persist, encrypted IndexedDB + blobs, rollback detection, crash recovery — тесты Codex PASS.
 - **Gate B1 (после R2-06):** реальная камера -> encrypted commit -> минимальный локальный просмотр -> offline/reload в **production** PWA, без S3, без записи в системную галерею, владелец проверил.
 - **Gate B2 (после R2-05/R2-07):** sync -> S3 readback -> полная галерея, бюджет assets и cleanup доказаны, владелец проверил.
@@ -118,7 +118,7 @@ Cross-module failure tests, independent security review, production build E2E, r
 - **Gate D**: Card/Browser scopes/TTL/revoke independent, no data leaks/false public grants.
 - **Gate E**: PIN destructive flows and backup/restore/recovery tested, release checklist and owner acceptance.
 
-В каждой Issue должны быть: цель, scope, dependencies, acceptance и failure paths; детали установки, CI и тестовой проверки определяет Codex. **ChatGPT реализует основную массу задач; Codex ставит зависимости, выдаёт Issues, проверяет и может исправлять/допиливать код в том же PR.**
+В каждой Issue должны быть: цель, scope, dependencies, acceptance и failure paths; детали установки и локальной тестовой проверки определяет Codex. **ChatGPT реализует основную массу задач; Codex ставит зависимости, выдаёт Issues, проверяет и может исправлять/допиливать код в том же PR.**
 
 ## 6. Вне scope
 
