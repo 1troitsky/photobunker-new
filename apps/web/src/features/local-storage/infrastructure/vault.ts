@@ -274,7 +274,7 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
         throw new Error('storage.expired_upload_forbidden')
       if(row.state==='cancelled'||row.state==='acknowledged')return
       this.check()
-      await db.outbox.update(key,{state:'retry'})
+      await db.outbox.update(key,{state:'retry',nextAttemptAt:0,lastError:undefined})
     })
   }
   /** Exports ciphertext only through the existing R2-04 outbox, never a second queue. */

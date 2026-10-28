@@ -35,6 +35,8 @@ final class PhotoMaintenanceTest extends TestCase {
         Storage::disk('photo-ciphertext')->put($f['key'],random_bytes(32));
         $this->artisan('photobunker:photo-maintain')->assertExitCode(0);
         Queue::assertPushed(PhotoCleanupJob::class,1);
+        $this->artisan('photobunker:photo-maintain')->assertExitCode(0);
+        Queue::assertPushed(PhotoCleanupJob::class,1);
         $this->assertDatabaseHas('photo_tombstones',['photo_id'=>$f['photo']]);
         app(Lifecycle::class)->cleanup($f['photo']);
         app(Lifecycle::class)->cleanup($f['photo']);

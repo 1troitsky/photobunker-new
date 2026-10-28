@@ -7,7 +7,8 @@ const fx=vi.hoisted(()=>{
   return {
     account:{value:{accountId:'x',deviceId:'y',offline:false}},
     receipt,call:vi.fn(),signed:vi.fn(async()=> 'p1363-signature'),
-    pending:vi.fn(),delivery:vi.fn(),ack:vi.fn(),retry:vi.fn(),revoke:vi.fn(),reconcile:vi.fn(async()=>{}),
+    pending:vi.fn(),delivery:vi.fn(),ack:vi.fn(),retry:vi.fn(),manualRetry:vi.fn(),
+    revoke:vi.fn(),reconcile:vi.fn(async()=>{}),
     refresh:vi.fn(async()=>{}),
   }
 })
@@ -17,7 +18,7 @@ vi.mock('../../identity',()=>({
 }))
 vi.mock('../../local-storage',()=>({
   openLocalPhotoVault:()=>({
-    pending:fx.pending,delivery:fx.delivery,acknowledge:fx.ack,failDelivery:fx.retry,
+    pending:fx.pending,delivery:fx.delivery,acknowledge:fx.ack,failDelivery:fx.retry,retry:fx.manualRetry,
     revokeFromServer:fx.revoke,
     reconcile:fx.reconcile,
     time:{status:()=>({trusted:true}),now:()=>1800000000000,
@@ -43,6 +44,7 @@ describe('R2-05 one R2-04 outbox, lost-ACK and retry protocol',()=>{
     })
     fx.ack.mockResolvedValue(undefined)
     fx.retry.mockResolvedValue(undefined)
+    fx.manualRetry.mockResolvedValue(undefined)
   })
   it('canonical contract contains ciphertext hashes/manifests but no decoded image',()=>{
     const encoded=signedContract({
@@ -69,6 +71,14 @@ describe('R2-05 one R2-04 outbox, lost-ACK and retry protocol',()=>{
     await flushPhotoSync()
     expect(fx.ack).not.toHaveBeenCalled()
     expect(fx.retry).toHaveBeenCalledWith(fx.receipt.operationId,'sync.http_503')
+  })
+  it('manual sync clears backoff and retries the same operation immediately',async()=>{
+    fx.pending.mockResolvedValueOnce([{photoId:fx.receipt.photoId,
+      operationId:fx.receipt.operationId,nextAttemptAt:1850000000000}])
+    fx.call.mockResolvedValueOnce(json({state:'active',receipt:fx.receipt}))
+    await flushPhotoSync(true)
+    expect(fx.manualRetry).toHaveBeenCalledWith(fx.receipt.operationId)
+    expect(fx.ack).toHaveBeenCalledWith(fx.receipt.operationId,fx.receipt)
   })
   it('410 from authenticated receipt cannot reupload or acknowledge an expired photo',async()=>{
     fx.call.mockResolvedValueOnce(json({error:'gone'},410))

@@ -81,7 +81,7 @@ async function runOne(snapshot:SyncSnapshot,accountId:string,deviceId:string):Pr
     publish({photoId,state:'retry',error:code})
   }
 }
-async function execute():Promise<void>{
+async function execute(force=false):Promise<void>{
   if(!identity.value||identity.value.offline||!navigator.onLine||document.hidden)return
   const {accountId,deviceId}=identity.value
   const vault=openLocalPhotoVault()
@@ -93,7 +93,8 @@ async function execute():Promise<void>{
     const pending=await vault.pending()
     for(const row of pending.slice(0,8)){
       bound(accountId,deviceId)
-      if(row.nextAttemptAt>vault.time.now())continue
+      if(force)await vault.retry(row.operationId)
+      else if(row.nextAttemptAt>vault.time.now())continue
       try{
         const snapshot=await vault.delivery(row.operationId)
         bound(accountId,deviceId)
@@ -107,13 +108,13 @@ async function execute():Promise<void>{
   }catch{/* offline / untrusted time / locked: do not claim cloud delivery */}
 }
 /** One foreground worker per process. navigator.locks prevents duplicate tabs. */
-export function flushPhotoSync():Promise<void>{
+export function flushPhotoSync(force=false):Promise<void>{
   if(running)return running
   stopping=false
   running=(async()=>{
     if(navigator.locks?.request)
-      await navigator.locks.request('pb-photo-outbox-v1',{ifAvailable:true},async lock=>{if(lock)await execute()})
-    else await execute() // server idempotency still protects Safari fallback races
+      await navigator.locks.request('pb-photo-outbox-v1',{ifAvailable:true},async lock=>{if(lock)await execute(force)})
+    else await execute(force) // server idempotency still protects Safari fallback races
   })().finally(()=>{running=null})
   return running
 }

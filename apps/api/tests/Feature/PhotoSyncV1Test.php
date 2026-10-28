@@ -118,7 +118,7 @@ final class PhotoSyncV1Test extends TestCase {
         $this->postJson('/photos/v1/'.$f['photo'].'/finalize',['operationId'=>$f['operation']])->assertOk();
         DB::table('photo_records')->where('id',$f['photo'])->update(['expires_at'=>now()->subMinute()->getTimestampMs()]);
         $this->getJson('/photos/v1/'.$f['photo'].'/receipt')->assertGone();
-        $this->reserve($f)->assertStatus(422); // existing signed deadline is expired
+        $this->reserve($f)->assertGone(); // existing logical photo is already expired
         app(Lifecycle::class)->mark($f['photo']);
         app(Lifecycle::class)->cleanup($f['photo']);
         $this->assertDatabaseMissing('photo_records',['id'=>$f['photo']]);

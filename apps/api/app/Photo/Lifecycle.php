@@ -19,7 +19,11 @@ final class Lifecycle
                 'cleanup_until'=>now()->addDay(),'created_at'=>now(),
             ]);
             DB::table('photo_records')->where('id',$photoId)->update([
-                'state'=>'deleting','cleanup_next_at'=>now()->addMinute(),'updated_at'=>now(),
+                'state'=>'deleting',
+                // Lease this cleanup so a delayed worker is not enqueued every minute.
+                // A failed job shortens the retry time in PhotoCleanupJob.
+                'cleanup_next_at'=>now()->addMinutes((int)config('photo_sync.cleanup_lease_minutes',15)),
+                'updated_at'=>now(),
             ]);
         },3);
     }

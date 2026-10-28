@@ -6,4 +6,5 @@ return [
     'max_metadata_bytes'=>1048576,
     'orphan_grace_hours'=>24,
     'cleanup_batch'=>100,
+    'cleanup_lease_minutes'=>15,
 ];

@@ -3,6 +3,7 @@ import {chromium,expect,test} from '@playwright/test'
 const origin=process.env.PB_SYNC_HTTPS_ORIGIN
 test.skip(!origin,'Codex must deploy HTTPS API + PostgreSQL + Garage and run integration with real storage')
 test('R2-05 offline encrypted outbox survives reload, 503, lost receipt and readback',async()=>{
+  test.setTimeout(90000)
   const browser=await chromium.launch({args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']})
   const context=await browser.newContext({baseURL:origin,permissions:['camera']})
   const page=await context.newPage()

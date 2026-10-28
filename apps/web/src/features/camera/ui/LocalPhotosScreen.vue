@@ -139,7 +139,14 @@ watch(identity,(a,b)=>{if(a?.accountId!==b?.accountId||a?.deviceId!==b?.deviceId
         >
           {{ copy.refresh }}
         </button>
-        <button type="button" class="subtle-button" :disabled="!identity || identity.offline || loading" @click="flushPhotoSync()">{{ copy.sync }}</button>
+        <button
+          type="button"
+          class="subtle-button"
+          :disabled="!identity || identity.offline || loading"
+          @click="flushPhotoSync(true)"
+        >
+          {{ copy.sync }}
+        </button>
       </div>
       <p
         v-if="loading"
