@@ -1,6 +1,6 @@
 # PhotoBunker — новая версия
 
-**Состояние на 28.10.2026:** архитектурные инварианты **APPROVED**, реализация начата. Codex выполняет **R2-01**: создан Vue/TypeScript PWA workspace, локальный production build/test harness и GitHub Project; внешний HTTPS preview остаётся последним deployment gate перед передачей R2-02 ChatGPT. Garage и PostgreSQL не входят в R2-01.
+**Состояние на 28.10.2026:** архитектурные инварианты **APPROVED**, **R2-01 интегрирована**: создан Vue/TypeScript PWA workspace, локальный production build/test harness и GitHub Project. **R2-02 Ready** после read-only legacy-check UI/assets и передана ChatGPT. Garage и PostgreSQL не входят в R2-01/R2-02.
 
 PhotoBunker — защищённое фотоприложение: камера, локальная галерея, задания и команды, редактор, Photo Card, защищённый Photo Browser, три независимых PIN-сценария. Мобильное PWA и desktop. **Мессенджера/Matrix/чатов/звонков в этой версии нет.**
 
