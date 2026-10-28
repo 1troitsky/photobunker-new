@@ -7,6 +7,8 @@ export type OutboxState = 'pending'|'retry'|'acknowledged'|'cancelled'
 export type PhotoHeader = Readonly<{
   accountId:string; photoId:string; assetId:string; metadataAssetId:string
   expiresAt:number; state:PhotoState; revision:number; operationId:string
+  thumbnailAssetId?:string;nameId?:string;namePending?:boolean;
+  leaseId?:string;nameNumber?:number
 }>
 export type WrappedDEK = Readonly<{iv:string;ciphertext:string}>
 export type CipherFrame = Readonly<{index:number; offset:number; bytes:number; plainBytes:number; iv:string; digest:string}>
@@ -17,13 +19,15 @@ export type CipherManifest = Readonly<{
 }>
 export type OutboxEntry = Readonly<{
   accountId:string; photoId:string; operationId:string; state:OutboxState
-  intent:'upload'|'delete'; attempts:number; nextAttemptAt:number; expiresAt:number
-  lastError?:string; receiptHash?:string
+  intent:'upload'|'delete'|'metadata'; attempts:number; nextAttemptAt:number; expiresAt:number
+  lastError?:string; receiptHash?:string; metadataAssetId?:string; expectedRevision?:number
 }>
 export type CreatePhoto = Readonly<{
   operationId:string; photoId:string; assetId:string; metadataAssetId:string
   kind:Exclude<AssetKind,'metadata'>; revision:1
   capturedAt:number; expiresAt:number; pixels:Blob; metadata:unknown
+  thumbnail?:Blob;thumbnailAssetId?:string
+  nameId?:string;leaseId?:string;nameNumber?:number
 }>
 export type TimeStatus = Readonly<{
   trusted:boolean; now:number|null; reason:'fresh'|'restored'|'missing'|'reload'|'corrupt'|'wall_jump'|'monotonic_lost'
@@ -71,3 +75,8 @@ export interface TimeAuthority {
   now():number
   proveExpiry(expiresAt:number):boolean
 }
+
+export type CloudAsset=Readonly<{assetId:string;kind:AssetKind;revision:number;
+  bytes:number;sha256:string;manifest:Omit<CipherManifest,'backend'|'storageKey'>}>
+export type CloudPhoto=Readonly<{photoId:string;expiresAt:number;metadataAssetId:string;
+  metadataRevision:number;nameId:string|null}>

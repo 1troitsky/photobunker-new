@@ -38,15 +38,15 @@ final class PhotoSync
         abort_unless($c['version']===1&&is_int($c['expiresAt'])&&
             $c['expiresAt']>self::nowMs()&&$c['expiresAt']<=self::nowMs()+45*86400000,422);
         P::uuid($c['photoId']);P::uuid($c['operationId']);
-        abort_unless(is_array($c['assets'])&&count($c['assets'])===2,422);
+        abort_unless(is_array($c['assets'])&&count($c['assets'])>=2&&count($c['assets'])<=3,422);
         $ids=[];$kinds=[];$total=0;
         foreach($c['assets'] as $asset){
             abort_unless(is_array($asset),422);
             self::exact($asset,['assetId','kind','revision','bytes','sha256','manifest']);
             P::uuid($asset['assetId']);
-            abort_unless(is_string($asset['kind'])&&in_array($asset['kind'],['master','original','metadata'],true),422);
+            abort_unless(is_string($asset['kind'])&&in_array($asset['kind'],['master','original','metadata','thumbnail'],true),422);
             abort_unless($asset['revision']===1&&is_int($asset['bytes'])&&
-                $asset['bytes']>=16&&$asset['bytes']<=($asset['kind']==='metadata'
+                $asset['bytes']>=16&&$asset['bytes']<=(in_array($asset['kind'],['metadata','thumbnail'],true)
                   ?config('photo_sync.max_metadata_bytes'):config('photo_sync.max_asset_bytes')),422);
             abort_unless(is_string($asset['sha256'])&&preg_match('/^[a-f0-9]{64}$/D',$asset['sha256'])===1,422);
             $m=$asset['manifest'];abort_unless(is_array($m),422);
@@ -79,9 +79,10 @@ final class PhotoSync
               is_string($m['cipherDigest'])&&preg_match('/^[a-f0-9]{64}$/D',$m['cipherDigest']),422);
             $ids[]=$asset['assetId'];$kinds[]=$asset['kind'];$total+=$asset['bytes'];
         }
-        abort_unless(count(array_unique($ids))===2&&
-          in_array('metadata',$kinds,true)&&count(array_intersect(['master','original'],$kinds))===1
-          &&$ids===array_values(array_unique($ids)),422);
+        abort_unless(count(array_unique($ids))===count($ids)&&
+          count(array_filter($kinds,fn($k)=>$k==='metadata'))===1&&
+          count(array_filter($kinds,fn($k)=>$k==='thumbnail'))<=1&&
+          count(array_filter($kinds,fn($k)=>in_array($k,['master','original'],true)))===1,422);
         // Canonical re-encoding disallows JSON whitespace/duplicate fields and signature aliases.
         abort_unless(json_encode($c,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR)===$json,422);
         abort_unless(P::verify($deviceSpki,"photobunker.photo-sync.v1\n".$json,$signature),401);

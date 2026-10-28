@@ -8,6 +8,7 @@ const mocked=vi.hoisted(()=>{
   }
 })
 vi.mock('../../identity',()=>({identity:mocked.current}))
+vi.mock('../../gallery',()=>({thumbnailWebp:vi.fn(async()=>null),captureGps:vi.fn(()=>undefined),takeReservedName:vi.fn(async()=>null)}))
 vi.mock('../../local-storage',()=>({
   openLocalPhotoVault:()=>({
     commit:mocked.commit,reconcile:mocked.reconcile,
@@ -22,7 +23,7 @@ const compressor=vi.fn(async()=>({
 const result={photoId:'saved-id',accountId:'a',expiresAt:1_800_000_000_000+86_400_000}
 describe('R2-06 application capture and encrypted commit API',()=>{
   beforeEach(()=>{vi.clearAllMocks();mocked.current.value={accountId:'a',deviceId:'d'};mocked.commit.mockResolvedValue(result)})
-  it('snapshots mode 2 original and mode 3 master without generating another asset',async()=>{
+  it('snapshots mode 2 original and mode 3 master without adding an unexpected extra asset',async()=>{
     const service=createCaptureSession(compressor)
     await service.prepare(new Blob(['frame']),'video-frame',2,1)
     expect(mocked.commit).toHaveBeenCalledOnce()

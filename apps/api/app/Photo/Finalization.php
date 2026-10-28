@@ -15,7 +15,7 @@ final class Finalization
         abort_unless($p->operation_id===$d['operationId'],409);
         if($p->state==='active')return ['receipt'=>json_decode($p->receipt,true)];
         $objects=DB::table('photo_objects')->where('photo_id',$photoId)->get();
-        abort_unless(count($objects)===2 && $objects->every(fn($o)=>$o->state==='verified'),409);
+        abort_unless(count($objects)>=2 && count($objects)<=3 && $objects->every(fn($o)=>$o->state==='verified'),409);
         // S3 independent readback is mandatory; HEAD/size alone is insufficient.
         foreach($objects as $o)
             abort_unless($this->sync->verify($o->object_key,(int)$o->bytes,$o->sha256),503);

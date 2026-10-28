@@ -5,7 +5,8 @@ import AppIcon from './AppIcon.vue'
 import ScreenHeader from './ScreenHeader.vue'
 import { identity, IdentityPanel } from '../../identity'
 import { StorageDiagnostics } from '../../local-storage'
-import { CameraScreen, LocalPhotosScreen } from '../../camera'
+import { CameraScreen } from '../../camera'
+import GalleryScreen from '../../gallery/ui/GalleryScreen.vue'
 import { language, setLanguage, setTheme, text, theme } from './copy'
 import { assignmentFixtures, photoFixtures } from './fixtures'
 
@@ -74,7 +75,7 @@ const title = computed(() => {
 
       <!-- R2-06: real encrypted photos and camera; no preview fixtures. -->
       <template v-if="route.path==='/photos'">
-        <LocalPhotosScreen />
+        <GalleryScreen />
       </template>
       <template v-else-if="route.path==='/camera'">
         <CameraScreen />

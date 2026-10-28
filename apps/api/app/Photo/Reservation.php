@@ -42,6 +42,7 @@ final class Reservation
                 'operation_id'=>$contract['operationId'],'state'=>'pending',
                 'expires_at'=>$contract['expiresAt'],'contract_hash'=>$hash,
                 'contract_json'=>$d['contract'],'signature'=>$d['signature'],
+                'metadata_asset_id'=>collect($contract['assets'])->firstWhere('kind','metadata')['assetId'],
                 'created_at'=>now(),'updated_at'=>now(),
             ]);
             foreach($contract['assets'] as $a)DB::table('photo_objects')->insert([

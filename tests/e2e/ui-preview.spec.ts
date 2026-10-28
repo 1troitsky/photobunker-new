@@ -51,8 +51,8 @@ test('dock navigates five primary screens with camera center and no messaging ru
 
 test('anonymous Photos shows no fake records; Browser still has explicitly labeled preview fixtures', async ({ page }) => {
   await page.goto('/photos')
-  await expect(page.getByTestId('local-photo-list')).toBeVisible()
-  await expect(page.locator('.photo-tile,.secure-photo-row')).toHaveCount(0)
+  await expect(page.getByTestId('encrypted-gallery')).toBeVisible()
+  await expect(page.locator('.photo-tile,.gallery-item')).toHaveCount(0)
   await expect(page.getByRole('link', { name: /Create account|Создать аккаунт/i }).first()).toBeVisible()
   await page.goto('/browser')
   await page.locator('.browser-sidebar .folder-row').nth(1).click()
@@ -80,6 +80,6 @@ test('Camera requires a real authenticated account and never simulates a saved p
   await expect(page.getByTestId('production-camera')).toBeVisible()
   await expect(page.getByRole('button', { name: /Take photo|Снять фото/i })).toHaveCount(0)
   await page.goto('/photos')
-  await expect(page.locator('.secure-photo-row')).toHaveCount(0)
+  await expect(page.locator('.gallery-item')).toHaveCount(0)
   expect(photoEndpoints).toEqual([])
 })

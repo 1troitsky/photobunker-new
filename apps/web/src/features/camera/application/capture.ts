@@ -1,6 +1,7 @@
 import type {PhotoHeader,PhotoRepository,TimeAuthority} from '../../local-storage'
 import {openLocalPhotoVault} from '../../local-storage'
 import {identity} from '../../identity'
+import {thumbnailWebp,captureGps,takeReservedName,gpsStatus} from '../../gallery'
 import type {CaptureMode,Method,PersonalPolicy} from '../domain/policy'
 import {personalPolicy,snapshot} from '../domain/policy'
 
@@ -8,6 +9,8 @@ export type PendingCapture=Readonly<{
   operationId:string;photoId:string;assetId:string;metadataAssetId:string
   jpeg:Blob;policy:PersonalPolicy;method:Method;sourceWidth:number;sourceHeight:number
   outputWidth:number;outputHeight:number;capturedAt:number;expiresAt:number
+  thumbnail?:Blob;thumbnailAssetId?:string;gps?:ReturnType<typeof captureGps>
+  nameId?:string;leaseId?:string;nameNumber?:number
 }>
 export type CaptureProgress='idle'|'compressing'|'encrypting'|'saved'|'failed'
 type Compressed=Readonly<{blob:Blob;sourceWidth:number;sourceHeight:number;outputWidth:number;outputHeight:number}>
@@ -56,7 +59,14 @@ export class CaptureSession{
     const metadata=snapshot(policy,capturedAt,
       {width:converted.sourceWidth,height:converted.sourceHeight},
       {width:converted.outputWidth,height:converted.outputHeight},method)
+    const thumbnail=await thumbnailWebp(converted.blob).catch(()=>null)
+    this.check(ticket)
+    const gps=captureGps(metadata.capturedAt)
+    const reserved=await takeReservedName().catch(()=>null)
+    this.check(ticket)
     this.pending={...ids,jpeg:converted.blob,policy,method,
+      ...(thumbnail?{thumbnail,thumbnailAssetId:crypto.randomUUID()}: {}),gps,
+      ...(reserved??{}),
       sourceWidth:converted.sourceWidth,sourceHeight:converted.sourceHeight,
       outputWidth:converted.outputWidth,outputHeight:converted.outputHeight,
       capturedAt:metadata.capturedAt,expiresAt:metadata.expiresAt}
@@ -77,7 +87,10 @@ export class CaptureSession{
       metadataAssetId:pending.metadataAssetId,revision:1 as const,
       kind:pending.policy.mode===2?'original' as const:'master' as const,
       capturedAt:pending.capturedAt,expiresAt:pending.expiresAt,
-      pixels:pending.jpeg,metadata,
+      pixels:pending.jpeg,thumbnail:pending.thumbnail,thumbnailAssetId:pending.thumbnailAssetId,
+      nameId:pending.nameId,leaseId:pending.leaseId,nameNumber:pending.nameNumber,
+      metadata:{...metadata,title:'',gps:pending.gps??null,
+        gpsStatus:pending.gps?'ready':gpsStatus()==='denied'?'denied':gpsStatus()==='disabled'?'disabled':gpsStatus()==='unavailable'?'unavailable':'pending'},
     }
     const row=await this.vault.commit(input)
     this.check(ticket)

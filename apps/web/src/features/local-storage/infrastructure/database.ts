@@ -12,6 +12,8 @@ export type ClockRow={key:string;accountId:string;deviceId:string;iv:string;ciph
   wrappedDEK:{iv:string;ciphertext:string}}
 export type TombstoneRow={key:string;accountId:string;photoId:string;expiresAt:number;confirmedAt:number}
 export type StoredOutbox=OutboxEntry & {key:string}
+export type NameLeaseRow={key:string;accountId:string;deviceId:string;leaseId:string;iv:string;ciphertext:Blob;wrappedDEK:{iv:string;ciphertext:string}}
+export type ThumbnailCacheRow={key:string;accountId:string;photoId:string;assetId:string;bytes:number;accessedAt:number;expiresAt:number;backend:StorageBackend;storageKey:string}
 export class PhotoDatabase extends Dexie{
   photos!:Table<PhotoRow,string>
   assets!:Table<ManifestRow,string>
@@ -20,6 +22,8 @@ export class PhotoDatabase extends Dexie{
   outbox!:Table<StoredOutbox,string>
   clock!:Table<ClockRow,string>
   tombstones!:Table<TombstoneRow,string>
+  nameLeases!:Table<NameLeaseRow,string>
+  thumbnailCache!:Table<ThumbnailCacheRow,string>
   constructor(){
     super('photobunker-encrypted-local-v1')
     this.version(1).stores({
@@ -30,6 +34,17 @@ export class PhotoDatabase extends Dexie{
       outbox:'&key,accountId, [accountId+state], [accountId+expiresAt], &[accountId+operationId]',
       clock:'&key,accountId',
       tombstones:'&key,accountId,[accountId+expiresAt]',
+    })
+    this.version(2).stores({
+      photos:'&key, accountId, [accountId+expiresAt], [accountId+state], &[accountId+operationId]',
+      assets:'&key,accountId, [accountId+photoId]',
+      journal:'&key,accountId,operationId',
+      blobFallback:'&key,accountId',
+      outbox:'&key,accountId, [accountId+state], [accountId+expiresAt], &[accountId+operationId]',
+      clock:'&key,accountId',
+      tombstones:'&key,accountId,[accountId+expiresAt]',
+      nameLeases:'&key,accountId,[accountId+deviceId]',
+      thumbnailCache:'&key,accountId,[accountId+accessedAt],[accountId+photoId]',
     })
   }
 }

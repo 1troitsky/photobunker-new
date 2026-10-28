@@ -9,18 +9,21 @@ const fx=vi.hoisted(()=>{
     receipt,call:vi.fn(),signed:vi.fn(async()=> 'p1363-signature'),
     pending:vi.fn(),delivery:vi.fn(),ack:vi.fn(),retry:vi.fn(),manualRetry:vi.fn(),
     revoke:vi.fn(),reconcile:vi.fn(async()=>{}),
-    refresh:vi.fn(async()=>{}),
+    refresh:vi.fn(async()=>{}),cacheThumbnail:vi.fn(async()=>{}),
   }
 })
 vi.mock('../../identity',()=>({
   identity:fx.account,photoRequest:fx.call,signPhotoSyncContract:fx.signed,
+  signMetadataContract:fx.signed,
   onIdentityCleanup:()=>()=>{},
 }))
+vi.mock('../../gallery',()=>({reserveNameRange:vi.fn(async()=>{}),claimName:vi.fn(async()=>{})}))
 vi.mock('../../local-storage',()=>({
   openLocalPhotoVault:()=>({
     pending:fx.pending,delivery:fx.delivery,acknowledge:fx.ack,failDelivery:fx.retry,retry:fx.manualRetry,
     revokeFromServer:fx.revoke,
-    reconcile:fx.reconcile,
+    reconcile:fx.reconcile,cacheThumbnail:fx.cacheThumbnail,
+    readHeader:vi.fn(async()=>null),
     time:{status:()=>({trusted:true}),now:()=>1800000000000,
       restoreFromStorage:fx.refresh,refreshFromServer:fx.refresh},
   }),
