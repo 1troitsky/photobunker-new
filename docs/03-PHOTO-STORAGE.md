@@ -34,6 +34,19 @@
 
 **Не выбирать** режим по наличию конкретного UI-экрана. Единственный источник решения — сохранённая политика capture на момент съёмки. Backend должен валидировать поддерживаемые значения; скрытый/disabled пункт фронтенда сам по себе не является защитой от API-вызова.
 
+### 2.1 Capture compression profile v1
+
+Для R2-06 утверждён первый технический профиль, одинаковый для личной съёмки и будущей политики задания:
+
+- режим 1 виден, но disabled; приложение не имитирует сохранение camera bytes без перекодирования;
+- режимы 2 и 3 при capture создают один оптимизированный JPEG (`image/jpeg`, quality `0.90`), без увеличения исходника, с ограничением длинной стороны `4096 px` и общей площади `12.5 MP`; aspect ratio сохраняется;
+- режим 2 записывает capture asset как `original`, режим 3 — как `master`; до первого редактирования вторую полноразмерную копию не создавать;
+- EXIF/XMP/comment segments не переносятся в JPEG. Разрешённые `capturedAt`, исходные/выходные размеры, camera method и snapshot capture policy хранятся только в отдельной зашифрованной metadata записи;
+- личное фото использует mode 3 и TTL 45 дней по умолчанию. Выбранные mode, TTL и `policyVersion: 1` фиксируются в metadata при capture и не меняются задним числом;
+- WebP thumbnail не входит в R2-06 и добавляется ровно один раз в R2-07. Минимальный список R2-06 может расшифровывать текущий JPEG по требованию и обязан освобождать object URL/decoded bitmap.
+
+Это технический baseline, а не обещание неизменяемых числовых параметров навсегда: последующая настройка качества допустима новой `policyVersion` после измерений, без перекодирования уже сохранённых фото и без ослабления TTL/шифрования.
+
 ## 3. Модель данных: метаданные отдельно от файла (ST-12 — DECIDED)
 
 На момент съёмки у PhotoBunker появляются:
@@ -108,7 +121,7 @@ Camera API -> кратковременные байты в памяти
 | ST-05 | Одна зашифрованная миниатюра WebP ≤320px, S3 + bounded encrypted local cache; ACL не шире фото | **DECIDED 2026-10-28** |
 | ST-06 | Отдельных постоянных previews не создавать | **DECIDED 2026-10-28** |
 | ST-07 | Полная история редактора и Undo после закрытия | OPEN |
-| ST-08 | Форматы/профили компрессии, качество, размеры, EXIF/геометки | OPEN |
+| ST-08 | Capture profile v1: JPEG q=0.90, ≤4096 px/12.5 MP, no upscale, EXIF отдельно в encrypted metadata; будущая настройка только новой policy revision | **TECHNICAL BASELINE 2026-10-28**, раздел 2.1 |
 | ST-09 | Фотографии 24ч–45д по заданию, удаление фото/всех assets/thumbnail/DB/metadata/share при expiry; batch scheduler + queue | **DECIDED 2026-10-28**; конкретные числовые квоты/backup SLA — технические параметры для Codex |
 | ST-10 | Экспорт/публикация Photo Card и жизнь независимых share objects | OPEN |
 | ST-11 | Старые encrypted photos, ключи и совместимость при переносе | OPEN |
@@ -119,4 +132,4 @@ Camera API -> кратковременные байты в памяти
 | ST-16 | Локальное хранилище Dexie/IndexedDB metadata/outbox + OPFS encrypted photo blobs с IDB Blob fallback; Pinia ephemeral | **TECHNICAL BASELINE 2026-10-28**, [12](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md) |
 | ST-17 | Server UTC authoritative, last trusted server time, local clock rollback detection/fail-closed offline | **TECHNICAL BASELINE 2026-10-28**, [12](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md) |
 
-**Не блокировать фундамент/UI:** ST-01/02/03/05/06/09/12/13 утверждены, ST-04/16/17 имеют **конкретный технический baseline**, Garage — первый S3 backend. Подлежат специальным review/test до их задач: crypto recovery, Safari storage, clock rollback. Поздние OPEN: ST-07 editor history, ST-08 fullres compression profile, ST-10 детализация экспорта, ST-11 legacy migration, ST-15 ретроактивные изменения. Codex выдаёт задачи после соответствующего gate, а не перепроектирует фундамент. Удаление по expiry не OPEN.
+**Не блокировать фундамент/UI:** ST-01/02/03/05/06/09/12/13 утверждены, ST-04/08/16/17 имеют **конкретный технический baseline**, Garage — первый S3 backend. Подлежат специальным review/test до их задач: crypto recovery, Safari storage, clock rollback и память/качество capture profile. Поздние OPEN: ST-07 editor history, ST-10 детализация экспорта, ST-11 legacy migration, ST-15 ретроактивные изменения. Codex выдаёт задачи после соответствующего gate, а не перепроектирует фундамент. Удаление по expiry не OPEN.

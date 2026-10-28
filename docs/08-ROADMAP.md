@@ -42,7 +42,7 @@
 
 ## 2. Открытые продуктовые решения — обязательный gate перед реализации зависимой функции
 
-В [03-PHOTO-STORAGE.md](03-PHOTO-STORAGE.md) утверждены ST-01/02/03/05/06/09/12/13, первый S3 backend Garage. **ST-04 recovery технический baseline уже зафиксирован** в [11](11-IDENTITY-AND-KEYS.md); **ST-16 browser storage** и **ST-17 trusted-time** — в [12](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md). Перед R2-03/R2-04 Codex делает crypto/device security review и реальные Safari probes, но **не возвращает вопросы хранения в общий дизайн-блокер**. Поздние OPEN — редакторская история (ST-07), fullres compression (ST-08), shares (ST-10), legacy migration (ST-11), изменение уже существующего TTL (ST-15).
+В [03-PHOTO-STORAGE.md](03-PHOTO-STORAGE.md) утверждены ST-01/02/03/05/06/09/12/13, первый S3 backend Garage. **ST-04 recovery технический baseline уже зафиксирован** в [11](11-IDENTITY-AND-KEYS.md); capture compression profile v1 зафиксирован как **ST-08 technical baseline** в [03](03-PHOTO-STORAGE.md); **ST-16 browser storage** и **ST-17 trusted-time** — в [12](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md). Перед соответствующими задачами Codex делает crypto/device/storage/memory review, но **не возвращает вопросы хранения в общий дизайн-блокер**. Поздние OPEN — редакторская история (ST-07), shares (ST-10), legacy migration (ST-11), изменение уже существующего TTL (ST-15).
 
 Для первой версии режим 1 (no additional compression) показан **disabled**, не имитируется. Mode 2 хранит compressed source и отдельный edited current, mode 3 default безопасно заменяет compressed master. **Миниатюры и 24ч–45д TTL уже закреплены, см. ST-05/06/09**; каждая редакторская версия, derivative и связанная metadata удаляются по expiry.
 
