@@ -6,7 +6,7 @@
 
 | Сущность | Принцип |
 | --- | --- |
-| Account / Device | Устройства и аккаунты имеют независимые идентичности, ключи и scopes. Одно устройство не превращается автоматически в trusted device другого. |
+| User / Account / Profile / Device / Session | **Стабильный user_id** — центральная identity, но не монолит. Публичный Profile, отдельные sessions/first trusted device/recovery и scopes. Ни User, ни Account не хранят фото, подписки или сообщения внутри одной гигантской модели. [11](11-IDENTITY-AND-KEYS.md). |
 | Team / Participant / Invitation | Команда — устойчивый набор участников и ролей; приглашение не даёт прав до принятия. Связь с заданием не равна праву на все снимки команды. |
 | Assignment | Отдельная задача со статусом, участниками/ролями, условиями, retention capture policy и ревизией. |
 | Photo | Канонический identity (UUID), свой assignmentId (nullable), снимок capture policy, lifecycle, связи с assets/metadata. |
@@ -66,10 +66,10 @@ Assignment required capture parameters are versioned and frozen at capture; role
 
 - exact compression profiles/format and browser support (ST-08), **не путать с уже выбранным WebP ≤320px для thumbnail**;
 - **Thumbnail уже определён:** один encrypted WebP ≤320px, S3 + bounded encrypted local cache, без постоянного preview. Детальная capability matrix thumbnail-only permission — в составе ACL review;
-- key generation/device recovery (ST-04);
+- **Identity/recovery уже специфицированы** в [11](11-IDENTITY-AND-KEYS.md): email/password, verified email, first trusted device, recovery secret, pairing и partial registration; Codex crypto review обязателен до реализации R2-03;
 - **S3/TTL уже выбраны:** Garage через адаптер, фото 24ч–45д по заданию с expiry и полным cleanup. OPEN только числовые бюджеты инфраструктуры, recovery/backup и provider deployment;
 - whether version history beyond one current edit exists (ST-07);
 - share export semantics/recipients (ST-10); **любой share/derivative истекает не позже фото и подлежит физическому cleanup**;
 - data migration from old Photobunker (ST-11).
 
-**Не реализовать чужую догадку об этих решениях под видом задачи из backlog.**
+**Не реализовать чужую догадку об этих решениях под видом задачи из backlog.** Новые данные ссылаются на стабильный User ID через Identity capability ports; будущий Billing (owner User/Team) и Messenger — отдельные необязательные модули, не хранить их как поля Photo/User core. Browser storage и trusted time baseline — [12](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md). Полный самостоятельный acceptance — [13](13-PRODUCT-ACCEPTANCE-BASELINE.md).
