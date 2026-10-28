@@ -1,7 +1,6 @@
 # 02. Архитектура PhotoBunker: границы и устойчивость
 
-**Статус: PROPOSAL / архитектурные правила на обсуждении.**  
-Это документ для согласования с владельцем, **не разрешение создавать приложение**. Подтверждённые требования перечислены в [README](../README.md); всё ниже, что не вытекает из них напрямую, остаётся предложением.
+**Статус: APPROVED ARCHITECTURAL INVARIANTS (2026-10-28).** Разработка разрешается по назначенным Codex `Ready` Issues и правилам [COLLABORATION](../COLLABORATION.md). Это **проектные обязательные границы**, а не утверждение, что соответствующий код уже готов. Открыты только конкретные технические выборы, явно помеченные OPEN в профильных контрактах. Владелец утверждает изменения продукта, Codex организует setup/проверки, ChatGPT исполняет большую часть Issues.
 
 ## 1. Цель архитектуры
 
@@ -27,11 +26,15 @@
 | Photo Browser | Авторизованная проекция по выбранным заданиям, фильтры, доступ к разрешённым фото | Не дублирует изображения и не расширяет права одной лишь ссылкой на коллекцию |
 | Editor | Операции над фото, вычисление нового изображения и результат редактирования | Не меняет файлы напрямую, не владеет originals или server upload |
 | Photo Card | Отдельная карточка, разрешённые поля, правила доступа к представлению/экспорту, share/TTL | Не эквивалентна исходному фото; не выдаёт original автоматически |
-| Security & Identity | Учётный/устройственный scope, разблокировка, PIN, gate, recovery/delete/wipe | Не смешивает PIN UI с криптографическим ключом и не превращает PIN в источник server-прав |
+| Identity & Access | Стабильные User/Account IDs, вход, first trusted device, recovery, session/device capabilities и права | **Центральная identity**, но без гигантской User-модели; PIN не является ключом и никакой модуль не зависит от будущего Messenger/Billing |
 
 **Мессенджера в этом составе нет.** Нет скрытой обязательной зависимости заданий от Matrix.
+### Независимая идентичность для будущих модулей
 
-## 3. Правило зависимостей (предложение)
+**User/Account ID — главный постоянный идентификатор пользователя, но не монолит бизнес-логики.** Модули фото, заданий и команд используют только стабильный `user_id`, Identity/Authorization API и разрешённые capabilities. В будущем Billing/Subscription (плательщик User или Team) и Messenger подключаются как независимые bounded contexts с собственными данными и public ports; их SDK/таблицы/события **не** нужны в core boot в первой версии. Не строить под подписки или Messenger универсальный фреймворк заранее. Полный контракт в [11 — Identity and Keys](11-IDENTITY-AND-KEYS.md).
+
+
+## 3. Утверждённые границы зависимостей
 
 Каждый модуль имеет `domain`, `application`, `infrastructure`, `ui`, и **публичный контракт** для остальных модулей.
 
@@ -48,7 +51,7 @@
 Camera UI
   -> Capture use-case
   -> Photo Library application port: commitCapture(capture, policy)
-  -> Storage adapter (implementation selected later)
+  -> EncryptedBlobStore: OPFS ciphertext с IndexedDB Blob fallback + Dexie metadata/journal/outbox
   -> Photo Library updates its canonical state
   -> Gallery/Editor/Photo Card consume only published Photo Library API
 ```
@@ -78,16 +81,16 @@ Assignments предоставляет неизменяемый снимок `Ca
 
 Канонический PhotoAsset-owner учитывает remote/local usage и каждый derivative по owner/purpose/expiry/delete state. **У каждой фотографии expires_at 24ч–45д; thumbnail/версия/share/metadata не живут дольше неё.** После expiry сервер немедленно запрещает чтение и через indexed scheduler + batch deletion queue удаляет S3 assets, originals/edits/thumbs и DB records; клиент чистит локальную копию при следующем запуске. Отдельных постоянных previews нет.
 
-## 6. Предлагаемая технологическая база (пока не утверждена)
+## 6. Технический baseline и отложенные интеграции
 
-- **Сервер:** Laravel 13 как сильный кандидат на сохранение существующих API/политик и работу с PostgreSQL и очередями.
-- **Клиент:** Vue 3 / TypeScript может остаться, но **не как самописная система состояния/синхронизации**. Pinia, RxDB/Dexie, OPFS, Inertia, Router и редакторские библиотеки обсуждать по реальным границам ответственности и mobile/browser limitations. Выбор компонента *не* заменяет архитектурные инварианты.
+- **Сервер:** Laravel + PostgreSQL и очереди — рабочая целевая архитектура; **интеграция PostgreSQL/Garage не входит в R2-01** и выполняется по соответствующим backend/storage Issues. Конкретную версию Laravel Codex проверяет при установке, не копирует старую схему БД автоматически.
+- **Клиент:** Vue 3 / TypeScript PWA; **Dexie/IndexedDB** для локальных metadata/journal/outbox, **OPFS только для encrypted blobs** при поддержке, **encrypted IndexedDB Blob fallback**, **Pinia только для ephemeral UI state**. Проверка Safari/iOS, storage.persist()/quota/eviction — обязательна в R2-04. Vue Router/инструмент интеграции выбирается Codex без нарушения немедленной навигации и доступа к локальным данным. См. [12](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md).
 - **Хранилище файлов:** утверждён гибрид **local encrypted → S3**, первый совместимый backend — **Garage**. ST-02/03 — три режима originals; ST-05/06 — единственная encrypted WebP thumbnail ≤320px, отдельного постоянного preview нет; ST-09 — **TTL 24 часа — 45 дней** по заданию и автоматическое удаление всех photo-related files/DB metadata; ST-12/13 — раздельная metadata DB, encryption before persistence, запрет системной галереи. Конкретные SDK/локальный адаптер, качество сжатия и история редактора уточняются Codex по соответствующему Issue.
-- **Crypto:** использовать проверенные существующие спецификации/библиотеки и независимую проверку при переносе; не придумывать новый криптопротокол из-за рефакторинга.
+- **Crypto/Identity:** утверждённые жизненные состояния first-device bootstrap и recovery envelope — в [11](11-IDENTITY-AND-KEYS.md), trusted-time policy в [12](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md). Использовать проверенные примитивы/тест-векторы, делать независимый threat review в Codex, не придумывать свою AEAD.
 
 ## 7. Машинные ограничения будущего репозитория
 
-Когда владелец разрешит реализацию:
+При старте реализации выбранной Codex Ready Issue:
 - проверка запретных импортов и dependency cycles; негативные тесты должны доказать, что нарушающий build падает;
 - typecheck, unit tests для чистого domain, contract tests для адаптеров;
 - тесты storage/rollback/recovery и удалений (storage full, offline, restart, ACK after revoke);
@@ -101,5 +104,5 @@ Assignments предоставляет неизменяемый снимок `Ca
 
 - Все неутверждённые вопросы отмечаются **OPEN** в существующих документах.
 - После согласования с владельцем записываются: решение, причины, последствия, исключения, критерии проверки и дата. Изменение не теряет контекст.
-- Нет самовольного GitHub Issue, PR или задачи «на один чат».
-- Дальнейший план разработки будет целостным и документированным в этом репозитории **после** архитектурных решений и прямой команды владельца.
+- Бэклог roadmap уже создан. Новые Issues только по согласованному изменению scope, не создавать параллельную очередь.
+- **Roadmap уже опубликован** в [08](08-ROADMAP.md); Codex выстраивает очередность, настраивает окружение и выдаёт ChatGPT задачи. Прежнего запрета на начало проекта нет; Ready/dependency/review gates действуют.
