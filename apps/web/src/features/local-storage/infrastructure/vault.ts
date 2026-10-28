@@ -1,11 +1,11 @@
 import { acquireStorageKeys, onIdentityCleanup } from '../../identity'
 import type { CreatePhoto, EncryptedBlobStore, PhotoRepository, PhotoSyncOutbox, PhotoHeader, CipherManifest, Capabilities, StorageBackend, TimeAuthority } from '../domain/contracts'
 import { db, photoKey, assetKey, writeCiphertext, readCiphertext, deleteCiphertext } from './database'
-import type { PhotoRow, JournalRow, StoredOutbox } from './database'
+import type { PhotoRow, ManifestRow, JournalRow, StoredOutbox } from './database'
 import { encryptAsset, decryptAsset, identifier, invalid, manifestValid } from './cipher'
 import { probeStorageCapabilities } from './capabilities'
 import { BrowserTimeAuthority, clearLiveTime } from './time'
-import { retentionValid } from '../domain/time-policy'
+import { MAX_CLOCK_SKEW_MS, retentionValid } from '../domain/time-policy'
 
 const metadataEncoder=new TextEncoder()
 const metadataDecoder=new TextDecoder('utf-8',{fatal:true})
@@ -18,9 +18,11 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
   private readonly grant=acquireStorageKeys()
   private readonly scope=this.grant.scope
   readonly time:TimeAuthority=new BrowserTimeAuthority(this.grant)
+  private readonly timeReady=this.time.restoreFromStorage()
   private capabilities:Capabilities|null=null
 
   private check():void{this.grant.check()}
+  private async clockReady():Promise<void>{await this.timeReady;this.check()}
   private async init():Promise<StorageBackend>{
     this.check()
     if(!this.capabilities)this.capabilities=await probeStorageCapabilities()
@@ -35,7 +37,8 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
   }
   private async existing(input:CreatePhoto):Promise<PhotoHeader|null>{
     const row=await db.photos.get(photoKey(this.scope,input.photoId))
-    const matched=await db.photos.where('operationId').equals(input.operationId).first()
+    const matched=await db.photos.where('[accountId+operationId]')
+      .equals([this.scope.accountId,input.operationId]).first()
     this.check()
     if(await db.tombstones.get(photoKey(this.scope,input.photoId)))throw new Error('storage.tombstoned')
     if(row){
@@ -61,13 +64,14 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
   private async commitUnlocked(input:CreatePhoto):Promise<PhotoHeader>{
     this.check()
     const backend=await this.init()
+    await this.clockReady()
     const now=this.time.now()
     for(const id of [input.operationId,input.photoId,input.assetId,input.metadataAssetId])identifier(id)
     invalid(input.assetId!==input.metadataAssetId && input.revision===1 &&
       ['master','original','edit','thumbnail'].includes(input.kind),'storage.invalid_capture')
     invalid(Number.isSafeInteger(input.capturedAt) && Number.isSafeInteger(input.expiresAt) &&
       retentionValid(input.capturedAt,input.expiresAt) &&
-      Math.abs(now-input.capturedAt)<=5*60*1000 && now<input.expiresAt,'storage.invalid_ttl')
+      Math.abs(input.capturedAt-now)<=MAX_CLOCK_SKEW_MS && now<input.expiresAt,'storage.invalid_ttl')
     invalid(input.pixels instanceof Blob && input.pixels.size>0,'storage.invalid_blob')
     const meta=metadataEncoder.encode(JSON.stringify({version:1,capturedAt:input.capturedAt,data:input.metadata}))
     invalid(meta.byteLength>0 && meta.byteLength<=256*1024,'storage.invalid_metadata')
@@ -79,7 +83,12 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     const imagePath=assetKey(this.scope,input.photoId,input.assetId)+'/'+attemptId
     const metadataPath=assetKey(this.scope,input.photoId,input.metadataAssetId)+'/'+attemptId
     // Reserve both backend paths BEFORE writing, for crash-recovery of partial blobs.
-    const allPaths=[imagePath,metadataPath].flatMap(path=>['opfs|'+path,'idb-blob|'+path])
+    // Reserve every backend that this attempt can actually touch. On browsers
+    // without OPFS, recording phantom OPFS paths makes successful IDB commits
+    // fail during cleanup because navigator.storage.getDirectory is absent.
+    const allPaths=[imagePath,metadataPath].flatMap(path=>backend==='opfs'
+      ?['opfs|'+path,'idb-blob|'+path]
+      :['idb-blob|'+path])
     const journalKey=photoReference+'/'+attemptId
     const journal:JournalRow={key:journalKey,accountId:this.scope.accountId,deviceId:this.scope.deviceId,
       photoId:input.photoId,operationId:input.operationId,attemptId,assetKeys:allPaths,
@@ -133,7 +142,8 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
         photoId:input.photoId,operationId:input.operationId,intent:'upload',state:'pending',
         attempts:0,nextAttemptAt:0,expiresAt:input.expiresAt,
       }
-      const outcome=await db.transaction('rw',db.photos,db.assets,db.outbox,db.journal,db.tombstones,async()=>{
+      const outcome:PhotoRow=await db.transaction('rw',
+        [db.photos,db.assets,db.outbox,db.journal,db.tombstones],async()=>{
         this.check()
         if(await db.tombstones.get(photoReference))throw new Error('storage.tombstoned')
         const row=await db.photos.get(photoReference)
@@ -144,7 +154,8 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
           await db.journal.update(journalKey,{state:'cleanup'})
           return row
         }
-        const other=await db.photos.where('operationId').equals(input.operationId).first()
+        const other=await db.photos.where('[accountId+operationId]')
+          .equals([this.scope.accountId,input.operationId]).first()
         if(other)throw new Error('storage.operation_conflict')
         for(const item of staged)await db.assets.add({key:assetKey(this.scope,input.photoId,item.manifest.assetId),...item.manifest})
         await db.photos.add(stored)
@@ -186,7 +197,7 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     }
   }
   private async current(photoId:string):Promise<PhotoRow>{
-    this.check();identifier(photoId)
+    this.check();await this.clockReady();identifier(photoId)
     const row=await db.photos.get(photoKey(this.scope,photoId))
     this.check()
     if(!row || row.state!=='local' || await db.tombstones.get(photoKey(this.scope,photoId)))
@@ -201,7 +212,7 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     try{return await this.current(photoId)}catch{return null}
   }
   async list():Promise<PhotoHeader[]>{
-    this.check()
+    this.check();await this.clockReady()
     const now=this.time.now()
     const rows=await db.photos.where('accountId').equals(this.scope.accountId).toArray()
     this.check()
@@ -216,9 +227,14 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
   async read(photoId:string,assetId:string):Promise<Blob>{
     this.check()
     const row=await this.current(photoId)
-    const asset=await db.assets.get(assetKey(this.scope,photoId,assetId))
-    invalid(!!asset && asset.accountId===this.scope.accountId && asset.photoId===photoId &&
+    const storedAsset=await db.assets.get(assetKey(this.scope,photoId,assetId))
+    invalid(!!storedAsset && storedAsset.accountId===this.scope.accountId && storedAsset.photoId===photoId &&
       (assetId===row.assetId || assetId===row.metadataAssetId),'storage.asset_unavailable')
+    // `key` is a Dexie-only index and is not part of the authenticated manifest
+    // protocol. Never feed storage bookkeeping into the exact-field validator.
+    const assetRecord:Partial<ManifestRow>={...storedAsset}
+    delete assetRecord.key
+    const asset=assetRecord as CipherManifest
     manifestValid(asset,{scope:this.scope,photoId,assetId})
     const key=await this.grant.open(asset.assetId,String(asset.expiresAt),asset.wrappedDEK)
     const blob=await readCiphertext(asset.backend,asset.storageKey)
@@ -231,17 +247,22 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     const row=await this.current(photoId)
     const result=await this.read(photoId,row.metadataAssetId)
     this.check()
-    return JSON.parse(metadataDecoder.decode(await result.arrayBuffer()))
+    const decoded=JSON.parse(metadataDecoder.decode(await result.arrayBuffer())) as {
+      version?:unknown;capturedAt?:unknown;data?:unknown
+    }
+    invalid(decoded!==null&&typeof decoded==='object'&&decoded.version===1&&
+      Number.isSafeInteger(decoded.capturedAt),'storage.metadata_invalid')
+    return decoded.data
   }
   async pending():Promise<StoredOutbox[]>{
-    this.check()
+    this.check();await this.clockReady()
     const now=this.time.now()
     const all=await db.outbox.where('accountId').equals(this.scope.accountId).toArray()
     this.check()
     return all.filter(x=>x.state!=='cancelled'&&x.state!=='acknowledged'&&x.expiresAt>now)
   }
   async retry(operationId:string):Promise<void>{
-    this.check();identifier(operationId)
+    this.check();await this.clockReady();identifier(operationId)
     const now=this.time.now()
     await db.transaction('rw',db.outbox,db.tombstones,async()=>{
       const key=this.scope.accountId+'/'+operationId
@@ -255,7 +276,7 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     })
   }
   async confirmExpiry(photoId:string):Promise<void>{
-    this.check();identifier(photoId)
+    this.check();await this.clockReady();identifier(photoId)
     const key=photoKey(this.scope,photoId)
     const row=await db.photos.get(key)
     if(!row)return
@@ -293,6 +314,7 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
   async reconcile():Promise<void>{
     this.check()
     await this.init()
+    await this.clockReady()
     // Sweep abandoned staging attempts only after a grace period. Never touch committed pointers.
     const clock=this.time.status()
     const old=clock.trusted&&clock.now!==null?clock.now-ORPHAN_GRACE:null

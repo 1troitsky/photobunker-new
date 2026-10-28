@@ -23,11 +23,11 @@ export class PhotoDatabase extends Dexie{
   constructor(){
     super('photobunker-encrypted-local-v1')
     this.version(1).stores({
-      photos:'&key, accountId, [accountId+expiresAt], [accountId+state], &operationId',
+      photos:'&key, accountId, [accountId+expiresAt], [accountId+state], &[accountId+operationId]',
       assets:'&key,accountId, [accountId+photoId]',
       journal:'&key,accountId,operationId',
       blobFallback:'&key,accountId',
-      outbox:'&key,accountId, [accountId+state], [accountId+expiresAt], &operationId',
+      outbox:'&key,accountId, [accountId+state], [accountId+expiresAt], &[accountId+operationId]',
       clock:'&key,accountId',
       tombstones:'&key,accountId,[accountId+expiresAt]',
     })
@@ -90,9 +90,10 @@ export async function deleteCiphertext(backend:StorageBackend,path:string):Promi
 export async function probeOpfs():Promise<boolean>{
   if(!navigator.storage?.getDirectory)return false
   const name='pb-probe-'+crypto.randomUUID()
+  let directory:FileSystemDirectoryHandle|null=null
   try{
     const root=await navigator.storage.getDirectory()
-    const directory=await root.getDirectoryHandle('pb-capabilities',{create:true})
+    directory=await root.getDirectoryHandle('pb-capabilities',{create:true})
     const handle=await directory.getFileHandle(name,{create:true})
     const key=await crypto.subtle.generateKey({name:'AES-GCM',length:256},false,['encrypt','decrypt'])
     const iv=crypto.getRandomValues(new Uint8Array(12))
@@ -105,9 +106,9 @@ export async function probeOpfs():Promise<boolean>{
     if(raw.byteLength!==cipher.byteLength)throw new Error('storage.opfs_probe')
     const clear=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,raw)
     if(new Uint8Array(clear).some((v,i)=>v!==probe[i]))throw new Error('storage.opfs_probe')
-    await directory.removeEntry(name)
     return true
   }catch{return false}
+  finally{if(directory)await directory.removeEntry(name).catch(()=>{})}
 }
 export async function probeEncryptedFallback():Promise<boolean>{
   const key='probe-'+crypto.randomUUID()

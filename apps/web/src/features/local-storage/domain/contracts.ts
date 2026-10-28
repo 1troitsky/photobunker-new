@@ -25,7 +25,7 @@ export type CreatePhoto = Readonly<{
   capturedAt:number; expiresAt:number; pixels:Blob; metadata:unknown
 }>
 export type TimeStatus = Readonly<{
-  trusted:boolean; now:number|null; reason:'fresh'|'missing'|'reload'|'corrupt'|'wall_jump'|'monotonic_lost'
+  trusted:boolean; now:number|null; reason:'fresh'|'restored'|'missing'|'reload'|'corrupt'|'wall_jump'|'monotonic_lost'
 }>
 export type PersistenceStatus = 'granted'|'denied'|'unsupported'|'error'
 export type Capabilities = Readonly<{
@@ -51,6 +51,7 @@ export interface PhotoSyncOutbox {
   retry(operationId:string):Promise<void>
 }
 export interface TimeAuthority {
+  restoreFromStorage():Promise<TimeStatus>
   refreshFromServer():Promise<TimeStatus>
   status():TimeStatus
   now():number

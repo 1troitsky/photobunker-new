@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { liveTime, retentionValid } from './time-policy'
+import { liveTime, restoreClock, retentionValid } from './time-policy'
 
 describe('R2-04 trusted UTC, not wall clock',()=>{
   it('only monotonic validated elapsed can prove expiry (24h and 45d)',()=>{
@@ -26,5 +26,13 @@ describe('R2-04 trusted UTC, not wall clock',()=>{
     const evaluated=liveTime(t,0,t,60_000,t+60_000+240_000)
     expect(evaluated.trusted).toBe(true)
     expect(evaluated.now).toBe(t+60_000)
+  })
+  it('restores a short offline reload without letting wall time prove deletion',()=>{
+    const t=1_800_000_000_000
+    expect(restoreClock(t,t,t+240_000)).toEqual({
+      trusted:true,nowBase:t+240_000,proofBase:t,
+    })
+    expect(restoreClock(t,t,t+300_001)).toEqual({trusted:false})
+    expect(restoreClock(t,t,t-300_001)).toEqual({trusted:false})
   })
 })

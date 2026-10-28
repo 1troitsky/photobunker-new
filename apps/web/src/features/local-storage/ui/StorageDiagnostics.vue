@@ -13,7 +13,7 @@ async function probe(persist:boolean){
   busy.value=true;error.value=''
   try{
     state.value=await probeStorageCapabilities(persist)
-    if(identity.value)time.value=openLocalPhotoVault().time.status()
+    if(identity.value)time.value=await openLocalPhotoVault().time.restoreFromStorage()
   }catch(e){error.value=e instanceof Error?e.message:'storage.probe_failed'}
   finally{busy.value=false}
 }
@@ -26,19 +26,40 @@ async function refreshTime(){
 </script>
 
 <template>
-  <section class="storage-diagnostics" aria-labelledby="storage-diagnostics-title">
-    <h2 id="storage-diagnostics-title">{{ title }}</h2>
-    <p>{{ ru?'Диагностика проверяет реальную запись, чтение и удаление. Она не сохраняет фотографии.':
-      'Real write/read/delete tests for encrypted storage. Does not save photos.' }}</p>
+  <section
+    class="storage-diagnostics"
+    aria-labelledby="storage-diagnostics-title"
+  >
+    <h2 id="storage-diagnostics-title">
+      {{ title }}
+    </h2>
+    <p>
+      {{ ru?'Диагностика проверяет реальную запись, чтение и удаление. Она не сохраняет фотографии.':
+        'Real write/read/delete tests for encrypted storage. Does not save photos.' }}
+    </p>
     <div class="storage-diagnostic-actions">
-      <button type="button" class="subtle-button" :disabled="busy" @click="probe(false)">
+      <button
+        type="button"
+        class="subtle-button"
+        :disabled="busy"
+        @click="probe(false)"
+      >
         {{ ru?'Проверить хранилище':'Test local storage' }}
       </button>
-      <button type="button" class="subtle-button" :disabled="busy" @click="probe(true)">
+      <button
+        type="button"
+        class="subtle-button"
+        :disabled="busy"
+        @click="probe(true)"
+      >
         {{ ru?'Запросить постоянное хранение':'Request persistent storage' }}
       </button>
     </div>
-    <dl v-if="state" class="storage-diagnostic-results" aria-live="polite">
+    <dl
+      v-if="state"
+      class="storage-diagnostic-results"
+      aria-live="polite"
+    >
       <dt>HTTPS / Secure context</dt><dd>{{ status(state.secureContext) }}</dd>
       <dt>IndexedDB + CryptoKey</dt><dd>{{ status(state.indexedDB && state.structuredCloneKey) }}</dd>
       <dt>OPFS</dt><dd>{{ status(state.opfs) }}</dd>
@@ -47,22 +68,43 @@ async function refreshTime(){
       <dt>Persisted</dt><dd>{{ state.persisted }}</dd>
       <dt>Persistence request</dt><dd>{{ state.persistRequest }}</dd>
       <dt>{{ ru?'Использовано / квота':'Usage / quota' }}</dt>
-      <dd>{{ state.usage===null?'?':(state.usage/1048576).toFixed(1)+' MB' }}
-        / {{ state.quota===null?'?':(state.quota/1048576).toFixed(1)+' MB' }}</dd>
+      <dd>
+        {{ state.usage===null?'?':(state.usage/1048576).toFixed(1)+' MB' }}
+        / {{ state.quota===null?'?':(state.quota/1048576).toFixed(1)+' MB' }}
+      </dd>
       <dt>{{ ru?'Предупреждение':'Warning' }}</dt><dd>{{ state.warning??'—' }}</dd>
     </dl>
-    <div v-if="identity" class="storage-diagnostic-clock">
-      <p>{{ ru?'Время сервера нужно для чтения и безопасной очистки просроченных фото.':
-        'Authenticated server time is required for access and proven expiry.' }}</p>
-      <button type="button" class="subtle-button" :disabled="busy || identity.offline" @click="refreshTime">
+    <div
+      v-if="identity"
+      class="storage-diagnostic-clock"
+    >
+      <p>
+        {{ ru?'Время сервера нужно для чтения и безопасной очистки просроченных фото.':
+          'Authenticated server time is required for access and proven expiry.' }}
+      </p>
+      <button
+        type="button"
+        class="subtle-button"
+        :disabled="busy || identity.offline"
+        @click="refreshTime"
+      >
         {{ ru?'Проверить серверное время':'Revalidate server time' }}
       </button>
-      <p v-if="time" role="status">
+      <p
+        v-if="time"
+        role="status"
+      >
         {{ time.trusted?(ru?'Доверенное время':'Trusted time'):(ru?'Доступ заблокирован':'Access locked') }}
         · {{ time.reason }}
       </p>
     </div>
-    <p v-if="error" role="alert" class="identity-error">{{ error }}</p>
+    <p
+      v-if="error"
+      role="alert"
+      class="identity-error"
+    >
+      {{ error }}
+    </p>
     <small>{{ ru?'Это результаты только данного браузера. Проверки iOS/Android требуют реального устройства.':
       'Results apply to this browser only. Actual iOS/Android testing is separate.' }}</small>
   </section>
