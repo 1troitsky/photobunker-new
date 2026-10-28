@@ -4,7 +4,7 @@ test('serves the built production UI welcome and retains the foundation diagnost
   await page.goto('/')
   await expect(page).toHaveTitle('PhotoBunker')
   await expect(page).toHaveURL(/\/welcome$/)
-  await expect(page.getByRole('heading', { name: 'PhotoBunker' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'PhotoBunker', exact: true })).toBeVisible()
 
   await page.goto('/foundation')
   await expect(page.getByTestId('foundation')).toBeVisible()
