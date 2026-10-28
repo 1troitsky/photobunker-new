@@ -325,6 +325,16 @@ export async function backgroundSessionCheck():Promise<void>{
 }
 
 /** Narrow PB2 crypto capability for the encrypted-photo module. Never exposes AKEK/package. */
+/** Only current authenticated device may authorize a ciphertext sync contract. */
+export async function signPhotoSyncContract(contract:string):Promise<string>{
+  const active=state.value,epoch=currentGeneration()
+  if(!active||active.offline)throw new Error('sync.identity_offline')
+  if(contract.length>200000)throw new Error('sync.contract_too_large')
+  const signature=await sign(active.device.deviceKey,"photobunker.photo-sync.v1\n"+contract)
+  assertEpoch(epoch)
+  if(active!==state.value)throw new Error('sync.account_changed')
+  return signature
+}
 export function acquireStorageKeys() {
   const active=state.value, epoch=currentGeneration()
   if(!active)throw new Error('storage.account_locked')

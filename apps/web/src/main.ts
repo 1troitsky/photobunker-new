@@ -12,3 +12,6 @@ import './features/identity/ui/identity.css'
 createApp(App).use(createPinia()).use(router).mount('#app')
 registerServiceWorker()
 void import('./features/identity').then(({ backgroundSessionCheck }) => backgroundSessionCheck()).catch(() => {})
+
+/* Non-blocking foreground encrypted delivery; camera never awaits network. */
+void import('./features/photo-sync').then(({startPhotoSync})=>startPhotoSync()).catch(()=>{})

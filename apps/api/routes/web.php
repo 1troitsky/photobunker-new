@@ -1,5 +1,8 @@
 <?php
 use App\Http\Controllers\IdentityController;
+use App\Http\Controllers\PhotoSyncController;
+use App\Photo\Finalization;
+use App\Photo\Lifecycle;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('identity/v2')->middleware('throttle:40,1')->group(function () {
@@ -18,4 +21,24 @@ Route::prefix('identity/v2')->middleware('throttle:40,1')->group(function () {
     Route::post('/rotations/status', [IdentityController::class,'rotationStatus']);
     Route::get('/devices', [IdentityController::class,'devices']);
     Route::delete('/devices/{id}', [IdentityController::class,'revoke']);
+});
+
+
+// Same-origin authenticated account/device sessions, CSRF and no public S3 URLs.
+Route::prefix('photos/v1')->middleware('throttle:100,1')->group(function () {
+    Route::post('/reserve', [PhotoSyncController::class,'reserve']);
+    Route::put('/{photoId}/objects/{assetId}', [PhotoSyncController::class,'upload']);
+    Route::post('/{photoId}/finalize', function (\Illuminate\Http\Request $r,string $photoId,Finalization $f) {
+        return response()->json($f->finalize($r,$photoId))->header('Cache-Control','no-store');
+    });
+    Route::get('/{photoId}/receipt', [PhotoSyncController::class,'receipt']);
+    Route::get('/{photoId}/manifests', [PhotoSyncController::class,'manifests']);
+    Route::get('/{photoId}/objects/{assetId}', [PhotoSyncController::class,'read']);
+    Route::delete('/{photoId}',function(\Illuminate\Http\Request $r,string $photoId,Lifecycle $life,\App\Photo\PhotoSync $sync) {
+        $sync->origin($r);[$a]=$sync->actor($r);
+        $p=$sync->requirePhoto($photoId,$a->id);
+        $life->mark($p->id,'revoked');
+        \App\Jobs\PhotoCleanupJob::dispatch($p->id);
+        return $sync->json(['state'=>'deleting'],202);
+    });
 });
