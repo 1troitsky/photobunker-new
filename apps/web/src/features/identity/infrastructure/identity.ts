@@ -335,6 +335,15 @@ export async function signPhotoSyncContract(contract:string):Promise<string>{
   if(active!==state.value)throw new Error('sync.account_changed')
   return signature
 }
+export async function signMetadataContract(message:string):Promise<string>{
+  const active=state.value,epoch=currentGeneration()
+  if(!active||active.offline)throw new Error('sync.identity_offline')
+  if(message.length>200000)throw new Error('sync.contract_too_large')
+  const signed=await sign(active.device.deviceKey,message)
+  assertEpoch(epoch)
+  if(active!==state.value)throw new Error('sync.account_changed')
+  return signed
+}
 export function acquireStorageKeys() {
   const active=state.value, epoch=currentGeneration()
   if(!active)throw new Error('storage.account_locked')

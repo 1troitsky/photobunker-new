@@ -39,14 +39,17 @@ test('real synthetic camera -> three encrypted local commits -> viewer -> reload
       expect(href).toBe(1)
     }
     await page.goto('/photos')
-    const photos=page.locator('.secure-photo-row')
+    const photos=page.locator('.gallery-item')
     await expect(photos).toHaveCount(3,{timeout:30_000})
-    for(const href of await photos.evaluateAll(elements=>elements.map(el=>el.getAttribute('href')))){
+    for(let i=0;i<3;i++){
+      await photos.nth(i).locator('.gallery-photo').click()
+      const href=new URL(page.url()).pathname
       expect(href).toMatch(/^\/photos\/[a-z0-9-]+$/)
-      ids.push(href!)
+      ids.push(href)
+      await page.goto('/photos')
     }
     expect(new Set(ids).size).toBe(3)
-    await photos.first().click()
+    await page.locator('.gallery-item .gallery-photo').first().click()
     await expect(page.locator('[data-testid=local-photo-viewer] img')).toBeVisible({timeout:30_000})
     await page.reload()
     await expect(page.locator('[data-testid=local-photo-viewer] img')).toBeVisible({timeout:30_000})
@@ -60,7 +63,7 @@ test('real synthetic camera -> three encrypted local commits -> viewer -> reload
     // Keep the in-memory offline unlock while navigating through the SPA. A full
     // document navigation intentionally clears decrypted identity state.
     await page.getByRole('link',{name:/Photos|Фото/i}).click()
-    await page.locator(`a[href="${ids[0]}"]`).click()
+    await page.locator('.gallery-item .gallery-photo').first().click()
     await expect(page.locator('[data-testid=local-photo-viewer] img')).toBeVisible({timeout:30_000})
     expect(remotePhotoRequests).toEqual([])
     // no save-to-download or user-visible file input as capture fallback
@@ -83,6 +86,6 @@ test('denied real permission shows error and never marks a saved capture',async(
     await expect(page.getByRole('alert')).toContainText(/denied|запрещён|supported|поддерж|NotAllowed/i)
     await expect(page.getByRole('button',{name:/Take photo|Снять фото/i})).toBeDisabled()
     await page.goto('/photos')
-    await expect(page.locator('.secure-photo-row')).toHaveCount(0)
+    await expect(page.locator('.gallery-item')).toHaveCount(0)
   }finally{await context.close();await browser.close()}
 })

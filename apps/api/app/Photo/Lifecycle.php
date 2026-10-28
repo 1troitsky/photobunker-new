@@ -53,17 +53,29 @@ final class Lifecycle
     public function recoverOrphans(int $batch):int {
         $old=now()->subHours((int)config('photo_sync.orphan_grace_hours'));
         $objects=DB::table('photo_objects as o')->join('photo_records as p','p.id','=','o.photo_id')
-            ->where('p.state','pending')->whereIn('o.state',['pending','uploading','verified'])
+            ->where(function($q){
+                $q->where(function($q){$q->where('p.state','pending')
+                    ->whereIn('o.state',['pending','uploading','verified']);})
+                  ->orWhere(function($q){$q->where('p.state','active')->where('o.kind','metadata')
+                    ->whereColumn('o.id','!=','p.metadata_asset_id')
+                    ->whereIn('o.state',['pending','uploading','verified','active']);});
+            })
             ->where('o.updated_at','<',$old)->orderBy('o.updated_at')->limit($batch)
-            ->select('o.id','o.object_key')->get();
+            ->select('o.id','o.object_key','p.state as parent_state')->get();
         $removed=0;
         foreach($objects as $o){
             try{
                 $disk=Storage::disk(config('photo_sync.disk'));
                 if($disk->exists($o->object_key)&&(!$disk->delete($o->object_key)||$disk->exists($o->object_key)))
                     throw new \RuntimeException('photo.orphan_retry');
-                DB::table('photo_objects')->where('id',$o->id)->whereIn('state',['pending','uploading','verified'])
-                  ->update(['state'=>'pending','updated_at'=>now()]);
+                if($o->parent_state==='active'){
+                  // Abandoned metadata candidate: no active pointer, remove stale reservation.
+                  DB::table('photo_objects')->where('id',$o->id)
+                    ->whereIn('state',['pending','uploading','verified','active'])->delete();
+                }else{
+                  DB::table('photo_objects')->where('id',$o->id)->whereIn('state',['pending','uploading','verified'])
+                    ->update(['state'=>'pending','updated_at'=>now()]);
+                }
                 $removed++;
             }catch(\Throwable){ /* bounded next scheduler retry, never log storage credentials */ }
         }

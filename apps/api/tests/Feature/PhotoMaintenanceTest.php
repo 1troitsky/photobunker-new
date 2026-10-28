@@ -55,4 +55,25 @@ final class PhotoMaintenanceTest extends TestCase {
         $this->assertDatabaseHas('photo_objects',['id'=>$f['asset'],'state'=>'pending']);
         $this->assertDatabaseHas('photo_records',['id'=>$f['photo'],'state'=>'pending']);
     }
+    public function test_orphan_sweep_removes_superseded_active_metadata_after_cleanup_job_loss():void {
+        Storage::fake('photo-ciphertext');
+        $f=$this->pendingPhoto(now()->addDay()->getTimestampMs());
+        $current=(string)Str::uuid();$currentKey=$f['key'].'-current';
+        DB::table('photo_objects')->insert(['id'=>$current,'photo_id'=>$f['photo'],'kind'=>'metadata',
+          'revision'=>2,'bytes'=>32,'sha256'=>str_repeat('d',64),'manifest_json'=>'{}',
+          'object_key'=>$currentKey,'state'=>'active','created_at'=>now(),'updated_at'=>now()]);
+        DB::table('photo_records')->where('id',$f['photo'])->update([
+          'state'=>'active','metadata_asset_id'=>$current,'metadata_revision'=>2,
+        ]);
+        DB::table('photo_objects')->where('id',$f['asset'])->update([
+          'state'=>'active','updated_at'=>now()->subDays(2),
+        ]);
+        Storage::disk('photo-ciphertext')->put($f['key'],random_bytes(32));
+        Storage::disk('photo-ciphertext')->put($currentKey,random_bytes(32));
+        $this->assertSame(1,app(Lifecycle::class)->recoverOrphans(10));
+        $this->assertFalse(Storage::disk('photo-ciphertext')->exists($f['key']));
+        $this->assertTrue(Storage::disk('photo-ciphertext')->exists($currentKey));
+        $this->assertDatabaseMissing('photo_objects',['id'=>$f['asset']]);
+        $this->assertDatabaseHas('photo_objects',['id'=>$current,'state'=>'active']);
+    }
 }

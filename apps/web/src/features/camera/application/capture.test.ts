@@ -4,10 +4,16 @@ const mocked=vi.hoisted(()=>{
   const state:{accountId:string;deviceId:string}|null={accountId:'a',deviceId:'d'}
   return{
     current: {value:state} as {value:{accountId:string;deviceId:string}|null},
-    commit:vi.fn(),reconcile:vi.fn(),now:vi.fn(()=>1_800_000_000_000),
+    commit:vi.fn(),reconcile:vi.fn(),now:vi.fn(()=>1_800_000_000_000),takeName:vi.fn(),
   }
 })
 vi.mock('../../identity',()=>({identity:mocked.current}))
+vi.mock('../../gallery',()=>({
+  thumbnailWebp:vi.fn(async()=>null),
+  captureGps:vi.fn(()=>undefined),
+  gpsStatus:vi.fn(()=>'idle'),
+  takeReservedName:mocked.takeName,
+}))
 vi.mock('../../local-storage',()=>({
   openLocalPhotoVault:()=>({
     commit:mocked.commit,reconcile:mocked.reconcile,
@@ -21,8 +27,9 @@ const compressor=vi.fn(async()=>({
 }))
 const result={photoId:'saved-id',accountId:'a',expiresAt:1_800_000_000_000+86_400_000}
 describe('R2-06 application capture and encrypted commit API',()=>{
-  beforeEach(()=>{vi.clearAllMocks();mocked.current.value={accountId:'a',deviceId:'d'};mocked.commit.mockResolvedValue(result)})
-  it('snapshots mode 2 original and mode 3 master without generating another asset',async()=>{
+  beforeEach(()=>{vi.clearAllMocks();mocked.current.value={accountId:'a',deviceId:'d'};
+    mocked.commit.mockResolvedValue(result);mocked.takeName.mockResolvedValue(null)})
+  it('snapshots mode 2 original and mode 3 master without adding an unexpected extra asset',async()=>{
     const service=createCaptureSession(compressor)
     await service.prepare(new Blob(['frame']),'video-frame',2,1)
     expect(mocked.commit).toHaveBeenCalledOnce()
@@ -52,6 +59,14 @@ describe('R2-06 application capture and encrypted commit API',()=>{
     expect(retry.assetId).toBe(original.assetId)
     expect(retry.metadataAssetId).toBe(original.metadataAssetId)
     expect(mocked.commit).toHaveBeenCalledTimes(2)
+  })
+  it('persists the reserved NAME-ID number under the durable header field',async()=>{
+    mocked.takeName.mockResolvedValue({nameId:'ABCD0042',leaseId:'00000000-0000-4000-8000-000000000042',number:42})
+    const service=createCaptureSession(compressor)
+    await service.prepare(new Blob(['frame']),'video-frame',3,45)
+    expect(mocked.commit.mock.calls[0]![0]).toMatchObject({
+      nameId:'ABCD0042',leaseId:'00000000-0000-4000-8000-000000000042',nameNumber:42,
+    })
   })
   it('refuses mode 1 and rejects work completed after identity change',async()=>{
     const service=createCaptureSession(compressor)

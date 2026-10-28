@@ -78,7 +78,7 @@ export async function photoRequest(
   path:string,method:'GET'|'POST'|'PUT'|'DELETE'='GET',
   data?:string|Blob,
 ):Promise<Response>{
-  if(!/^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*$/.test(path))throw new IdentityError('sync.invalid_path',400)
+  if(!/^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*(?:\?after=[0-9a-f-]{36}&limit=(?:[1-9]|[1-4][0-9]|50))?$/.test(path))throw new IdentityError('sync.invalid_path',400)
   const epoch=currentGeneration(),controller=new AbortController()
   controllers.add(controller)
   try{

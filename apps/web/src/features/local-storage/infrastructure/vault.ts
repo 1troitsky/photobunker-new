@@ -1,5 +1,5 @@
 import { acquireStorageKeys, onIdentityCleanup } from '../../identity'
-import type { CreatePhoto, EncryptedBlobStore, PhotoRepository, PhotoSyncOutbox, PhotoHeader, CipherManifest, Capabilities, StorageBackend, TimeAuthority, SyncSnapshot, SyncReceipt, SyncState } from '../domain/contracts'
+import type { CreatePhoto, EncryptedBlobStore, PhotoRepository, PhotoSyncOutbox, PhotoHeader, CipherManifest, Capabilities, StorageBackend, TimeAuthority, SyncSnapshot, SyncReceipt, SyncState, CloudAsset, CloudPhoto } from '../domain/contracts'
 import { db, photoKey, assetKey, writeCiphertext, readCiphertext, deleteCiphertext } from './database'
 import type { PhotoRow, ManifestRow, JournalRow, StoredOutbox } from './database'
 import { encryptAsset, decryptAsset, identifier, invalid, manifestValid, sha } from './cipher'
@@ -44,6 +44,7 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     if(row){
       if(row.operationId!==input.operationId)throw new Error('storage.photo_conflict')
       if(row.accountId!==this.scope.accountId || row.assetId!==input.assetId ||
+        row.nameId!==input.nameId ||
         row.metadataAssetId!==input.metadataAssetId || row.expiresAt!==input.expiresAt ||
         row.revision!==input.revision || row.state!=='local')
         throw new Error('storage.operation_conflict')
@@ -67,6 +68,8 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     await this.clockReady()
     const now=this.time.now()
     for(const id of [input.operationId,input.photoId,input.assetId,input.metadataAssetId])identifier(id)
+    if(input.thumbnailAssetId)identifier(input.thumbnailAssetId)
+    invalid(!input.thumbnail || (!!input.thumbnailAssetId&&input.thumbnail.type==='image/webp'&&input.thumbnail.size<=512*1024),'gallery.thumbnail_invalid')
     invalid(input.assetId!==input.metadataAssetId && input.revision===1 &&
       ['master','original','edit','thumbnail'].includes(input.kind),'storage.invalid_capture')
     invalid(Number.isSafeInteger(input.capturedAt) && Number.isSafeInteger(input.expiresAt) &&
@@ -86,7 +89,8 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     // Reserve every backend that this attempt can actually touch. On browsers
     // without OPFS, recording phantom OPFS paths makes successful IDB commits
     // fail during cleanup because navigator.storage.getDirectory is absent.
-    const allPaths=[imagePath,metadataPath].flatMap(path=>backend==='opfs'
+    const thumbnailPath=input.thumbnailAssetId?assetKey(this.scope,input.photoId,input.thumbnailAssetId)+'/'+attemptId:null
+    const allPaths=[imagePath,metadataPath,...(thumbnailPath?[thumbnailPath]:[])].flatMap(path=>backend==='opfs'
       ?['opfs|'+path,'idb-blob|'+path]
       :['idb-blob|'+path])
     const journalKey=photoReference+'/'+attemptId
@@ -100,6 +104,7 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
       for(const item of [
         {assetId:input.assetId,kind:input.kind,content:input.pixels,path:imagePath},
         {assetId:input.metadataAssetId,kind:'metadata' as const,content:new Blob([meta]),path:metadataPath},
+        ...(input.thumbnail&&input.thumbnailAssetId&&thumbnailPath?[{assetId:input.thumbnailAssetId,kind:'thumbnail' as const,content:input.thumbnail,path:thumbnailPath}]:[]),
       ]){
         this.check()
         const expires=String(input.expiresAt)
@@ -133,7 +138,8 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
       // Dexie atomic manifest, encrypted metadata pointer, photo header & outbox.
       const stored:PhotoRow={
         key:photoReference,accountId:this.scope.accountId,photoId:input.photoId,assetId:input.assetId,
-        metadataAssetId:input.metadataAssetId,
+        metadataAssetId:input.metadataAssetId,thumbnailAssetId:input.thumbnailAssetId,
+        ...(input.nameId?{nameId:input.nameId,namePending:true,leaseId:input.leaseId,nameNumber:input.nameNumber}:{namePending:true}),
         expiresAt:input.expiresAt,revision:input.revision,
         operationId:input.operationId,state:'local',
       }
@@ -165,7 +171,7 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
       })
       manifestCommitted=true
       // If a concurrent attempt won, only its manifest is durable; remove this attempt.
-      if(staged.some(x=>x.manifest.storageKey!==imagePath && x.manifest.storageKey!==metadataPath)){
+      if(staged.some(x=>![imagePath,metadataPath,thumbnailPath].includes(x.manifest.storageKey))){
         // impossible internal invariant — fail closed
         throw new Error('storage.invalid_staging')
       }
@@ -210,6 +216,20 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     }
     return row
   }
+  /** NAME-ID is an allowed minimal technical header, never a primary key. */
+  async setName(photoId:string,nameId:string,pending:boolean,leaseId?:string,number?:number):Promise<void>{
+    const photo=await this.current(photoId)
+    invalid(/^[A-Z]{4}[0-9]{4}$/.test(nameId),'gallery.name_invalid')
+    if(leaseId)identifier(leaseId)
+    await db.transaction('rw',db.photos,async()=>{
+      this.check()
+      const live=await db.photos.get(photoKey(this.scope,photoId))
+      invalid(!!live&&live.state==='local'&&live.operationId===photo.operationId,'gallery.photo_changed')
+      if(live.nameId && live.nameId!==nameId)throw Error('gallery.name_immutable')
+      await db.photos.update(live.key,{nameId,namePending:pending,
+        ...(leaseId?{leaseId,nameNumber:number}: {})})
+    })
+  }
   async readHeader(photoId:string):Promise<PhotoHeader|null>{
     try{return await this.current(photoId)}catch{return null}
   }
@@ -231,7 +251,7 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     const row=await this.current(photoId)
     const storedAsset=await db.assets.get(assetKey(this.scope,photoId,assetId))
     invalid(!!storedAsset && storedAsset.accountId===this.scope.accountId && storedAsset.photoId===photoId &&
-      (assetId===row.assetId || assetId===row.metadataAssetId),'storage.asset_unavailable')
+      (assetId===row.assetId || assetId===row.metadataAssetId || assetId===row.thumbnailAssetId),'storage.asset_unavailable')
     // `key` is a Dexie-only index and is not part of the authenticated manifest
     // protocol. Never feed storage bookkeeping into the exact-field validator.
     const assetRecord:Partial<ManifestRow>={...storedAsset}
@@ -255,6 +275,81 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     invalid(decoded!==null&&typeof decoded==='object'&&decoded.version===1&&
       Number.isSafeInteger(decoded.capturedAt),'storage.metadata_invalid')
     return decoded.data
+  }
+  /** Crash-safe encrypted title/GPS revision, queued in the *existing* outbox. */
+  async editMetadata(photoId:string,data:unknown):Promise<string>{
+    const photo=await this.current(photoId),backend=await this.init()
+    const bytes=metadataEncoder.encode(JSON.stringify({version:1,capturedAt:(data as {capturedAt:number}).capturedAt,data}))
+    invalid(bytes.length>0&&bytes.length<=256*1024,'gallery.metadata_too_large')
+    const operationId=crypto.randomUUID(),assetId=crypto.randomUUID(),revision=photo.revision+1,attempt=crypto.randomUUID()
+    const path=assetKey(this.scope,photoId,assetId)+'/'+attempt
+    const journalKey=photoKey(this.scope,photoId)+'/'+attempt
+    await db.journal.add({key:journalKey,operationId,accountId:this.scope.accountId,deviceId:this.scope.deviceId,
+      photoId,attemptId:attempt,assetKeys:[backend+'|'+path],createdAt:this.time.now(),state:'staging'})
+    let committed=false
+    try{
+      const {key,wrapped}=await this.grant.create(assetId,String(photo.expiresAt))
+      const cipher=await encryptAsset(this.scope,photoId,assetId,'metadata',revision,photo.expiresAt,
+        new Blob([bytes]),key,wrapped,backend,path,()=>this.check())
+      await writeCiphertext(backend,path,cipher.blob,this.scope)
+      const reloaded=await readCiphertext(backend,path)
+      await decryptAsset(cipher.manifest,reloaded,key,this.scope,()=>this.check())
+      await db.transaction('rw',[db.photos,db.assets,db.outbox,db.journal,db.tombstones],async()=>{
+        this.check()
+        const current=await db.photos.get(photoKey(this.scope,photoId))
+        invalid(!!current&&current.state==='local'&&current.revision===photo.revision&&
+          current.expiresAt===photo.expiresAt,'gallery.metadata_conflict')
+        invalid(!await db.tombstones.get(photoKey(this.scope,photoId)),'gallery.tombstoned')
+        await db.assets.add({key:assetKey(this.scope,photoId,assetId),...cipher.manifest})
+        await db.photos.update(photoKey(this.scope,photoId),{metadataAssetId:assetId,revision})
+        await db.outbox.add({key:this.scope.accountId+'/'+operationId,accountId:this.scope.accountId,
+          photoId,operationId,intent:'metadata',metadataAssetId:assetId,expectedRevision:photo.revision,
+          state:'pending',attempts:0,nextAttemptAt:0,expiresAt:photo.expiresAt})
+        await db.journal.update(journalKey,{state:'cleanup'})
+      })
+      committed=true
+      await db.journal.delete(journalKey)
+      window.dispatchEvent(new Event('photobunker-outbox'))
+      return operationId
+    }catch(error){
+      if(!committed){await deleteCiphertext(backend,path).catch(()=>{});await db.journal.delete(journalKey).catch(()=>{})}
+      throw error
+    }
+  }
+  /** Metadata operations are durable rows in the same R2-04 outbox. */
+  async metadataDelivery(operationId:string):Promise<{photoId:string;operationId:string;expectedRevision:number;asset:SyncSnapshot['assets'][number]}>{
+    const task=await db.outbox.get(this.scope.accountId+'/'+operationId)
+    invalid(!!task&&task.intent==='metadata'&&!!task.metadataAssetId&&Number.isSafeInteger(task.expectedRevision),'gallery.metadata_outbox_missing')
+    const photo=await this.current(task.photoId)
+    invalid(photo.revision>=task.expectedRevision!+1,'gallery.metadata_conflict')
+    const record=await db.assets.get(assetKey(this.scope,photo.photoId,task.metadataAssetId!))
+    invalid(!!record,'gallery.metadata_asset_missing')
+    const {key,backend,storageKey,...manifest}=record
+    void key
+    const ciphertext=await readCiphertext(backend,storageKey)
+    const sha256=await sha(new Uint8Array(await ciphertext.arrayBuffer()))
+    this.check()
+    return{photoId:photo.photoId,operationId,expectedRevision:task.expectedRevision!,
+      asset:{assetId:record.assetId,kind:'metadata',revision:record.revision,
+        bytes:ciphertext.size,sha256,manifest,ciphertext}}
+  }
+  async acknowledgeMetadata(operationId:string,assetId:string):Promise<void>{
+    this.check()
+    const task=await db.outbox.get(this.scope.accountId+'/'+operationId)
+    invalid(!!task&&task.intent==='metadata'&&task.metadataAssetId===assetId,'gallery.ack_mismatch')
+    const photo=await this.current(task.photoId)
+    invalid(photo.revision>=task.expectedRevision!+1,'gallery.ack_stale')
+    await db.transaction('rw',db.outbox,async()=>{
+      this.check()
+      await db.outbox.update(this.scope.accountId+'/'+operationId,{state:'acknowledged',attempts:0,nextAttemptAt:0})
+    })
+    const older=await db.assets.where('[accountId+photoId]')
+      .equals([this.scope.accountId,photo.photoId]).filter(a=>a.kind==='metadata'&&
+        a.revision<task.expectedRevision!+1&&a.assetId!==photo.metadataAssetId).toArray()
+    for(const old of older){
+      await deleteCiphertext(old.backend,old.storageKey)
+      await db.assets.delete(old.key)
+    }
   }
   async pending():Promise<StoredOutbox[]>{
     this.check();await this.clockReady()
@@ -287,11 +382,12 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     if(photo.operationId!==operationId||photo.expiresAt!==task.expiresAt)throw new Error('sync.operation_conflict')
     const records=await db.assets.where('[accountId+photoId]')
       .equals([this.scope.accountId,photo.photoId]).toArray()
-    invalid(records.length===2,'sync.assets_incomplete')
+    const baseline=records.filter(x=>x.kind!=='metadata'||x.revision===1)
+    invalid(baseline.length>=2&&baseline.length<=3,'sync.assets_incomplete')
     const assets=[]
-    for(const asset of records){
+    for(const asset of baseline){
       this.check()
-      invalid(asset.assetId===photo.assetId||asset.assetId===photo.metadataAssetId,'sync.asset_unexpected')
+      invalid(asset.assetId===photo.assetId||asset.kind==='metadata'||asset.assetId===photo.thumbnailAssetId,'sync.asset_unexpected')
       const {key,backend,storageKey,...manifest}=asset
       void key
       manifestValid({...manifest,backend,storageKey},{scope:this.scope,photoId:photo.photoId,assetId:asset.assetId})
@@ -351,9 +447,124 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     if(!photo||photo.state!=='local')return 'expired'
     if(!this.time.status().trusted)return 'local'
     if(this.time.now()>=photo.expiresAt)return 'expired'
-    const task=await db.outbox.get(this.scope.accountId+'/'+photo.operationId)
-    return task?.state==='acknowledged'?'synced':task?.state==='retry'?'retry':'local'
+    const tasks=await db.outbox.where('accountId').equals(this.scope.accountId)
+      .filter(task=>task.photoId===photoId&&task.state!=='cancelled').toArray()
+    if(tasks.some(task=>task.state==='retry'))return 'retry'
+    if(tasks.some(task=>task.state!=='acknowledged'))return 'local'
+    const original=tasks.find(task=>task.operationId===photo.operationId)
+    return original?.state==='acknowledged'?'synced':'local'
   }
+  /** Remote E2EE object: validate scope/digest before opening only in volatile memory. */
+  async decryptRemote(photoId:string,asset:{assetId:string;kind:'thumbnail'|'metadata';revision:number;
+    bytes:number;sha256:string;manifest:Omit<CipherManifest,'backend'|'storageKey'>},ciphertext:Blob):Promise<Blob>{
+    this.check();await this.clockReady();identifier(photoId)
+    invalid(ciphertext.size===asset.bytes,'gallery.remote_length')
+    const hash=await sha(new Uint8Array(await ciphertext.arrayBuffer()))
+    invalid(hash===asset.sha256,'gallery.remote_checksum')
+    const storageKey=assetKey(this.scope,photoId,asset.assetId)+'/'+crypto.randomUUID()
+    const manifest:CipherManifest={...asset.manifest,backend:'idb-blob',storageKey}
+    manifestValid(manifest,{scope:this.scope,photoId,assetId:asset.assetId})
+    invalid(manifest.kind===asset.kind&&manifest.cipherBytes===asset.bytes&&
+      manifest.expiresAt>this.time.now(),'gallery.remote_expired')
+    const key=await this.grant.open(asset.assetId,String(manifest.expiresAt),manifest.wrappedDEK)
+    return decryptAsset(manifest,ciphertext,key,this.scope,()=>{this.check();this.time.now()})
+  }
+  /** Confirmed thumbnail ciphertext may be evicted; unsynced upload assets never are. */
+  async cacheThumbnail(photoId:string):Promise<void>{
+    const photo=await this.current(photoId)
+    if(!photo.thumbnailAssetId||await this.syncState(photoId)!=='synced')return
+    const asset=await db.assets.get(assetKey(this.scope,photoId,photo.thumbnailAssetId))
+    if(!asset)return
+    const key=assetKey(this.scope,photoId,photo.thumbnailAssetId)
+    await db.thumbnailCache.put({key,accountId:this.scope.accountId,photoId,assetId:photo.thumbnailAssetId,
+      backend:asset.backend,storageKey:asset.storageKey,bytes:asset.cipherBytes,
+      expiresAt:photo.expiresAt,accessedAt:this.time.now()})
+    await this.trimThumbnailCache()
+  }
+  async trimThumbnailCache():Promise<void>{
+    this.check()
+    const now=this.time.now()
+    const entries=await db.thumbnailCache.where('accountId').equals(this.scope.accountId).toArray()
+    entries.sort((a,b)=>a.accessedAt-b.accessedAt)
+    let total=entries.reduce((n,item)=>n+item.bytes,0),count=entries.length
+    for(const item of entries){
+      if(item.expiresAt>now&&total<=64*1024*1024&&count<=500)break
+      const photo=await db.photos.get(photoKey(this.scope,item.photoId))
+      const out=photo?await db.outbox.get(this.scope.accountId+'/'+photo.operationId):null
+      if(photo&&out?.state!=='acknowledged'&&item.expiresAt>now)continue
+      // Delete only local cached ciphertext. Manifest remains for authorized cloud re-download.
+      await deleteCiphertext(item.backend,item.storageKey)
+      await db.thumbnailCache.delete(item.key)
+      total-=item.bytes;count--
+    }
+  }
+
+  /** Import a server-authorized encrypted photo without ever writing plaintext or duplicating UUIDs. */
+  async importCloud(photo:CloudPhoto,downloaded:ReadonlyArray<{asset:CloudAsset;blob:Blob}>):Promise<boolean>{
+    this.check();await this.clockReady()
+    identifier(photo.photoId)
+    invalid(photo.expiresAt>this.time.now(),'gallery.cloud_expired')
+    if(await db.tombstones.get(photoKey(this.scope,photo.photoId)))return false
+    if(await db.photos.get(photoKey(this.scope,photo.photoId)))return false
+    const originals=downloaded.filter(x=>x.asset.kind==='master'||x.asset.kind==='original')
+    const metadata=downloaded.filter(x=>x.asset.kind==='metadata'&&x.asset.assetId===photo.metadataAssetId)
+    const thumbnails=downloaded.filter(x=>x.asset.kind==='thumbnail')
+    invalid(originals.length===1&&metadata.length===1&&thumbnails.length<=1,'gallery.cloud_objects_invalid')
+    const backend=await this.init()
+    const attempt=crypto.randomUUID(),journalKey=photoKey(this.scope,photo.photoId)+'/'+attempt
+    const paths=downloaded.map(x=>assetKey(this.scope,photo.photoId,x.asset.assetId)+'/'+attempt)
+    await db.journal.add({key:journalKey,accountId:this.scope.accountId,deviceId:this.scope.deviceId,
+      photoId:photo.photoId,operationId:photo.photoId,attemptId:attempt,assetKeys:paths.map(path=>backend+'|'+path),
+      state:'staging',createdAt:this.time.now()})
+    const staged:CipherManifest[]=[]
+    let published=false
+    try{
+      for(let i=0;i<downloaded.length;i++){
+        this.check()
+        const {asset,blob}=downloaded[i]!,path=paths[i]!
+        invalid(asset.manifest.accountId===this.scope.accountId&&asset.manifest.photoId===photo.photoId&&
+          asset.manifest.assetId===asset.assetId&&asset.manifest.kind===asset.kind&&
+          asset.manifest.expiresAt===photo.expiresAt,'gallery.cloud_scope')
+        const m:CipherManifest={...asset.manifest,backend,storageKey:path}
+        manifestValid(m,{scope:this.scope,photoId:photo.photoId,assetId:asset.assetId})
+        invalid(blob.size===asset.bytes,'gallery.cloud_truncated')
+        const digest=await sha(new Uint8Array(await blob.arrayBuffer()))
+        invalid(digest===asset.sha256,'gallery.cloud_digest')
+        const key=await this.grant.open(asset.assetId,String(photo.expiresAt),m.wrappedDEK)
+        await decryptAsset(m,blob,key,this.scope,()=>{this.check();this.time.now()})
+        await writeCiphertext(backend,path,blob,this.scope)
+        staged.push(m)
+      }
+      const main=originals[0]!.asset
+      const stored:PhotoRow={key:photoKey(this.scope,photo.photoId),accountId:this.scope.accountId,
+        photoId:photo.photoId,assetId:main.assetId,metadataAssetId:photo.metadataAssetId,
+        thumbnailAssetId:thumbnails[0]?.asset.assetId,expiresAt:photo.expiresAt,
+        state:'local',revision:photo.metadataRevision,operationId:photo.photoId,
+        ...(photo.nameId?{nameId:photo.nameId,namePending:false}:{namePending:true})}
+      await db.transaction('rw',[db.photos,db.assets,db.outbox,db.journal,db.tombstones],async()=>{
+        this.check()
+        if(await db.tombstones.get(stored.key))throw Error('gallery.tombstoned')
+        if(await db.photos.get(stored.key))throw Error('gallery.cloud_conflict')
+        await db.photos.add(stored)
+        for(const m of staged)await db.assets.add({key:assetKey(this.scope,photo.photoId,m.assetId),...m})
+        await db.outbox.put({key:this.scope.accountId+'/'+photo.photoId,
+          accountId:this.scope.accountId,photoId:photo.photoId,operationId:photo.photoId,
+          state:'acknowledged',intent:'upload',expiresAt:photo.expiresAt,
+          attempts:0,nextAttemptAt:0})
+        await db.journal.update(journalKey,{state:'cleanup'})
+      })
+      published=true
+      await db.journal.delete(journalKey)
+      return true
+    }catch(error){
+      if(!published){
+        for(const m of staged)await deleteCiphertext(m.backend,m.storageKey).catch(()=>{})
+        await db.journal.delete(journalKey).catch(()=>{})
+      }
+      throw error
+    }
+  }
+
   /** A same-origin authenticated 410 is authoritative even before local wall-clock expiry. */
   async revokeFromServer(photoId:string):Promise<void>{
     this.check();identifier(photoId)
@@ -397,14 +608,15 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
       this.check()
       await deleteCiphertext(item.backend,item.storageKey)
     }
-    await db.transaction('rw',db.photos,db.assets,db.outbox,async()=>{
+    await db.transaction('rw',[db.photos,db.assets,db.outbox,db.thumbnailCache],async()=>{
       this.check()
       for(const item of assets)await db.assets.delete(item.key)
+      await db.thumbnailCache.where('[accountId+photoId]').equals([this.scope.accountId,photoId]).delete()
       const photo=await db.photos.get(key)
-      if(photo){
-        await db.outbox.delete(this.scope.accountId+'/'+photo.operationId)
-        await db.photos.delete(key)
-      }
+      const operations=await db.outbox.where('accountId').equals(this.scope.accountId)
+        .filter(row=>row.photoId===photoId).primaryKeys()
+      await db.outbox.bulkDelete(operations)
+      if(photo)await db.photos.delete(key)
     })
   }
   async reconcile():Promise<void>{

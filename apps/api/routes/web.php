@@ -3,6 +3,9 @@ use App\Http\Controllers\IdentityController;
 use App\Http\Controllers\PhotoSyncController;
 use App\Photo\Finalization;
 use App\Photo\Lifecycle;
+use App\Http\Controllers\GalleryController;
+use App\Http\Controllers\PhotoMetadataController;
+use App\Http\Controllers\PhotoNamesController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('identity/v2')->middleware('throttle:40,1')->group(function () {
@@ -26,6 +29,12 @@ Route::prefix('identity/v2')->middleware('throttle:40,1')->group(function () {
 
 // Same-origin authenticated account/device sessions, CSRF and no public S3 URLs.
 Route::prefix('photos/v1')->middleware('throttle:100,1')->group(function () {
+    Route::get('/list', [GalleryController::class,'index']);
+    Route::post('/names/reserve', [PhotoNamesController::class,'reserve']);
+    Route::post('/names/claim', [PhotoNamesController::class,'claim']);
+    Route::post('/{photoId}/metadata/reserve', [PhotoMetadataController::class,'reserve']);
+    Route::put('/{photoId}/metadata/{assetId}', [PhotoMetadataController::class,'upload']);
+    Route::post('/{photoId}/metadata/finalize', [PhotoMetadataController::class,'finalize']);
     Route::post('/reserve', [PhotoSyncController::class,'reserve']);
     Route::put('/{photoId}/objects/{assetId}', [PhotoSyncController::class,'upload']);
     Route::post('/{photoId}/finalize', function (\Illuminate\Http\Request $r,string $photoId,Finalization $f) {

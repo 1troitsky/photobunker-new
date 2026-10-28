@@ -12,3 +12,5 @@ export { acquireStorageKeys, fetchAuthenticatedServerTime } from './infrastructu
 
 export { signPhotoSyncContract } from './infrastructure/identity'
 export { photoRequest } from './infrastructure/api'
+
+export {signMetadataContract} from './infrastructure/identity'

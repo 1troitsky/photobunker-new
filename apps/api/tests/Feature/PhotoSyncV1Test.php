@@ -79,6 +79,28 @@ final class PhotoSyncV1Test extends TestCase {
                 'CONTENT_TYPE'=>'application/octet-stream'],$bytes)->assertOk();
         }
     }
+    private function metadataFixture(array $photo,?string $operation=null):array {
+        $operation??=(string)Str::uuid();$assetId=(string)Str::uuid();$bytes=random_bytes(96);
+        $expires=$photo['assets'][0]['manifest']['expiresAt'];
+        $manifest=[
+            'version'=>1,'algorithm'=>'AES-256-GCM','chunkBytes'=>262144,
+            'accountId'=>$this->account,'photoId'=>$photo['photo'],'assetId'=>$assetId,'kind'=>'metadata',
+            'revision'=>2,'expiresAt'=>$expires,'plainBytes'=>80,'cipherBytes'=>96,
+            'frames'=>[['index'=>0,'offset'=>0,'bytes'=>96,'plainBytes'=>80,
+                'iv'=>P::encode(random_bytes(12)),'digest'=>hash('sha256',$bytes)]],
+            'cipherDigest'=>hash('sha256','metadata-revision'),
+            'wrappedDEK'=>['iv'=>P::encode(random_bytes(12)),'ciphertext'=>P::encode(random_bytes(64))],
+        ];
+        $asset=['assetId'=>$assetId,'kind'=>'metadata','revision'=>2,'bytes'=>96,
+            'sha256'=>hash('sha256',$bytes),'manifest'=>$manifest];
+        $statement=['photoId'=>$photo['photo'],'operationId'=>$operation,
+            'expectedRevision'=>1,'asset'=>$asset];
+        $json=json_encode($statement,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        return ['operation'=>$operation,'asset'=>$asset,'bytes'=>$bytes,'body'=>[
+            'operationId'=>$operation,'expectedRevision'=>1,'asset'=>$asset,
+            'signature'=>$this->signature("photobunker.photo-metadata.v1\n".$json),
+        ]];
+    }
     public function test_signed_reserve_upload_readback_finalize_replay_and_private_read():void {
         $f=$this->fixture();
         $this->reserve($f)->assertOk()->assertJsonPath('state','pending');
@@ -125,5 +147,27 @@ final class PhotoSyncV1Test extends TestCase {
         $this->assertDatabaseHas('photo_tombstones',['photo_id'=>$f['photo']]);
         $this->assertSame([],Storage::disk('photo-ciphertext')->allFiles());
         $this->getJson('/photos/v1/'.$f['photo'].'/receipt')->assertGone();
+    }
+    public function test_metadata_revision_is_idempotently_bound_to_one_operation_and_asset():void {
+        $f=$this->fixture();$this->reserve($f)->assertOk();$this->upload($f);
+        $this->postJson('/photos/v1/'.$f['photo'].'/finalize',
+            ['operationId'=>$f['operation']])->assertOk();
+        $m=$this->metadataFixture($f);
+        $url='/photos/v1/'.$f['photo'].'/metadata';
+        $this->postJson($url.'/reserve',$m['body'])->assertOk()->assertJsonPath('state','pending');
+        $this->postJson($url.'/reserve',$m['body'])->assertOk()->assertJsonPath('state','pending');
+        $conflict=$this->metadataFixture($f,$m['operation']);
+        $this->postJson($url.'/reserve',$conflict['body'])->assertConflict();
+        $this->call('PUT',$url.'/'.$m['asset']['assetId'],[],[],[],[
+            'HTTP_ORIGIN'=>'https://localhost','CONTENT_LENGTH'=>'96',
+            'CONTENT_TYPE'=>'application/octet-stream',
+        ],$m['bytes'])->assertOk();
+        $this->postJson($url.'/finalize',$m['body'])->assertOk()
+            ->assertJsonPath('revision',2)->assertJsonPath('assetId',$m['asset']['assetId']);
+        $this->postJson($url.'/reserve',$m['body'])->assertOk()->assertJsonPath('state','active');
+        $this->postJson($url.'/finalize',$m['body'])->assertOk()->assertJsonPath('revision',2);
+        $this->assertDatabaseCount('photo_objects',3);
+        $this->assertDatabaseHas('photo_records',['id'=>$f['photo'],
+            'metadata_asset_id'=>$m['asset']['assetId'],'metadata_revision'=>2]);
     }
 }

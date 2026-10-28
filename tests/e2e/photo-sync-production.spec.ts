@@ -20,21 +20,23 @@ test('R2-05 offline encrypted outbox survives reload, 503, lost receipt and read
     await page.getByRole('button',{name:/Take photo|Снять фото/i}).click()
     await expect(page.getByText(/Encrypted on this device|Сохранено зашифрованно/i)).toBeVisible({timeout:30000})
     await page.goto('/photos')
-    await expect(page.locator('.secure-photo-row')).toHaveCount(1)
-    await expect(page.locator('.secure-local-label')).not.toContainText(/Cloud verified|В облаке/)
+    await expect(page.locator('.gallery-item')).toHaveCount(1)
+    await expect(page.locator('.gallery-state')).not.toContainText(/Cloud verified|В облаке/)
     await page.reload()
     await page.unroute('**/photos/v1/**')
     await page.getByRole('button',{name:/Sync now|Синхронизировать/i}).click()
-    await expect(page.locator('.secure-local-label')).toContainText(/Cloud verified|В облаке/,{timeout:60000})
-    const href=await page.locator('.secure-photo-row').first().getAttribute('href')
-    const id=href!.split('/').pop()!
+    await expect(page.locator('.gallery-state')).toContainText(/Cloud verified|В облаке/,{timeout:60000})
+    await page.locator('.gallery-item .gallery-photo').first().click()
+    const href=new URL(page.url()).pathname
+    const id=href.split('/').pop()!
     const receipt=await page.evaluate(async id=>{
       const r=await fetch('/photos/v1/'+id+'/receipt',{credentials:'same-origin',cache:'no-store'})
       if(!r.ok)throw new Error('receipt_http_'+r.status)
       return r.json()
     },id) as {state:string;receipt:{assets:{assetId:string;sha256:string;bytes:number}[]}}
     expect(receipt.state).toBe('active')
-    expect(receipt.receipt.assets).toHaveLength(2)
+    expect(receipt.receipt.assets.length).toBeGreaterThanOrEqual(2)
+    expect(receipt.receipt.assets.length).toBeLessThanOrEqual(3)
     const asset=receipt.receipt.assets[0]!
     const actual=await page.evaluate(async args=>{
       const r=await fetch('/photos/v1/'+args.id+'/objects/'+args.assetId,{credentials:'same-origin',cache:'no-store'})

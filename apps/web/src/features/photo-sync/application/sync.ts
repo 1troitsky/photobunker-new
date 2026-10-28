@@ -1,6 +1,7 @@
-import {identity,onIdentityCleanup,photoRequest,signPhotoSyncContract} from '../../identity'
+import {identity,onIdentityCleanup,photoRequest,signPhotoSyncContract,signMetadataContract} from '../../identity'
 import {openLocalPhotoVault} from '../../local-storage'
-import type {SyncSnapshot,SyncReceipt,SyncState} from '../../local-storage'
+import type {SyncSnapshot,SyncReceipt,SyncState,OutboxEntry} from '../../local-storage'
+import {claimName,reserveNameRange} from '../../gallery'
 import {watch} from 'vue'
 
 export type SyncMessage={photoId:string;state:SyncState;error?:string}
@@ -68,6 +69,7 @@ async function runOne(snapshot:SyncSnapshot,accountId:string,deviceId:string):Pr
     }
     bound(accountId,deviceId)
     await vault.acknowledge(snapshot.operationId,receipt)
+    await vault.cacheThumbnail(photoId).catch(()=>{})
     publish({photoId,state:'synced'})
   }catch(e){
     const code=e instanceof Error?e.message:'sync.failed'
@@ -81,6 +83,54 @@ async function runOne(snapshot:SyncSnapshot,accountId:string,deviceId:string):Pr
     publish({photoId,state:'retry',error:code})
   }
 }
+/** Metadata revisions use the same queue and server CAS; never duplicate local photo. */
+async function syncMetadata(row:OutboxEntry,accountId:string,deviceId:string):Promise<void>{
+  const vault=openLocalPhotoVault()
+  bound(accountId,deviceId)
+  try{
+    const data=await vault.metadataDelivery(row.operationId)
+    const current=await photoRequest('/'+row.photoId+'/manifests')
+    if(!current.ok)throw httpError(current)
+    const existing=await current.json() as {metadataAssetId:string;assets:{assetId:string}[]}
+    bound(accountId,deviceId)
+    if(existing.metadataAssetId===data.asset.assetId){
+      await vault.acknowledgeMetadata(row.operationId,data.asset.assetId)
+      publish({photoId:row.photoId,state:await vault.syncState(row.photoId)})
+      return
+    }
+    const {ciphertext,manifest,...asset}=data.asset
+    const statement={photoId:row.photoId,operationId:row.operationId,
+      expectedRevision:data.expectedRevision,asset:{...asset,manifest}}
+    const json=JSON.stringify(statement)
+    const signature=await signMetadataContract("photobunker.photo-metadata.v1\n"+json)
+    bound(accountId,deviceId)
+    const body=JSON.stringify({operationId:row.operationId,expectedRevision:data.expectedRevision,
+      asset:statement.asset,signature})
+    const reserved=await photoRequest('/'+row.photoId+'/metadata/reserve','POST',body)
+    if(!reserved.ok)throw httpError(reserved)
+    const state=await reserved.json() as {state:'active'|'pending'}
+    if(state.state==='pending'){
+      const uploaded=await photoRequest('/'+row.photoId+'/metadata/'+data.asset.assetId,'PUT',ciphertext)
+      if(!uploaded.ok)throw httpError(uploaded)
+      const done=await photoRequest('/'+row.photoId+'/metadata/finalize','POST',body)
+      if(!done.ok)throw httpError(done)
+    }
+    bound(accountId,deviceId)
+    await vault.acknowledgeMetadata(row.operationId,data.asset.assetId)
+    publish({photoId:row.photoId,state:await vault.syncState(row.photoId)})
+  }catch(e){
+    const code=e instanceof Error?e.message:'sync.metadata_failed'
+    if(code==='sync.account_changed')return
+    if(code==='sync.http_410'){
+      await vault.revokeFromServer(row.photoId)
+      publish({photoId:row.photoId,state:'expired'})
+    }else{
+      await vault.failDelivery(row.operationId,code).catch(()=>{})
+      publish({photoId:row.photoId,state:'retry',error:code})
+    }
+  }
+}
+
 async function execute(force=false):Promise<void>{
   if(!identity.value||identity.value.offline||!navigator.onLine||document.hidden)return
   const {accountId,deviceId}=identity.value
@@ -90,15 +140,23 @@ async function execute(force=false):Promise<void>{
     if(!vault.time.status().trusted)await vault.time.refreshFromServer()
     bound(accountId,deviceId)
     await vault.reconcile()
+    try{await reserveNameRange()}catch{/* no trusted network or quota: UUID remains available */}
     const pending=await vault.pending()
     for(const row of pending.slice(0,8)){
       bound(accountId,deviceId)
       if(force)await vault.retry(row.operationId)
       else if(row.nextAttemptAt>vault.time.now())continue
       try{
+        if(row.intent==='metadata'){
+          await syncMetadata(row,accountId,deviceId)
+          continue
+        }
         const snapshot=await vault.delivery(row.operationId)
         bound(accountId,deviceId)
         await runOne(snapshot,accountId,deviceId)
+        const header=await vault.readHeader(row.photoId)
+        if(header && (!header.nameId||header.namePending)){try{await claimName(row.photoId,header.nameId??null,header.leaseId,header.nameNumber)}catch{/* retry on gallery refresh */}}
+        publish({photoId:row.photoId,state:await vault.syncState(row.photoId)})
       }catch(e){
         if((e instanceof Error && e.message==='sync.account_changed')||!identity.value)return
         await vault.failDelivery(row.operationId,'sync.local_read_failed').catch(()=>{})

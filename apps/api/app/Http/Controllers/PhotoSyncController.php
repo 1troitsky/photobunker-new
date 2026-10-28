@@ -73,7 +73,9 @@ final class PhotoSyncController extends Controller
             'bytes'=>(int)$o->bytes,'sha256'=>$o->sha256,
             'manifest'=>json_decode($o->manifest_json,true),
           ])->all();
-        return $this->sync->json(['photoId'=>$photo->id,'expiresAt'=>(int)$photo->expires_at,'assets'=>$assets]);
+        return $this->sync->json(['photoId'=>$photo->id,'expiresAt'=>(int)$photo->expires_at,
+          'metadataAssetId'=>$photo->metadata_asset_id,'metadataRevision'=>(int)$photo->metadata_revision,
+          'assets'=>$assets]);
     }
     public function read(Request $r,string $photoId,string $assetId){
         [$a]=$this->sync->actor($r);

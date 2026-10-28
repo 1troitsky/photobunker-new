@@ -3,6 +3,7 @@ import {computed,nextTick,onMounted,onUnmounted,ref,shallowRef,watch} from 'vue'
 import {useRouter} from 'vue-router'
 import {identity,onIdentityCleanup} from '../../identity'
 import {language} from '../../ui-preview'
+import {startGrantedGps} from '../../gallery'
 import {BrowserCamera,captureError,openCaptureSession,DEFAULT_TTL_DAYS} from '../index'
 import type {CaptureMode,Facing,CaptureProgress,CaptureSession} from '../index'
 
@@ -22,7 +23,7 @@ const copy=computed(()=>ru.value?{
   ttl:'Срок хранения, дней',clock:'Проверить время сервера',saving:'Шифрование и локальное сохранение…',
   compressing:'Обработка JPEG…',saved:'Сохранено зашифрованно на этом устройстве (не в облаке).',
   retry:'Повторить сохранение',retake:'Снять ещё',open:'Открыть снимок',notReady:'Камера выключена',
-  confirm:'Фотографии не отправляются в системную галерею. Синхронизация с облаком пока не реализована.',
+  confirm:'Фотографии не отправляются в системную галерею. Облачная синхронизация выполняется позже.',
   pending:'Не удалось сохранить: исходный кадр находится только в оперативной памяти. Повторите запись.',
   offline:'Без доверенного времени снимок не будет считаться сохранённым.',back:'К фотографиям',
   error:'Не удалось выполнить действие:',ready:'Камера готова',busy:'Обработка…',invalid:'Нужен новый снимок',
@@ -35,7 +36,7 @@ const copy=computed(()=>ru.value?{
   ttl:'Retention, days',clock:'Revalidate server time',saving:'Encrypting and saving locally…',
   compressing:'Compressing JPEG…',saved:'Encrypted on this device (not uploaded to cloud).',
   retry:'Retry local save',retake:'Take another photo',open:'Open photo',notReady:'Camera is off',
-  confirm:'Photos are never saved to the system gallery. Cloud sync is not implemented yet.',
+  confirm:'Photos are never saved to the system gallery. Cloud sync runs later.',
   pending:'Save failed. This captured frame exists only in memory. Retry the save.',
   offline:'Without trusted time, the photo cannot be marked saved.',back:'To photos',
   error:'Action failed:',ready:'Camera is ready',busy:'Processing…',invalid:'Retake a new photo',
@@ -76,6 +77,7 @@ function hidden(){if(document.hidden)dispose()}
 function leaving(){dispose()}
 onMounted(()=>{
   mounted=true
+  startGrantedGps()
   if(video.value)controller=new BrowserCamera(video.value)
   if(identity.value)session.value=openCaptureSession()
   void prepareTime()
