@@ -10,10 +10,10 @@
 
 ## 2. Cryptography boundary
 
-- **До локального persistent commit**: photo bytes и приватные metadata зашифрованы стандартными проверенными библиотеками / browser WebCrypto; всё хранилище PWA (IndexedDB/OPFS/cache) допускает только ciphertext. In-memory plaintext краткоживущий; не сериализовать его в DevTools persistence/localStorage/logs.
+- **До локального persistent commit**: photo bytes и приватные metadata зашифрованы стандартными проверенными библиотеками / browser WebCrypto; Dexie/IndexedDB хранит encrypted sensitive fields + minimal index headers, OPFS хранит ciphertext blobs с encrypted IDB fallback; всё persistent storage допускает только ciphertext для чувствительных данных. [12](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md). In-memory plaintext краткоживущий; не сериализовать его в DevTools persistence/localStorage/logs.
 - **Перед S3**: только ciphertext objects с проверяемым протоколом, integrity, scoped encryption envelopes, account/device separation и поддержкой смены полномочий. Сервер не получает ключей для массового расшифрования. Режим compression **до** encryption, а при редактировании формируется новое корректно аутентифицированное содержимое.
 - **Серверные metadata**: разрешённые policy/ACL/expiry/size/ids fields минимально открыты; GPS, пользовательское описание и закрытые поля — encrypted. Схема данных проходит review на side-channel exposures.
-- Crypto protocol/recovery design — отдельный design review и test vectors. Опереться на существующие peer-reviewed primitives/старые vetted vectors, **не самописный AEAD**. Нельзя выдавать «E2EE» до успешных тестов интероперабельности/recovery.
+- **R2-03 не стартует без конкретного identity/recovery контракта** из [11](11-IDENTITY-AND-KEYS.md). Там уже определены email+password, verified email, first trusted device bootstrap, recovery secret/encrypted envelope и pairing второго устройства, частичная регистрация и изоляция account switching. Codex независимо проверяет crypto protocol/реализацию и test vectors, **не самописный AEAD**. Пароль входа, PIN и ключ фото — разные сущности; password reset без recovery secret не расшифровывает старые фото. Нельзя выдавать «E2EE» до успешных тестов.
 - Коррумпированный ciphertext не показывать как корректную фотографию. Recovery не должен означать «создать новый ключ и потерять старые фото» без явного выбора.
 
 ## 3. Camera and system gallery
@@ -41,7 +41,7 @@ PhotoBunker не вызывает системный save-to-Photos, DCIM или
 - Every server photo object read, export, version, metadata fetch, browser projection validates current role/grant/**expires_at (24h–45d per assignment)**/device session. Signed URL scope/expiry cannot exceed photo expiry; no permanent unscoped Garage URLs. **Immediately fail-closed on expiry**, even if physical deletion is pending. Indexed Laravel scheduled sweep + batched deletion jobs then remove every encrypted original/edit/thumbnail/share and per-photo DB/metadata; retry until verified. Offline client cleans expired data upon resumption; do not promise instant remote wiping of a powered-off device.
 - Browser URL — location, not bearer capability; all listed assignments and each photo independently checked. No partial leakage when one assignment revoked.
 - Shares/exports can require isolated encrypted flattened object; privacy mask baked into delivered pixels and version restrictions respected; no raw layers/EXIF unless explicitly permitted.
-- Revoke and **expiry** close access **before** physical cleanup, tombstones survive retries and delayed ACKs until safe cleanup and then get removed. A server must not accept reupload of expired ciphertext. Offline cache cannot know unseen server revoke; expiry check is local on resume/read, with limitation of device clock/closed PWA. Explain this limitation, never claim forensic physical erase.
+- Revoke и **expiry** закрывают access до физической очистки, tombstones предотвращают resurrection. Сервер reject expired uploads. Для локального expiry требуется [last trusted server time + clock rollback detection](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md) и **fail closed при подозрении на подмену времени**. Нельзя гарантировать абсолютное TTL на полностью скомпрометированном offline-устройстве; часы ОС и локальный storage доступны владельцу устройства. Не обещать forensic physical erase.
 
 ## 6. Mandatory adversarial checks
 
