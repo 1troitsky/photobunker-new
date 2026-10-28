@@ -38,10 +38,10 @@ PhotoBunker не вызывает системный save-to-Photos, DCIM или
 ## 5. ACL / TTL / Share / Browser
 
 - Photo/Card/Note/Assignment/Team/Browser/Share independent sources of authority; membership ≠ photo ACL. Public Card URL does not reveal full original/download/GPS by default.
-- Every server photo object read, export, version, metadata fetch, browser projection validates current role/grant/TTL/device session. Signed URL must have narrow scope, short expiry, revoke strategy; avoid unscoped permanent S3 access.
+- Every server photo object read, export, version, metadata fetch, browser projection validates current role/grant/**expires_at (24h–45d per assignment)**/device session. Signed URL scope/expiry cannot exceed photo expiry; no permanent unscoped Garage URLs. **Immediately fail-closed on expiry**, even if physical deletion is pending. Indexed Laravel scheduled sweep + batched deletion jobs then remove every encrypted original/edit/thumbnail/share and per-photo DB/metadata; retry until verified. Offline client cleans expired data upon resumption; do not promise instant remote wiping of a powered-off device.
 - Browser URL — location, not bearer capability; all listed assignments and each photo independently checked. No partial leakage when one assignment revoked.
 - Shares/exports can require isolated encrypted flattened object; privacy mask baked into delivered pixels and version restrictions respected; no raw layers/EXIF unless explicitly permitted.
-- Revoke closes access **before** physical cleanup, tombstones survive retries and delayed ACKs. Offline cache cannot know unseen server revoke; online revalidate before any new remote access. Explain this limitation.
+- Revoke and **expiry** close access **before** physical cleanup, tombstones survive retries and delayed ACKs until safe cleanup and then get removed. A server must not accept reupload of expired ciphertext. Offline cache cannot know unseen server revoke; expiry check is local on resume/read, with limitation of device clock/closed PWA. Explain this limitation, never claim forensic physical erase.
 
 ## 6. Mandatory adversarial checks
 
