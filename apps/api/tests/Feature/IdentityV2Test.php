@@ -77,12 +77,35 @@ final class IdentityV2Test extends TestCase
         $new=$this->challenge(['accountId'=>$aid,'deviceId'=>$deviceId,'purpose'=>'login']);
         $wrong=['challengeId'=>$new['id'],'signature'=>$this->rawSignature($new['message'],$account['key']),
            'deviceSignature'=>'','envelope'=>null];
+        $this->assertSame(64,strlen(P::b64($wrong['signature'],64)));
+        $this->assertFalse(P::verify($device['pub'],$new['message'],$wrong['signature']));
         $this->postIdentity('proof',$wrong)->assertUnauthorized();
         $right=['challengeId'=>$new['id'],'signature'=>$this->rawSignature($new['message'],$device['key']),
            'deviceSignature'=>'','envelope'=>null];
         DB::table('identity_challenges')->where('id',$new['id'])->update(['expires_at'=>now()->subMinute()]);
         $this->postIdentity('proof',$right)->assertUnauthorized();
-        $this->assertDatabaseCount('identity_devices',1);
+        $recovered=$this->pair();$recoveredId=(string)Str::uuid();
+        $recoverPayload=['accountId'=>$aid,'deviceId'=>$recoveredId,'deviceSpki'=>$recovered['pub'],
+            'purpose'=>'recover','revision'=>'1'];
+        foreach([1,2] as $_){
+            $recoverChallenge=$this->challenge($recoverPayload);
+            $this->postIdentity('proof',[
+                'challengeId'=>$recoverChallenge['id'],
+                'signature'=>$this->rawSignature($recoverChallenge['message'],$account['key']),
+                'deviceSignature'=>$this->rawSignature($recoverChallenge['message'],$recovered['key']),
+                'envelope'=>null,
+            ])->assertOk()->assertJsonPath('deviceId',$recoveredId);
+        }
+        $this->assertDatabaseCount('identity_devices',2);
+
+        $pairingId=(string)Str::uuid();
+        $pairing=['pairingId'=>$pairingId,'accountId'=>$aid,'deviceId'=>(string)Str::uuid(),
+            'deviceSpki'=>$this->pair()['pub'],'ecdhSpki'=>$this->pair()['pub'],
+            'fingerprint'=>bin2hex(random_bytes(32)),'requestToken'=>P::encode(random_bytes(32))];
+        $this->postIdentity('pairings',$pairing)->assertOk()->assertJsonPath('pairingId',$pairingId);
+        $this->postIdentity('pairings',$pairing)->assertOk()->assertJsonPath('pairingId',$pairingId);
+        $this->postIdentity('pairings',[...$pairing,'fingerprint'=>bin2hex(random_bytes(32))])->assertStatus(409);
+        $this->assertDatabaseCount('identity_pairings',1);
     }
     public function test_origin_protection_and_no_unauthenticated_devices():void {
         $this->postJson('/identity/v2/prepare',['operationId'=>(string)Str::uuid(),

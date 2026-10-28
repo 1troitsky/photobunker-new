@@ -4,7 +4,14 @@ import { canonical, digest, hex, verifyChallenge } from './crypto'
 let generation = 0
 const controllers = new Set<AbortController>()
 export class IdentityError extends Error {
-  constructor(public readonly code: string, public readonly status: number) { super(code) }
+  readonly code: string
+  readonly status: number
+
+  constructor(code: string, status: number) {
+    super(code)
+    this.code = code
+    this.status = status
+  }
 }
 export function invalidateRequests(): void {
   generation++

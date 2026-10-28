@@ -5,15 +5,18 @@ import { b64, createPB2, digest, exportECDHPublic, freshPackage, hex, importSign
   sealRecovery, sign, uuid, exchangeKey } from '../infrastructure/crypto'
 import type { PackageV2 } from '../infrastructure/crypto'
 import { getPending, listDevices, newLocalDevice, openIdentityDB, probeCapabilities,
-  putPending, dropPending, saveDevice } from '../infrastructure/storage'
-import type { LocalDevice } from '../infrastructure/storage'
+  putPending, reservePending, dropPending, saveDevice, getRecoveryPending, saveRecoveryPending,
+  dropRecoveryPending, getPairingPending, savePairingPending, dropPairingPending,
+  getRotationPending, saveRotationPending, dropRotationPending, markSignedOut,
+  isSignedOut } from '../infrastructure/storage'
+import type { LocalDevice, PairingPending } from '../infrastructure/storage'
 
 type Active={accountId:string; deviceId:string; pkg:PackageV2; device:LocalDevice; offline:boolean}
 const state=shallowRef<Active|null>(null)
 export const identity=computed(()=>{const s=state.value;return s?{accountId:s.accountId,deviceId:s.deviceId,offline:s.offline}:null})
 const disposers=new Set<()=>void>()
 const identityChannel=typeof BroadcastChannel==='undefined'?null:new BroadcastChannel('photobunker-identity-v2')
-let pairing: {accountId:string; device:LocalDevice; key:CryptoKeyPair; token:string; id:string; fingerprint:string}|undefined
+let pairing: PairingPending|undefined
 const objectUrls=new Set<string>()
 export function registerDecryptedObjectUrl(url:string):void{objectUrls.add(url)}
 function assertEpoch(epoch:number):void{if(epoch!==currentGeneration())throw new DOMException('Account changed','AbortError')}
@@ -27,7 +30,14 @@ function dispose(){
 }
 export function onIdentityCleanup(fn:()=>void):()=>void {disposers.add(fn);return()=>disposers.delete(fn)}
 export async function logout():Promise<void>{
-  try{await call('/session','DELETE')}finally{dispose();resetCsrf();identityChannel?.postMessage({event:'identity-session-changed'})}
+  const current=state.value
+  if(current)await markSignedOut(current.accountId,current.deviceId,true)
+  dispose()
+  resetCsrf()
+  identityChannel?.postMessage({event:'identity-session-changed'})
+  // Local sign-out is already durable. A missing network acknowledgement must
+  // not reopen the account or turn the successful local action into an error.
+  await call('/session','DELETE').catch(()=>{})
 }
 export function forgetRuntime():void{dispose();resetCsrf()}
 export async function availableDevices():Promise<LocalDevice[]> {return listDevices()}
@@ -38,7 +48,7 @@ export async function prepareCreate():Promise<string>{
   const kit=await createPB2()
   const operationId=uuid(),reservationProof=b64(random(32))
   const local=await newLocalDevice('')
-  await putPending({
+  await reservePending({
     operationId,reservationProof,kitLocator:kit.locator,deviceId:local.deviceId,
     deviceKey:local.deviceKey,deviceSpki:local.deviceSpki,encryptionKey:local.encryptionKey,
   })
@@ -114,12 +124,14 @@ export async function loginWithDevice(device:LocalDevice):Promise<void>{
   const payload={accountId:device.accountId,deviceId:device.deviceId,purpose:'login'}
   const result=await prove('login',payload,device.deviceKey,null)
   if(result.accountId!==device.accountId || result.deviceId!==device.deviceId)throw new Error('identity.session_mismatch')
+  await markSignedOut(device.accountId,device.deviceId,false)
   assertEpoch(epoch)
   await activated(device,pkg)
 }
 export async function offlineUnlock(device:LocalDevice):Promise<void>{
   const epoch=currentGeneration()
   const pkg=await openDevice(device.envelope,device.encryptionKey,device.accountId,device.deviceId)
+  await markSignedOut(device.accountId,device.deviceId,false)
   assertEpoch(epoch)
   await activated(device,pkg,true)
 }
@@ -130,12 +142,28 @@ export async function restore(encoded:string):Promise<void>{
   const row=await call<{accountId:string;accountSpki:string;revision:number;envelope:unknown}>('/recovery/'+kit.locator)
   const pkg=await openRecovery(row.envelope,kit,row.accountId)
   if(pkg.accountSpki!==row.accountSpki || pkg.revision!==row.revision)throw new Error('identity.recovery_mismatch')
-  const device=await newLocalDevice(row.accountId)
-  device.envelope=await sealDevice(pkg,device.deviceId,device.encryptionKey)
+  const saved=await getRecoveryPending(kit.locator)
+  if(saved && saved.device.accountId!==row.accountId)throw new Error('identity.recovery_state_conflict')
+  const device=saved?.device ?? await newLocalDevice(row.accountId)
+  if(!saved){
+    device.envelope=await sealDevice(pkg,device.deviceId,device.encryptionKey)
+    await saveRecoveryPending({locator:kit.locator,device})
+  }else{
+    const local=await openDevice(device.envelope,device.encryptionKey,row.accountId,device.deviceId)
+    if(local.accountSpki!==pkg.accountSpki||local.revision!==pkg.revision)throw new Error('identity.recovery_state_conflict')
+    let loggedIn=false
+    try{await loginWithDevice(device);loggedIn=true}catch{ /* Enrollment was not committed. */ }
+    if(loggedIn){
+      await saveDevice(device)
+      await dropRecoveryPending(kit.locator)
+      return
+    }
+  }
   await openDevice(device.envelope,device.encryptionKey,row.accountId,device.deviceId)
   const payload={accountId:row.accountId,deviceId:device.deviceId,deviceSpki:device.deviceSpki,purpose:'recover',revision:String(row.revision)}
   await prove('recover',payload,await importSigner(pkg.accountPkcs8),device.deviceKey)
   await saveDevice(device)
+  await dropRecoveryPending(kit.locator)
   assertEpoch(epoch)
   await activated(device,pkg)
 }
@@ -156,27 +184,46 @@ export async function rotateRecoveryKey(encoded:string):Promise<void>{
   if(!current || current.offline)throw new Error('identity.requires_online')
   await probeCapabilities()
   const kit=await parsePB2(encoded)
-  const updated:PackageV2={...current.pkg,revision:current.pkg.revision+1,wrappingKeyId:b64(random(16))}
-  const envelope=await sealRecovery(updated,kit)
-  await openRecovery(envelope,kit,updated.accountId)
-  const operationId=uuid()
-  const payload={accountId:current.accountId,deviceId:current.deviceId,
-    envelopeHash:await envelopeHash(envelope),expectedRevision:String(current.pkg.revision),
-    locator:kit.locator,operationId,purpose:'rotate'}
-  try {
-    await prove('rotate',payload,await importSigner(current.pkg.accountPkcs8),current.device.deviceKey,envelope)
-  } catch(error) {
-    // Lost response: verify same operation+hash before claiming completion. Never replay the challenge.
-    try {
-      const status=await call<{committed:boolean;revision:number}>('/rotations/status','POST',{
-        operationId,envelopeHash:payload.envelopeHash,
-      })
-      if (!status.committed || status.revision!==updated.revision) throw error
-    }catch{ throw new Error('identity.rotation_unconfirmed') }
+  let pending=await getRotationPending(current.accountId)
+  if(pending && pending.locator!==kit.locator)throw new Error('identity.rotation_key_mismatch')
+  if(!pending){
+    const updated:PackageV2={...current.pkg,revision:current.pkg.revision+1,wrappingKeyId:b64(random(16))}
+    const recoveryEnvelope=await sealRecovery(updated,kit)
+    await openRecovery(recoveryEnvelope,kit,updated.accountId)
+    pending={
+      accountId:current.accountId,deviceId:current.deviceId,operationId:uuid(),
+      envelopeHash:await envelopeHash(recoveryEnvelope),expectedRevision:current.pkg.revision,
+      locator:kit.locator,recoveryEnvelope,
+      deviceEnvelope:await sealDevice(updated,current.deviceId,current.device.encryptionKey),
+    }
+    await saveRotationPending(pending)
   }
+  const updated=await openDevice(pending.deviceEnvelope,current.device.encryptionKey,current.accountId,current.deviceId)
+  const payload={accountId:current.accountId,deviceId:current.deviceId,
+    envelopeHash:pending.envelopeHash,expectedRevision:String(pending.expectedRevision),
+    locator:pending.locator,operationId:pending.operationId,purpose:'rotate'}
+  let status=await call<{committed:boolean;revision:number}>('/rotations/status','POST',{
+    operationId:pending.operationId,envelopeHash:pending.envelopeHash,
+  })
+  if(!status.committed){
+    try {
+      await prove('rotate',payload,await importSigner(current.pkg.accountPkcs8),current.device.deviceKey,pending.recoveryEnvelope)
+      status={committed:true,revision:updated.revision}
+    } catch(error) {
+      // Lost response: verify the immutable operation before claiming completion.
+      try {
+        status=await call<{committed:boolean;revision:number}>('/rotations/status','POST',{
+          operationId:pending.operationId,envelopeHash:pending.envelopeHash,
+        })
+        if (!status.committed || status.revision!==updated.revision) throw error
+      }catch{ throw new Error('identity.rotation_unconfirmed') }
+    }
+  }
+  if(status.revision!==updated.revision)throw new Error('identity.rotation_state_conflict')
   assertEpoch(epoch)
-  const device={...current.device,envelope:await sealDevice(updated,current.deviceId,current.device.encryptionKey)}
+  const device={...current.device,envelope:pending.deviceEnvelope}
   await saveDevice(device)
+  await dropRotationPending(current.accountId)
   assertEpoch(epoch)
   await activated(device,updated)
 }
@@ -185,18 +232,23 @@ function pairSalt(id:string,fingerprint:string):Promise<Uint8Array<ArrayBuffer>>
 }
 export async function beginPairing(accountId:string):Promise<{id:string;fingerprint:string}>{
   await probeCapabilities()
-  if(pairing)throw new Error('identity.pairing_in_progress')
-  const device=await newLocalDevice(accountId)
-  const key=await newPairingKey()
-  const token=b64(random(32))
-  const ecdhSpki=await exportECDHPublic(key.publicKey)
-  const fingerprint=hex(await digest(new TextEncoder().encode(
-    'photobunker/pairing/fingerprint/v2:'+accountId+':'+device.deviceId+':'+device.deviceSpki+':'+ecdhSpki)))
+  pairing=pairing ?? await getPairingPending()
+  if(pairing && pairing.accountId!==accountId)throw new Error('identity.pairing_state_conflict')
+  if(!pairing){
+    const device=await newLocalDevice(accountId),key=await newPairingKey(),token=b64(random(32))
+    const ecdhSpki=await exportECDHPublic(key.publicKey)
+    const fingerprint=hex(await digest(new TextEncoder().encode(
+      'photobunker/pairing/fingerprint/v2:'+accountId+':'+device.deviceId+':'+device.deviceSpki+':'+ecdhSpki)))
+    pairing={accountId,device,key,token,id:uuid(),fingerprint,ecdhSpki}
+    await savePairingPending(pairing)
+  }
+  if(pairing.device.envelope)return {id:pairing.id,fingerprint:pairing.fingerprint}
   const result=await call<{pairingId:string}>('/pairings','POST',{
-    accountId,deviceId:device.deviceId,deviceSpki:device.deviceSpki,ecdhSpki,fingerprint,requestToken:token,
+    pairingId:pairing.id,accountId,deviceId:pairing.device.deviceId,deviceSpki:pairing.device.deviceSpki,
+    ecdhSpki:pairing.ecdhSpki,fingerprint:pairing.fingerprint,requestToken:pairing.token,
   })
-  pairing={accountId,device,key,token,id:result.pairingId,fingerprint}
-  return {id:result.pairingId,fingerprint}
+  if(result.pairingId!==pairing.id)throw new Error('identity.pairing_mismatch')
+  return {id:pairing.id,fingerprint:pairing.fingerprint}
 }
 export async function pairingRequests():Promise<{id:string;device_id:string;device_spki:string;ecdh_spki:string;fingerprint:string}[]>{
   return (await call<{pairings:{id:string;device_id:string;device_spki:string;ecdh_spki:string;fingerprint:string}[]}>('/pairings')).pairings
@@ -218,6 +270,15 @@ export async function finishPairing():Promise<void>{
   const epoch=currentGeneration()
   const p=pairing
   if(!p)throw new Error('identity.no_pairing')
+  if(p.device.envelope){
+    let loggedIn=false
+    try{await loginWithDevice(p.device);loggedIn=true}catch{ /* Enrollment did not commit. */ }
+    if(loggedIn){
+      await saveDevice(p.device)
+      await dropPairingPending(p.id)
+      return
+    }
+  }
   const result=await call<{status:'pending'|'approved';accountId:string;envelope?:{envelope:{iv:string;ciphertext:string};approverEcdhSpki:string}}>('/pairings/'+p.id+'/poll','POST',{requestToken:p.token})
   if(result.status!=='approved'||!result.envelope)throw new Error('identity.pairing_pending')
   if(result.accountId!==p.accountId)throw new Error('identity.pairing_mismatch')
@@ -226,9 +287,11 @@ export async function finishPairing():Promise<void>{
     (await pairSalt(p.id,p.fingerprint)).slice(0,16))
   const pkg=await openPairing(result.envelope.envelope,shared,p.accountId,p.id,p.device.deviceId)
   p.device.envelope=await sealDevice(pkg,p.device.deviceId,p.device.encryptionKey)
+  await savePairingPending(p)
   const payload={accountId:p.accountId,deviceId:p.device.deviceId,deviceSpki:p.device.deviceSpki,pairingId:p.id,purpose:'pair-enroll',revision:String(pkg.revision)}
   await prove('pair-enroll',payload,await importSigner(pkg.accountPkcs8),p.device.deviceKey)
   await saveDevice(p.device)
+  await dropPairingPending(p.id)
   assertEpoch(epoch)
   await activated(p.device,pkg)
 }
@@ -241,6 +304,10 @@ export async function revokeDevice(id:string):Promise<void>{
 export async function sessionStatus():Promise<{accountId:string;deviceId:string;revision:number}>{
   return call('/session')
 }
+export async function hasPendingRotation():Promise<boolean>{
+  const current=state.value
+  return Boolean(current&&await getRotationPending(current.accountId))
+}
 /** Asynchronous, never in Vue route guards; shell always opens immediately. */
 export async function backgroundSessionCheck():Promise<void>{
   const epoch=currentGeneration()
@@ -249,7 +316,7 @@ export async function backgroundSessionCheck():Promise<void>{
     if(epoch!==currentGeneration())return
     const devices=await listDevices()
     const found=devices.find(d=>d.accountId===server.accountId&&d.deviceId===server.deviceId)
-    if(found){
+    if(found&&!await isSignedOut(found.accountId,found.deviceId)){
       const pkg=await openDevice(found.envelope,found.encryptionKey,found.accountId,found.deviceId)
       if(epoch===currentGeneration()) await activated(found,pkg)
     }

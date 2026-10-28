@@ -187,7 +187,7 @@ export async function verifyChallenge(c:Challenge,purpose:string,payload:Record<
   if (c.message!==frame || c.digest!==digestHex || Date.parse(c.expiresAt)<=Date.now()
       || Date.parse(c.expiresAt)>Date.now()+120000 || payload.purpose!==purpose) throw new Error('identity.bad_challenge')
 }
-export async function exchangeKey(privateKey:CryptoKey,peerSpki:string,info:string,salt:Uint8Array):Promise<CryptoKey>{
+export async function exchangeKey(privateKey:CryptoKey,peerSpki:string,info:string,salt:Uint8Array<ArrayBuffer>):Promise<CryptoKey>{
   const other=await crypto.subtle.importKey('spki',unb64(peerSpki),{name:'ECDH',namedCurve:'P-256'},false,[])
   const shared=await crypto.subtle.deriveBits({name:'ECDH',public:other},privateKey,256)
   const material=await crypto.subtle.importKey('raw',shared,'HKDF',false,['deriveKey'])

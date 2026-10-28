@@ -68,51 +68,157 @@ async function pairFinish(){
 }
 </script>
 <template>
-  <section class="account-preview" data-testid="identity-v2">
+  <section
+    class="account-preview"
+    data-testid="identity-v2"
+  >
     <div class="account-card">
       <header class="account-header">
-        <RouterLink to="/welcome" class="icon-button" :aria-label="txt.back"><AppIcon name="back"/></RouterLink>
-        <button class="language-button" type="button" @click="setLanguage(language==='ru'?'en':'ru')">
-          <AppIcon name="globe"/>{{ language.toUpperCase() }}
+        <RouterLink
+          to="/welcome"
+          class="icon-button"
+          :aria-label="txt.back"
+        ><AppIcon name="back" /></RouterLink>
+        <button
+          class="language-button"
+          type="button"
+          @click="setLanguage(language==='ru'?'en':'ru')"
+        >
+          <AppIcon name="globe" />{{ language.toUpperCase() }}
         </button>
       </header>
-      <img src="/icons/brand-logo.png" alt="" class="account-logo" width="80" height="80">
+      <img
+        src="/icons/brand-logo.png"
+        alt=""
+        class="account-logo"
+        width="80"
+        height="80"
+      >
       <span class="eyebrow">PhotoBunker · Identity PB2</span>
       <h1>{{ creating?txt.create:txt.restore }}</h1>
-      <p class="account-lead">{{ txt.intro }}</p>
-      <p class="account-warning"><AppIcon name="shield"/>{{ txt.noReset }}</p>
-      <p v-if="creating && pending" class="account-explanation" role="status">{{ txt.resume }}</p>
+      <p class="account-lead">
+        {{ txt.intro }}
+      </p>
+      <p class="account-warning">
+        <AppIcon name="shield" />{{ txt.noReset }}
+      </p>
+      <p
+        v-if="creating && pending"
+        class="account-explanation"
+        role="status"
+      >
+        {{ txt.resume }}
+      </p>
       <template v-if="!creating || generated || pending">
-        <div v-if="!creating" class="pill-group identity-mode" :aria-label="txt.restore">
-          <button type="button" :class="{selected:mode==='key'}" :aria-pressed="mode==='key'" @click="mode='key'">Recovery Key</button>
-          <button type="button" :class="{selected:mode==='pair'}" :aria-pressed="mode==='pair'" @click="mode='pair'">{{ txt.pair }}</button>
+        <div
+          v-if="!creating"
+          class="pill-group identity-mode"
+          :aria-label="txt.restore"
+        >
+          <button
+            type="button"
+            :class="{selected:mode==='key'}"
+            :aria-pressed="mode==='key'"
+            @click="mode='key'"
+          >
+            Recovery Key
+          </button>
+          <button
+            type="button"
+            :class="{selected:mode==='pair'}"
+            :aria-pressed="mode==='pair'"
+            @click="mode='pair'"
+          >
+            {{ txt.pair }}
+          </button>
         </div>
-        <form v-if="creating || mode==='key'" class="identity-form" autocomplete="off" @submit.prevent="submit">
+        <form
+          v-if="creating || mode==='key'"
+          class="identity-form"
+          autocomplete="off"
+          @submit.prevent="submit"
+        >
           <label for="identity-key">{{ creating && !pending?txt.generated:txt.restoreKey }}</label>
-          <textarea id="identity-key" v-model="key" rows="4" spellcheck="false" autocapitalize="none"
-            autocomplete="off" :readonly="creating && !pending" :placeholder="creating && !pending?'PB2.…':'PB2.…'"/>
-          <label v-if="creating" class="identity-confirm">
-            <input v-model="confirmed" type="checkbox" />{{ txt.saved }}
+          <textarea
+            id="identity-key"
+            v-model="key"
+            rows="4"
+            spellcheck="false"
+            autocapitalize="none"
+            autocomplete="off"
+            :readonly="creating && !pending"
+            :placeholder="creating && !pending?'PB2.…':'PB2.…'"
+          />
+          <label
+            v-if="creating"
+            class="identity-confirm"
+          >
+            <input
+              v-model="confirmed"
+              type="checkbox"
+            >{{ txt.saved }}
           </label>
-          <button class="primary-button account-browse" type="submit" :disabled="busy || !key || (creating&&!confirmed)">
-            {{ busy?txt.working:creating?txt.continue:txt.restoreButton }} <AppIcon name="arrow"/>
+          <button
+            class="primary-button account-browse"
+            type="submit"
+            :disabled="busy || !key || (creating&&!confirmed)"
+          >
+            {{ busy?txt.working:creating?txt.continue:txt.restoreButton }} <AppIcon name="arrow" />
           </button>
         </form>
-        <form v-else class="identity-form" @submit.prevent="pairId?pairFinish():pairStart()">
+        <form
+          v-else
+          class="identity-form"
+          @submit.prevent="pairId?pairFinish():pairStart()"
+        >
           <label for="pair-account">{{ txt.accountId }}</label>
-          <input id="pair-account" v-model="pairAccount" :readonly="!!pairId" autocapitalize="none" autocomplete="off" spellcheck="false" />
-          <p v-if="pairId" class="identity-fingerprint" role="status">{{ txt.pairCode }} <strong>{{ fingerprint.slice(0,12) }}</strong><small>{{ pairId }}</small></p>
-          <button class="primary-button account-browse" type="submit" :disabled="busy || !pairAccount">
+          <input
+            id="pair-account"
+            v-model="pairAccount"
+            :readonly="!!pairId"
+            autocapitalize="none"
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <p
+            v-if="pairId"
+            class="identity-fingerprint"
+            role="status"
+          >
+            {{ txt.pairCode }} <strong>{{ fingerprint.slice(0,12) }}</strong><small>{{ pairId }}</small>
+          </p>
+          <button
+            class="primary-button account-browse"
+            type="submit"
+            :disabled="busy || !pairAccount"
+          >
             {{ busy?txt.working:pairId?txt.pairFinish:txt.pairStart }}
           </button>
         </form>
       </template>
-      <button v-else class="primary-button account-browse" type="button" :disabled="busy" @click="generate">
-        {{ busy?txt.working:txt.generate }} <AppIcon name="key"/>
+      <button
+        v-else
+        class="primary-button account-browse"
+        type="button"
+        :disabled="busy"
+        @click="generate"
+      >
+        {{ busy?txt.working:txt.generate }} <AppIcon name="key" />
       </button>
-      <p v-if="error" role="alert" class="identity-error">{{ error }}</p>
-      <p class="hint">{{ txt.preview }}</p>
-      <RouterLink class="account-alternative" :to="creating?'/account/restore':'/account/create'">
+      <p
+        v-if="error"
+        role="alert"
+        class="identity-error"
+      >
+        {{ error }}
+      </p>
+      <p class="hint">
+        {{ txt.preview }}
+      </p>
+      <RouterLink
+        class="account-alternative"
+        :to="creating?'/account/restore':'/account/create'"
+      >
         {{ creating?txt.restore:txt.create }}
       </RouterLink>
     </div>

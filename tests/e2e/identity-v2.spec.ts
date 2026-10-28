@@ -24,3 +24,22 @@ test('R2-03 restored key is not included in browser URLs or app localStorage',as
   expect(stored).not.toContain(raw)
   await expect(page.locator('input[type=password],input[type=email]')).toHaveCount(0)
 })
+
+test('R2-03 concurrent tabs reserve exactly one pending account',async({context})=>{
+  const first=await context.newPage(),second=await context.newPage()
+  await Promise.all([first.goto('/account/create'),second.goto('/account/create')])
+  await Promise.all([
+    first.getByRole('button',{name:/Generate Recovery Key|Создать ключ восстановления/i}).click(),
+    second.getByRole('button',{name:/Generate Recovery Key|Создать ключ восстановления/i}).click(),
+  ])
+  async function generatedKey(page:typeof first):Promise<string>{
+    const input=page.locator('#identity-key')
+    return await input.count()===1?input.inputValue():''
+  }
+  const values=await Promise.all([
+    generatedKey(first),
+    generatedKey(second),
+  ])
+  expect(values.filter(value=>value.startsWith('PB2.'))).toHaveLength(1)
+  expect(await first.getByRole('alert').count()+await second.getByRole('alert').count()).toBe(1)
+})

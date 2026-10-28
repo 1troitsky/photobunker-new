@@ -389,13 +389,19 @@ const title = computed(() => {
 
       <!-- PROFILE: no invented real identity; only local display preferences -->
       <template v-else-if="route.path==='/profile'">
-        <div v-if="!identity" class="profile-hero">
+        <div
+          v-if="!identity"
+          class="profile-hero"
+        >
           <div class="profile-avatar">
             <AppIcon name="profile" />
           </div>
           <div><span class="eyebrow">{{ text.demo }}</span><h2>{{ text.profileAnon }}</h2><p>{{ text.profileDemo }}</p></div>
         </div>
-        <div v-if="!identity" class="profile-quicklinks">
+        <div
+          v-if="!identity"
+          class="profile-quicklinks"
+        >
           <RouterLink
             to="/account/create"
             class="profile-action"
