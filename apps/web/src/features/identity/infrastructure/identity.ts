@@ -2,11 +2,11 @@ import { computed, shallowRef } from 'vue'
 import { call, challenge, currentGeneration, envelopeHash, invalidateRequests, resetCsrf } from '../infrastructure/api'
 import { b64, createPB2, digest, exportECDHPublic, freshPackage, hex, importSigner, newPairingKey,
   openDevice, openPairing, openRecovery, parsePB2, random, sealDevice, sealPairing,
-  sealRecovery, sign, unb64, uuid, exchangeKey } from '../infrastructure/crypto'
+  sealRecovery, sign, uuid, exchangeKey } from '../infrastructure/crypto'
 import type { PackageV2 } from '../infrastructure/crypto'
 import { getPending, listDevices, newLocalDevice, openIdentityDB, probeCapabilities,
   putPending, dropPending, saveDevice } from '../infrastructure/storage'
-import type { LocalDevice, Pending } from '../infrastructure/storage'
+import type { LocalDevice } from '../infrastructure/storage'
 
 type Active={accountId:string; deviceId:string; pkg:PackageV2; device:LocalDevice; offline:boolean}
 const state=shallowRef<Active|null>(null)
