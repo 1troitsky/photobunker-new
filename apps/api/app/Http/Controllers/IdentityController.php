@@ -223,6 +223,11 @@ final class IdentityController extends Controller
             'envelope'=>json_decode($a->recovery_envelope,true,flags:JSON_THROW_ON_ERROR)]);
     }
 
+    public function time(Request $r): JsonResponse {
+        $this->actor($r);
+        return $this->json(['serverUtc'=>now()->utc()->format('Y-m-d\TH:i:s.v\Z')]);
+    }
+
     public function me(Request $r): JsonResponse {
         [$account,$device]=$this->actor($r);
         return $this->json(['accountId'=>$account->id,'deviceId'=>$device->id,'revision'=>$account->revision]);
