@@ -1,8 +1,8 @@
 import { acquireStorageKeys, onIdentityCleanup } from '../../identity'
-import type { CreatePhoto, EncryptedBlobStore, PhotoRepository, PhotoSyncOutbox, PhotoHeader, CipherManifest, Capabilities, StorageBackend, TimeAuthority } from '../domain/contracts'
+import type { CreatePhoto, EncryptedBlobStore, PhotoRepository, PhotoSyncOutbox, PhotoHeader, CipherManifest, Capabilities, StorageBackend, TimeAuthority, SyncSnapshot, SyncReceipt, SyncState } from '../domain/contracts'
 import { db, photoKey, assetKey, writeCiphertext, readCiphertext, deleteCiphertext } from './database'
 import type { PhotoRow, ManifestRow, JournalRow, StoredOutbox } from './database'
-import { encryptAsset, decryptAsset, identifier, invalid, manifestValid } from './cipher'
+import { encryptAsset, decryptAsset, identifier, invalid, manifestValid, sha } from './cipher'
 import { probeStorageCapabilities } from './capabilities'
 import { BrowserTimeAuthority, clearLiveTime } from './time'
 import { MAX_CLOCK_SKEW_MS, retentionValid } from '../domain/time-policy'
@@ -179,6 +179,8 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
         await deleteCiphertext(destination,path)
       }
       await db.journal.delete(journalKey)
+      // Durable outbox is already committed; wake foreground delivery without waiting for network.
+      if(typeof window!=='undefined')window.dispatchEvent(new Event('photobunker-outbox'))
       return outcome
     }catch(error){
       // Once manifest committed, its ciphertext is live; never compensate committed pointers.
@@ -272,9 +274,103 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
         throw new Error('storage.expired_upload_forbidden')
       if(row.state==='cancelled'||row.state==='acknowledged')return
       this.check()
-      await db.outbox.update(key,{state:'retry'})
+      await db.outbox.update(key,{state:'retry',nextAttemptAt:0,lastError:undefined})
     })
   }
+  /** Exports ciphertext only through the existing R2-04 outbox, never a second queue. */
+  async delivery(operationId:string):Promise<SyncSnapshot>{
+    this.check();await this.clockReady();identifier(operationId)
+    const task=await db.outbox.where('[accountId+operationId]')
+      .equals([this.scope.accountId,operationId]).first()
+    if(!task||task.state==='cancelled'||task.intent!=='upload')throw new Error('sync.operation_unavailable')
+    const photo=await this.current(task.photoId)
+    if(photo.operationId!==operationId||photo.expiresAt!==task.expiresAt)throw new Error('sync.operation_conflict')
+    const records=await db.assets.where('[accountId+photoId]')
+      .equals([this.scope.accountId,photo.photoId]).toArray()
+    invalid(records.length===2,'sync.assets_incomplete')
+    const assets=[]
+    for(const asset of records){
+      this.check()
+      invalid(asset.assetId===photo.assetId||asset.assetId===photo.metadataAssetId,'sync.asset_unexpected')
+      const {key,backend,storageKey,...manifest}=asset
+      void key
+      manifestValid({...manifest,backend,storageKey},{scope:this.scope,photoId:photo.photoId,assetId:asset.assetId})
+      const ciphertext=await readCiphertext(backend,storageKey)
+      invalid(ciphertext.size===asset.cipherBytes,'sync.blob_truncated')
+      const sha256=await sha(new Uint8Array(await ciphertext.arrayBuffer()))
+      this.check()
+      assets.push({assetId:asset.assetId,kind:asset.kind,revision:asset.revision,
+        bytes:asset.cipherBytes,sha256,manifest,ciphertext})
+    }
+    assets.sort((a,b)=>a.assetId.localeCompare(b.assetId))
+    return{photoId:photo.photoId,operationId,expiresAt:photo.expiresAt,assets}
+  }
+  async failDelivery(operationId:string,code:string):Promise<void>{
+    this.check();await this.clockReady();identifier(operationId)
+    const now=this.time.now()
+    await db.transaction('rw',db.outbox,db.tombstones,async()=>{
+      this.check()
+      const key=this.scope.accountId+'/'+operationId
+      const row=await db.outbox.get(key)
+      if(!row||row.state==='acknowledged'||row.state==='cancelled')return
+      if(await db.tombstones.get(photoKey(this.scope,row.photoId))||row.expiresAt<=now)return
+      const attempts=Math.min(24,(row.attempts??0)+1)
+      const nextAttemptAt=now+Math.min(300000,1000*2**Math.min(8,attempts))
+      await db.outbox.update(key,{state:'retry',attempts,nextAttemptAt,lastError:code.slice(0,40)})
+    })
+  }
+  async acknowledge(operationId:string,receipt:SyncReceipt):Promise<void>{
+    this.check();await this.clockReady();identifier(operationId)
+    const data=await this.delivery(operationId)
+    invalid(receipt.photoId===data.photoId&&receipt.operationId===operationId &&
+      receipt.expiresAt===data.expiresAt&&Array.isArray(receipt.assets),'sync.receipt_mismatch')
+    const expected=data.assets.map(a=>({assetId:a.assetId,kind:a.kind,bytes:a.bytes,sha256:a.sha256}))
+    const actual=[...receipt.assets].sort((a,b)=>a.assetId.localeCompare(b.assetId))
+    invalid(JSON.stringify(expected)===JSON.stringify(actual),'sync.receipt_assets_mismatch')
+    const payload={photoId:data.photoId,operationId,expiresAt:data.expiresAt,assets:expected}
+    const receiptHash=await sha(new TextEncoder().encode(JSON.stringify(payload)))
+    invalid(receipt.receiptHash===receiptHash,'sync.receipt_digest_mismatch')
+    await db.transaction('rw',db.photos,db.outbox,db.tombstones,async()=>{
+      this.check()
+      const key=this.scope.accountId+'/'+operationId
+      const row=await db.outbox.get(key)
+      const photo=await db.photos.get(photoKey(this.scope,data.photoId))
+      if(!row||!photo||row.photoId!==data.photoId||row.state==='cancelled'||
+          photo.expiresAt<=this.time.now()||
+          await db.tombstones.get(photoKey(this.scope,data.photoId)))
+        throw new Error('sync.ack_expired_or_revoked')
+      if(row.state==='acknowledged')invalid(row.receiptHash===receiptHash,'sync.ack_conflict')
+      else await db.outbox.update(key,{state:'acknowledged',receiptHash,
+        attempts:0,nextAttemptAt:0,lastError:undefined})
+    })
+  }
+  async syncState(photoId:string):Promise<SyncState>{
+    this.check();identifier(photoId)
+    if(await db.tombstones.get(photoKey(this.scope,photoId)))return 'expired'
+    const photo=await db.photos.get(photoKey(this.scope,photoId))
+    if(!photo||photo.state!=='local')return 'expired'
+    if(!this.time.status().trusted)return 'local'
+    if(this.time.now()>=photo.expiresAt)return 'expired'
+    const task=await db.outbox.get(this.scope.accountId+'/'+photo.operationId)
+    return task?.state==='acknowledged'?'synced':task?.state==='retry'?'retry':'local'
+  }
+  /** A same-origin authenticated 410 is authoritative even before local wall-clock expiry. */
+  async revokeFromServer(photoId:string):Promise<void>{
+    this.check();identifier(photoId)
+    const key=photoKey(this.scope,photoId)
+    await db.transaction('rw',db.photos,db.outbox,db.tombstones,async()=>{
+      this.check()
+      const photo=await db.photos.get(key)
+      if(!photo)return
+      if(!await db.tombstones.get(key))
+        await db.tombstones.put({key,accountId:this.scope.accountId,photoId,
+          expiresAt:photo.expiresAt,confirmedAt:0})
+      await db.photos.update(key,{state:'delete_pending'})
+      await db.outbox.update(this.scope.accountId+'/'+photo.operationId,{state:'cancelled'})
+    })
+    await this.cleanupTombstone(photoId)
+  }
+
   async confirmExpiry(photoId:string):Promise<void>{
     this.check();await this.clockReady();identifier(photoId)
     const key=photoKey(this.scope,photoId)

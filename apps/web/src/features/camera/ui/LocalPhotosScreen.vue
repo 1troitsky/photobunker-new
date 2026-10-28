@@ -3,33 +3,44 @@ import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
 import {identity,onIdentityCleanup} from '../../identity'
 import {language} from '../../ui-preview'
 import {openLocalPhotoVault} from '../../local-storage'
-import type {PhotoHeader} from '../../local-storage'
+import type {PhotoHeader,SyncState} from '../../local-storage'
+import {flushPhotoSync,onPhotoSync} from '../../photo-sync'
 import {captureError} from '../infrastructure/browser-camera'
 import type {CaptureMetadata} from '../domain/policy'
 
 type Item={header:PhotoHeader;metadata:CaptureMetadata}
 const ru=computed(()=>language.value==='ru'),loading=ref(Boolean(identity.value)),locked=ref(false),error=ref(''),refreshing=ref(false)
-const rows=ref<Item[]>([]),filter=ref('')
+const rows=ref<Item[]>([]),filter=ref(''),states=ref<Record<string,SyncState>>({})
+let stopEvents:(()=>void)|null=null
 let generation=0
 const copy=computed(()=>ru.value?{
-  title:'Локальные фотографии',explanation:'Только зашифрованные снимки текущего аккаунта. Облако пока не подключено.',
+  title:'Локальные фотографии',explanation:'Зашифрованные снимки текущего аккаунта. Статус облака указан для каждого файла.',
   login:'Для просмотра откройте свой анонимный аккаунт.',create:'Создать аккаунт',restore:'Восстановить доступ',
   empty:'Здесь пока нет фотографий',emptyHint:'Сделайте первый снимок камерой.',camera:'Открыть камеру',
   locked:'Фотографии скрыты до подтверждения доверенного времени.',reload:'Проверить время и обновить',
   failure:'Ошибка чтения зашифрованных фотографий.',partial:'Часть записей повреждена или недоступна.',
-  local:'Только на устройстве',retention:'Истекает',view:'Открыть',loading:'Загрузка защищённого списка…',
+  local:'Только на устройстве',syncing:'Синхронизация…',synced:'В облаке · проверено',retry:'Повтор загрузки',sync:'Синхронизировать',retention:'Истекает',view:'Открыть',loading:'Загрузка защищённого списка…',
   mode:'Режим',refresh:'Обновить список',
 }:{
-  title:'Local photographs',explanation:'Encrypted photographs for this account only. No cloud sync yet.',
+  title:'Local photographs',explanation:'Encrypted photos for this account. Cloud status is shown for each file.',
   login:'Unlock your anonymous account to view photos.',create:'Create account',restore:'Restore access',
   empty:'No photos yet',emptyHint:'Take your first photo.',camera:'Open camera',
   locked:'Photos are hidden until trusted time is revalidated.',reload:'Revalidate time and refresh',
   failure:'Unable to read encrypted local photos.',partial:'Some records are corrupt or inaccessible.',
-  local:'On device only',retention:'Expires',view:'Open',loading:'Loading protected list…',
+  local:'On device only',syncing:'Syncing…',synced:'Cloud verified',retry:'Upload retry',sync:'Sync now',retention:'Expires',view:'Open',loading:'Loading protected list…',
   mode:'Mode',refresh:'Refresh list',
 })
+function syncLabel(state:SyncState|undefined):string {
+  switch(state){
+    case 'syncing':return copy.value.syncing
+    case 'synced':return copy.value.synced
+    case 'retry':return copy.value.retry
+    case 'expired':return copy.value.locked
+    default:return copy.value.local
+  }
+}
 const visible=computed(()=>rows.value.filter(row=>row.header.photoId.toLowerCase().includes(filter.value.toLowerCase())))
-function dispose(){generation++;rows.value=[];loading.value=false;locked.value=false;error.value=''}
+function dispose(){generation++;rows.value=[];states.value={};loading.value=false;locked.value=false;error.value=''}
 const release=onIdentityCleanup(dispose)
 function timestamp(value:number):string{return new Intl.DateTimeFormat(language.value==='ru'?'ru-RU':'en-US',{dateStyle:'medium',timeStyle:'short'}).format(value)}
 async function load(force=false){
@@ -56,8 +67,14 @@ async function load(force=false){
         records.push({header,metadata})
       }catch{broken++}
     }
+    const fresh:Record<string,SyncState>={}
+    for(const item of records){
+      if(ticket!==generation)return
+      fresh[item.header.photoId]=await vault.syncState(item.header.photoId)
+    }
     records.sort((a,b)=>b.metadata.capturedAt-a.metadata.capturedAt||b.header.photoId.localeCompare(a.header.photoId))
     if(ticket===generation&&identity.value?.accountId===active.accountId&&identity.value?.deviceId===active.deviceId){
+      states.value=fresh
       rows.value=records
       if(broken)error.value=copy.value.partial+' ('+broken+')'
     }
@@ -68,8 +85,8 @@ async function load(force=false){
   }finally{if(ticket===generation){loading.value=false;refreshing.value=false}}
 }
 function visibleAgain(){if(!document.hidden)void load()}
-onMounted(()=>{void load();window.addEventListener('focus',visibleAgain);window.addEventListener('online',visibleAgain)})
-onUnmounted(()=>{dispose();release();window.removeEventListener('focus',visibleAgain);window.removeEventListener('online',visibleAgain)})
+onMounted(()=>{stopEvents=onPhotoSync(e=>{states.value={...states.value,[e.photoId]:e.state}});void load();window.addEventListener('focus',visibleAgain);window.addEventListener('online',visibleAgain)})
+onUnmounted(()=>{stopEvents?.();stopEvents=null;dispose();release();window.removeEventListener('focus',visibleAgain);window.removeEventListener('online',visibleAgain)})
 watch(identity,(a,b)=>{if(a?.accountId!==b?.accountId||a?.deviceId!==b?.deviceId)void load()})
 </script>
 
@@ -122,6 +139,14 @@ watch(identity,(a,b)=>{if(a?.accountId!==b?.accountId||a?.deviceId!==b?.deviceId
         >
           {{ copy.refresh }}
         </button>
+        <button
+          type="button"
+          class="subtle-button"
+          :disabled="!identity || identity.offline || loading"
+          @click="flushPhotoSync(true)"
+        >
+          {{ copy.sync }}
+        </button>
       </div>
       <p
         v-if="loading"
@@ -164,7 +189,7 @@ watch(identity,(a,b)=>{if(a?.accountId!==b?.accountId||a?.deviceId!==b?.deviceId
             <small>{{ item.header.photoId }}</small>
             <span>{{ copy.mode }} {{ item.metadata.mode }} · {{ copy.retention }} {{ timestamp(item.header.expiresAt) }}</span>
           </div>
-          <span class="secure-local-label">{{ copy.local }}</span>
+          <span class="secure-local-label">{{ syncLabel(states[item.header.photoId]) }}</span>
         </RouterLink>
       </div>
       <div
@@ -202,5 +227,5 @@ watch(identity,(a,b)=>{if(a?.accountId!==b?.accountId||a?.deviceId!==b?.deviceId
 .secure-local-label{white-space:nowrap}
 .secure-empty{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;min-height:210px;padding:18px;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:14px}
 .secure-empty h2,.secure-empty p{width:100%;font-size:15px}
-@media(max-width:420px){.secure-local-label{display:none}.local-photos-header h2{font-size:19px}}
+@media(max-width:420px){.secure-local-label{font-size:10px;white-space:normal;max-width:100px;text-align:right}.local-photos-header h2{font-size:19px}}
 </style>

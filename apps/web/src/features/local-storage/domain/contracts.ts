@@ -18,6 +18,7 @@ export type CipherManifest = Readonly<{
 export type OutboxEntry = Readonly<{
   accountId:string; photoId:string; operationId:string; state:OutboxState
   intent:'upload'|'delete'; attempts:number; nextAttemptAt:number; expiresAt:number
+  lastError?:string; receiptHash?:string
 }>
 export type CreatePhoto = Readonly<{
   operationId:string; photoId:string; assetId:string; metadataAssetId:string
@@ -46,9 +47,22 @@ export interface PhotoRepository {
 export interface EncryptedBlobStore {
   read(photoId:string,assetId:string):Promise<Blob>
 }
+export type SyncAsset = Readonly<{
+  assetId:string;kind:AssetKind;revision:number;bytes:number;sha256:string
+  manifest:Omit<CipherManifest,'backend'|'storageKey'>;ciphertext:Blob
+}>
+export type SyncSnapshot = Readonly<{photoId:string;operationId:string;expiresAt:number;assets:SyncAsset[]}>
+export type SyncReceipt = Readonly<{photoId:string;operationId:string;expiresAt:number;
+  assets:ReadonlyArray<Readonly<{assetId:string;kind:AssetKind;bytes:number;sha256:string}>>;receiptHash:string}>
+export type SyncState = 'local'|'syncing'|'synced'|'retry'|'expired'
 export interface PhotoSyncOutbox {
   pending():Promise<OutboxEntry[]>
   retry(operationId:string):Promise<void>
+  delivery(operationId:string):Promise<SyncSnapshot>
+  failDelivery(operationId:string,code:string):Promise<void>
+  acknowledge(operationId:string,receipt:SyncReceipt):Promise<void>
+  syncState(photoId:string):Promise<SyncState>
+  revokeFromServer(photoId:string):Promise<void>
 }
 export interface TimeAuthority {
   restoreFromStorage():Promise<TimeStatus>

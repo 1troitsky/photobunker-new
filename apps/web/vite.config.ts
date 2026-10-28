@@ -36,7 +36,10 @@ export default defineConfig({
     }),
   ],
   preview: {
-    proxy: identityProxy ? { '/identity/v2': { target: identityProxy } } : undefined,
+    proxy: identityProxy ? {
+      '/identity/v2': { target: identityProxy },
+      '/photos/v1': { target: identityProxy },
+    } : undefined,
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Permissions-Policy': 'camera=(self), geolocation=(self)',

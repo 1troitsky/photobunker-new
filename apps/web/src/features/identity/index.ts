@@ -9,3 +9,6 @@ export type { LocalDevice } from './infrastructure/storage'
 export { default as IdentityPanel } from './ui/IdentityPanel.vue'
 
 export { acquireStorageKeys, fetchAuthenticatedServerTime } from './infrastructure/identity'
+
+export { signPhotoSyncContract } from './infrastructure/identity'
+export { photoRequest } from './infrastructure/api'

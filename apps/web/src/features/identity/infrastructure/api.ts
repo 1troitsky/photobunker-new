@@ -69,3 +69,30 @@ export function resetCsrf():void{csrf=undefined}
 if(typeof window!=='undefined'){
   window.addEventListener('pagehide',()=>{invalidateRequests();csrf=undefined})
 }
+
+
+/** Same-origin authenticated photo API, shares the existing Identity CSRF/abort epoch.
+ * Neither credentials nor signed S3 URLs are given to frontend code.
+ */
+export async function photoRequest(
+  path:string,method:'GET'|'POST'|'PUT'|'DELETE'='GET',
+  data?:string|Blob,
+):Promise<Response>{
+  if(!/^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*$/.test(path))throw new IdentityError('sync.invalid_path',400)
+  const epoch=currentGeneration(),controller=new AbortController()
+  controllers.add(controller)
+  try{
+    const headers:Record<string,string>={'Accept':'application/json'}
+    if(method!=='GET'){
+      headers['X-CSRF-TOKEN']=await token(epoch)
+      headers['Content-Type']=data instanceof Blob?'application/octet-stream':'application/json'
+    }
+    assertGeneration(epoch)
+    const response=await fetch('/photos/v1'+path,{
+      method,credentials:'same-origin',cache:'no-store',signal:controller.signal,
+      headers,body:data,
+    })
+    assertGeneration(epoch)
+    return response
+  }finally{controllers.delete(controller)}
+}
