@@ -18,7 +18,7 @@
 - `Backlog`: defined, may have open owner decisions.
 - `Ready`: complete acceptance, decisions closed, dependencies integrated.
 - `Review`: single Draft PR handed over; evidence may still be missing.
-- `Integrated`: reviewed diff + verified build/target test/production E2E for scope, changed code merged by authorized Codex. No known P0 breach.
+- `Integrated`: ChatGPT написал и исправил код, Codex независимо проверил diff и production build/target test/E2E; **merge выполнен только после отдельного разрешения владельца**. Известных P0 дефектов нет.
 - `Accepted`: owner performed scenario **on real deployed phone/desktop**, result recorded; includes honest caveats.
 - `Released`: candidate passes **release gate** and rollback/backup drill, versioned and deployed. Accepted for individual Issue ≠ entire product release.
 
