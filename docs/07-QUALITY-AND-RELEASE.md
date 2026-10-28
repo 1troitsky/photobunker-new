@@ -18,7 +18,7 @@
 - `Backlog`: defined, may have open owner decisions.
 - `Ready`: complete acceptance, decisions closed, dependencies integrated.
 - `Review`: single Draft PR handed over; evidence may still be missing.
-- `Integrated`: ChatGPT написал и исправил код, Codex независимо проверил diff и production build/target test/E2E; **merge выполнен только после отдельного разрешения владельца**. Известных P0 дефектов нет.
+- `Integrated`: ChatGPT реализовал основную Issue, Codex установил/подготовил зависимости, независимо проверил diff и production build/target tests/E2E, **при необходимости сам исправил и дополнил код в том же PR**; merge после разрешения владельца. Известных P0 дефектов нет.
 - `Accepted`: owner performed scenario **on real deployed phone/desktop**, result recorded; includes honest caveats.
 - `Released`: candidate passes **release gate** and rollback/backup drill, versioned and deployed. Accepted for individual Issue ≠ entire product release.
 
@@ -39,7 +39,7 @@
 | Photo Browser | Grid/List/Tree; 1–20 assignments as specified, same membership and per-photo ACL, no bearer leakage, ZIP only permitted |
 | PIN | App lock, delete preflight, emergency offline/online, crash mid-wipe, key removal, truthful cloud confirmation |
 | PWA | Fresh install, reload/offline, low-storage, background/resume, safe-area, 320px mobile, desktop, RU/EN |
-| Operations | Backup/restore encrypted blob + key access, monitoring no plaintext, retention sweeps/cleanup, rollback |
+| Operations | Garage encrypted objects + key recovery, **24h–45d expiry**, indexed scheduler / batch deletion jobs, cascade purge originals/edits/WebP thumbnail/metadata/shares, local cleanup after resume, rollback |
 
 ## 4. Release fail/stop policy
 
@@ -58,4 +58,4 @@ No-Go means do not label `production-ready`. Feature can be explicitly excluded 
 - **NOT RUN**, known issues and rollback;
 - conclusion: READY FOR REVIEW, INTEGRATED or ACCEPTED **with actor and evidence**.
 
-No author can self-approve security-sensitive changes; Codex independently tests in running environment, owner accepts device experience.
+Codex имеет право самостоятельно дорабатывать и тестировать код в исходном PR, выдавать ChatGPT следующую Ready Issue и подтверждать технические gates. **Основные Issues исполняет ChatGPT из-за лимитов; Codex занимается setup, tests, review и необходимыми исправлениями.** Владелец принимает реальное device experience.
