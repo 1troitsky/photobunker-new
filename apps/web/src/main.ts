@@ -21,4 +21,7 @@ if (!assignmentReleaseEnabled()) {
   
   /* R2-09: independent foreground team/contact outbox; no navigation/network gate. */
   void import('./features/collaboration').then(({startCollaborationSync})=>startCollaborationSync()).catch(()=>{})
+
+  /* Signed invitation outbox only; recipient PhotoSync reads remain forbidden. */
+  void import('./features/photo-grants').then(({startGrantSync})=>startGrantSync()).catch(()=>{})
 }

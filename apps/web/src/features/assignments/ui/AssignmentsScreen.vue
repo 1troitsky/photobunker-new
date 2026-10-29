@@ -34,7 +34,7 @@ const copy=computed(()=>ru.value?{
   conflict:'Конфликт ревизий: локальные изменения сохранены зашифрованными.',
   refresh:'Обновить',sync:'Синхронизировать',loading:'Открываем приватные задания…',
   unlock:'Откройте анонимный аккаунт для работы с заданиями.',
-  createAccount:'Создать аккаунт',restore:'Восстановить доступ',
+  createAccount:'Создать аккаунт',restore:'Восстановить доступ',grants:'Участники',
   error:'Операцию не удалось выполнить. Изменения не подтверждены.',detail:'Детали задания',
   back:'К заданиям',recheck:'Загрузить версию сервера',keep:'Оставить мой локальный черновик',
   choose:'Сравните изменения перед повторной отправкой.',
@@ -53,7 +53,7 @@ const copy=computed(()=>ru.value?{
   conflict:'Revision conflict: your local draft remains encrypted.',
   refresh:'Refresh',sync:'Sync now',loading:'Opening private assignments…',
   unlock:'Unlock your anonymous account to manage assignments.',
-  createAccount:'Create account',restore:'Restore access',
+  createAccount:'Create account',restore:'Restore access',grants:'Participants',
   error:'Could not perform operation. No server confirmation was claimed.',detail:'Assignment details',
   back:'Assignments',recheck:'Load server version',keep:'Keep my local draft',
   choose:'Compare both versions before retrying.',
@@ -158,6 +158,7 @@ onUnmounted(()=>{ended=true;epoch++;cleanup();unlisten()})
         <RouterLink v-if="details||create" to="/assignments" class="assignment-back">{{ copy.back }}</RouterLink>
         <h1>{{ create?copy.new:edit?copy.edit:view?copy.detail:copy.title }}</h1>
       </div>
+      <RouterLink v-if="identity&&!create" to="/assignment-grants" class="subtle-button">{{ copy.grants }}</RouterLink>
       <RouterLink v-if="!details&&!create&&identity" to="/assignments/new" class="primary-button">{{ copy.new }}</RouterLink>
     </header>
 
