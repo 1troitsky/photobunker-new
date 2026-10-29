@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import AppIcon from './AppIcon.vue'
 import ScreenHeader from './ScreenHeader.vue'
@@ -8,19 +8,11 @@ import { StorageDiagnostics } from '../../local-storage'
 import { CameraScreen } from '../../camera'
 import {GalleryScreen} from '../../gallery'
 import { language, setLanguage, setTheme, text, theme } from './copy'
-import { assignmentFixtures, photoFixtures } from './fixtures'
+import { photoFixtures } from './fixtures'
 
 const route = useRoute()
-const search = ref('')
-const view = ref<'grid'|'list'>('grid')
-const selectedFolder = ref('ALFA')
 const editorTool = ref<'brush'|'text'|'shape'>('brush')
 
-watch(() => route.path, () => { search.value = '' })
-const browserPhotos = computed(() => photoFixtures.filter(p => p.assignment === selectedFolder.value &&
-  (p.title[language.value].toLowerCase().includes(search.value.toLowerCase()) ||
-    p.id.toLowerCase().includes(search.value.toLowerCase()))))
-const folderTitle = computed(() => assignmentFixtures.find(a => a.id === selectedFolder.value)?.title[language.value] ?? text.value.folders)
 const title = computed(() => {
   switch (route.path) {
     case '/photos': return text.value.photos
@@ -73,93 +65,6 @@ const title = computed(() => {
       </template>
       <template v-else-if="route.path==='/camera'">
         <CameraScreen />
-      </template>
-
-      <!-- PHOTO BROWSER: Finder-ish selection and grid/list with local fixtures -->
-      <template v-else-if="route.path==='/browser'">
-        <div class="section-heading">
-          <div><span class="eyebrow">{{ text.demo }}</span><h2>{{ text.browser }}</h2><p>{{ text.browserHint }}</p></div>
-        </div>
-        <div class="browser-layout">
-          <aside
-            class="browser-sidebar"
-            :aria-label="text.folders"
-          >
-            <h3>{{ text.folders }}</h3>
-            <button
-              v-for="item in assignmentFixtures"
-              :key="item.id"
-              type="button"
-              class="folder-row"
-              :aria-pressed="selectedFolder===item.id"
-              :class="{ selected: selectedFolder===item.id }"
-              @click="selectedFolder=item.id"
-            >
-              <AppIcon name="folder" /><span>{{ item.title[language] }}</span><small>{{ item.count }}</small>
-            </button>
-          </aside>
-          <div class="browser-content">
-            <div class="browser-breadcrumb">
-              <AppIcon name="folder" /><span>{{ folderTitle }}</span><small>{{ text.sampleAccess }}</small>
-            </div>
-            <div class="toolbar">
-              <label class="search-field"><AppIcon name="search" /><span class="sr-only">{{ text.search }}</span><input
-                v-model="search"
-                type="search"
-                :aria-label="text.search"
-                :placeholder="text.search"
-              ></label>
-              <div
-                class="pill-group view-switch"
-                :aria-label="text.galleryView"
-              >
-                <button
-                  type="button"
-                  :class="{selected:view==='grid'}"
-                  :aria-label="text.grid"
-                  :aria-pressed="view==='grid'"
-                  @click="view='grid'"
-                >
-                  <AppIcon name="grid" />
-                </button>
-                <button
-                  type="button"
-                  :class="{selected:view==='list'}"
-                  :aria-label="text.list"
-                  :aria-pressed="view==='list'"
-                  @click="view='list'"
-                >
-                  <AppIcon name="list" />
-                </button>
-              </div>
-            </div>
-            <div
-              v-if="browserPhotos.length"
-              class="photo-gallery browser-gallery"
-              :class="{ 'gallery-list': view==='list' }"
-            >
-              <RouterLink
-                v-for="photo in browserPhotos"
-                :key="photo.id"
-                to="/photo-card/preview"
-                class="photo-tile"
-                :aria-label="photo.title[language]+' — '+text.openCard"
-              >
-                <div
-                  class="photo-art"
-                  :class="photo.art"
-                ><span class="fake-photo-label">{{ text.demo }}</span></div>
-                <div class="photo-caption"><strong>{{ photo.title[language] }}</strong><small>{{ photo.id }}</small></div>
-              </RouterLink>
-            </div>
-            <div
-              v-else
-              class="empty-state"
-            >
-              <AppIcon name="folder" /><h2>{{ text.empty }}</h2><p>{{ text.emptyHint }}</p>
-            </div>
-          </div>
-        </div>
       </template>
 
       <!-- PROFILE: no invented real identity; only local display preferences -->

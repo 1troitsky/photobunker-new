@@ -7,6 +7,7 @@ const IdentityPage = () => import('./features/identity/ui/IdentityPage.vue')
 const AppShell = () => import('./features/ui-preview/ui/AppShell.vue')
 const MainScreens = () => import('./features/ui-preview/ui/MainScreens.vue')
 const LocalPhotoViewer = () => import('./features/camera/ui/LocalPhotoViewer.vue')
+const BrowserScreen = () => import('./features/photo-browser/ui/BrowserScreen.vue')
 const EditorScreen = () => import('./features/editor/ui/EditorScreen.vue')
 const AssignmentsScreen = () => import('./features/assignments/ui/AssignmentsScreen.vue')
 const CollaborationScreen = () => import('./features/collaboration/ui/CollaborationScreen.vue')
@@ -33,7 +34,7 @@ export const router = createRouter({
         { path: 'assignments/new', name: 'assignment-new', component: AssignmentsScreen },
         { path: 'assignments/:assignmentId', name: 'assignment-detail', component: AssignmentsScreen },
         { path: 'assignments/:assignmentId/edit', name: 'assignment-edit', component: AssignmentsScreen },
-        { path: 'browser', name: 'browser', component: MainScreens },
+        { path: 'browser', name: 'browser', component: BrowserScreen },
         { path: 'contacts', name: 'contacts', component: CollaborationScreen },
         { path: 'teams', name: 'teams', component: CollaborationScreen },
         { path: 'teams/:teamId', name: 'team-detail', component: CollaborationScreen },
