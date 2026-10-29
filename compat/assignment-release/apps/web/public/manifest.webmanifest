@@ -1,0 +1,31 @@
+{
+  "id": "/",
+  "name": "PhotoBunker",
+  "short_name": "PB",
+  "description": "Private photo capture, controlled sharing and encrypted messaging.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0c151d",
+  "theme_color": "#0c151d",
+  "icons": [
+    {
+      "src": "/icons/favicon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
