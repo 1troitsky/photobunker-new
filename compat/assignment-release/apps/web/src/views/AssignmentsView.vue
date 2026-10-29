@@ -19,6 +19,7 @@ import {
   studioError,
 } from '../studio/store'
 import { photos } from '../local/library'
+import { receipts } from '../workspace/state'
 import { locale, formatNumber } from '../i18n'
 import { account } from '../identity/store'
 import WorkspaceInvitations from '../components/WorkspaceInvitations.vue'
@@ -76,11 +77,16 @@ const menuName = computed(
   () => rows.value.find((item) => item.id === menu.value)?.name ?? '',
 )
 function count(id: string) {
-  return photos.value.filter(
-    (photo) =>
+  // Only server-confirmed ciphertext counts towards the assignment target.
+  // A local/offline pending shot must not inflate the owner's progress.
+  const confirmed = new Set([
+    ...photos.value.filter(photo =>
       (photo.uiAssignmentId === id || photo.assignmentId === id) &&
-      !photo.uiVersionOf,
-  ).length
+      !photo.uiVersionOf && typeof photo.remoteRevision === 'number',
+    ).map(photo => photo.id),
+    ...receipts.value.filter(item => item.assignmentId === id).map(item => item.id),
+  ])
+  return confirmed.size
 }
 function start(id: string) {
   const local = localTasks.value.find((item) => item.id === id)

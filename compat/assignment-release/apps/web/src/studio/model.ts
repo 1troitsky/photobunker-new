@@ -136,7 +136,7 @@ export function newTask(name: string): Task {
     instructions: '',
     startsAt: null,
     finishesAt: null,
-    targetCount: 1,
+    targetCount: 30,
     shots: [],
     presetId: '',
     preset: null,

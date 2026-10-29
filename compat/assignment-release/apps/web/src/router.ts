@@ -24,7 +24,6 @@ import JoinView from './views/JoinView.vue'
 import AssignmentsView from './views/AssignmentsView.vue'
 import AssignmentView from './views/AssignmentView.vue'
 import UserProfileView from './views/UserProfileView.vue'
-import MessagesView from './views/MessagesView.vue'
 import { account, sessionState, offlineCaptureIdentity, hasConfirmedIdentity } from './identity/store'
 import { launchPath } from './app/preferences'
 import { profileReturnTo } from './identity/person'
@@ -66,9 +65,9 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
       { path: '/profile', name: 'profile', component: UserProfileView },
       { path: '/profile/teams', name: 'teams', component: TeamsView },
       { path: '/profile/teams/:id', name: 'team-profile', component: TeamProfileView },
-      { path: '/messages', name: 'messages', component: MessagesView, children: [
-        { path: 'profile/:handle', name: 'conversation-profile', component: PersonProfileView },
-      ] },
+      // Messenger is unavailable in Assignment Release. Matrix is retained only as a
+      // compatibility dependency for the old account/security lifecycle.
+      { path: '/messages', redirect: '/assignments' },
       { path: '/people/:handle', name: 'person-profile', component: PersonProfileView },
       { path: '/join', name: 'join', component: JoinView },
       {

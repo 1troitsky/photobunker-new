@@ -121,7 +121,7 @@ onMounted(() => {
         <strong
           >{{
             new Set([
-              ...materials.map((photo) => photo.id),
+              ...materials.filter(photo => typeof photo.remoteRevision === 'number').map((photo) => photo.id),
               ...receipts
                 .filter((item) => item.assignmentId === task?.id)
                 .map((item) => item.id),

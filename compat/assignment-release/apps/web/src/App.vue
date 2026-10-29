@@ -224,10 +224,8 @@ const editor = computed(() =>
 )
 const navigation = [
   { name: 'assignments', to: '/assignments', icon: 'profiles' },
-  { name: 'messages', to: '/messages', icon: 'messages' },
   { name: 'camera', to: '/camera', icon: 'camera' },
   { name: 'gallery', to: '/gallery', icon: 'gallery' },
-  { name: 'profile', to: '/profile', icon: 'user' },
 ] as const
 const immersive = computed(() => route.name === 'camera')
 function label(name: string) {
