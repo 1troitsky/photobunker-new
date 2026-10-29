@@ -15,3 +15,4 @@ void import('./features/identity').then(({ backgroundSessionCheck }) => backgrou
 
 /* Non-blocking foreground encrypted delivery; camera never awaits network. */
 void import('./features/photo-sync').then(({startPhotoSync})=>startPhotoSync()).catch(()=>{})
+void import('./features/assignments').then(({startAssignmentSync})=>startAssignmentSync()).catch(()=>{})
