@@ -1,10 +1,10 @@
 # PhotoBunker — новая версия
 
-**Состояние на 28.10.2026:** архитектурные инварианты **APPROVED**, **R2-01 интегрирована**: создан Vue/TypeScript PWA workspace, локальный production build/test harness и GitHub Project. **R2-02 Ready** после read-only legacy-check UI/assets и передана ChatGPT. Garage и PostgreSQL не входят в R2-01/R2-02.
+**Процесс обновлён решением владельца 2026-10-29:** ChatGPT последовательно реализует все оставшиеся согласованные Issues без ожидания Codex и merge; финальную проверку и интеграцию накопленного стека выполняет Codex. **Состояние baseline на 28.10.2026:** архитектурные инварианты **APPROVED**, **R2-01 интегрирована**: создан Vue/TypeScript PWA workspace, локальный production build/test harness и GitHub Project. **R2-02 Ready** после read-only legacy-check UI/assets и передана ChatGPT. Garage и PostgreSQL не входят в R2-01/R2-02.
 
 PhotoBunker — защищённое фотоприложение: камера, локальная галерея, задания и команды, редактор, Photo Card, защищённый Photo Browser, три независимых PIN-сценария. Мобильное PWA и desktop. **Мессенджера/Matrix/чатов/звонков в этой версии нет.**
 
-Новый проект **не копирует массово** старый `1troitsky/photobunker`: нормативные требования уже перенесены в [самостоятельный baseline](docs/13-PRODUCT-ACCEPTANCE-BASELINE.md). Codex проверяет конкретные legacy компоненты только при обоснованном reuse; ChatGPT реализует отдельные ограниченные Issues, Codex проверяет и допиливает.
+Новый проект **не копирует массово** старый `1troitsky/photobunker`: нормативные требования уже перенесены в [самостоятельный baseline](docs/13-PRODUCT-ACCEPTANCE-BASELINE.md). ChatGPT перед каждой Issue самостоятельно читает нужные legacy-компоненты на GitHub read-only и фиксирует их классификацию; выполняет отдельные ограниченные Issues и собирает Draft PR в стек. Codex проверяет и допиливает стек после завершения Implementation Phase.
 
 ## Принятые продуктовые правила
 
@@ -19,19 +19,21 @@ PhotoBunker — защищённое фотоприложение: камера,
 
 Полная спецификация — [03 — Photo Storage](docs/03-PHOTO-STORAGE.md), [11 — Identity/Keys](docs/11-IDENTITY-AND-KEYS.md), [12 — Browser Storage/Time](docs/12-CLIENT-STORAGE-AND-TRUSTED-TIME.md). **ST-04 recovery baseline больше не OPEN:** его проверяет Codex перед R2-03/R2-04. Остальные поздние детали (конкретные профили fullres compression, editor undo/export и legacy migration) не блокируют R2-01/R2-02.
 
-## Трёхсторонняя работа — фиксированные роли
+## Новая схема работы: Implementation → Verification/Integration
 
-| Участник | Обязанности |
-| --- | --- |
-| **Владелец** | Продуктовые решения, приоритеты, ручные проверки на телефоне/desktop и разрешение выпуска; технически проверенные PR Codex сливает по постоянному разрешению без запроса на каждый merge |
-| **Codex** | Технический координатор **с доступом к окружению**: установка зависимостей, локальные проверки, Project/production preview, выдача ChatGPT Ready Issues, code review, тесты **и самостоятельная доработка того же PR** при необходимости |
-| **ChatGPT** | **Основная масса реализации по Issue** благодаря доступным лимитам: код, ветка, один Draft PR, передача Codex; проверки по доступным инструментам, без обязанности дублировать тестовое окружение Codex |
+**Владелец:** продуктовые решения, приоритеты, UX/device acceptance и разрешение выпуска.
 
-**Codex не подчинён ChatGPT и не ограничен ролью пассивного рецензента.** Он вправе настраивать инфраструктуру, писать тесты и исправлять код. ChatGPT не назначает Codex задачи и не навязывает ему лишние процедуры. Правила подробнее — [COLLABORATION.md](COLLABORATION.md), [AGENTS.md](AGENTS.md), [CHATBOT-AGENTS.md](CHATBOT-AGENTS.md).
+**ChatGPT:** самостоятельно подготавливает Legacy evidence и выполняет **все оставшиеся Issues** по зависимостям без ожидания Codex review/merge; на каждый Issue одна ветка и один Draft PR. Все `NOT RUN` и риски честно документируются. Никакого изменения `main`.
+
+**Codex:** по завершении всей реализации проверяет, тестирует, исправляет и последовательно сливает **весь стек**; проверяет общий production build, безопасность, device/PWA UX, backup/recovery/rollback. **Только этот PR с утверждёнными правилами** Codex должен сначала проверить и слить в `main`.
+
+**Stacked PRs:** незалитая upstream ветка является `base` следующего Draft PR; один Issue = один PR, свой `base...HEAD` diff. Логические зависимости сохраняются, но необходимость предварительного merge и выдачи следующего Ready от Codex отменена. Финальная интеграция Codex — снизу вверх.
+
+**UI/UX — сменяемая оболочка:** `ui` + design tokens + composable shell; функции/локальная надёжность/криптография/ACL/TTL живут в domain/application/infrastructure и не переписываются при изменении дизайна. Нормативный документ: **[14 — Independent Development Pipeline & Replaceable UI](docs/14-INDEPENDENT-DEVELOPMENT-PIPELINE.md)**. Правила ролей: [COLLABORATION](COLLABORATION.md), [AGENTS](AGENTS.md), [CHATBOT-AGENTS](CHATBOT-AGENTS.md).
 
 ## Старый PhotoBunker — обязательная read-only сверка для каждой задачи
 
-Старый `1troitsky/photobunker` не изменяется и не переносится целиком, но **не игнорируется**. Перед переводом каждой Issue в `Ready` Codex читает релевантную старую реализацию и записывает в Issue точные пути и решения `REUSE / ADAPT / REFERENCE / REJECT`. ChatGPT обязан открыть эти пути через GitHub перед написанием кода. Так повторно используются проверенные assets, UX, алгоритмы и тесты, а новый baseline остаётся нормативным источником требований.
+Старый `1troitsky/photobunker` не изменяется и не переносится целиком, но **не игнорируется**. Перед каждой Issue ChatGPT читает точные legacy-пути из её evidence через GitHub. Если evidence отсутствует, ChatGPT самостоятельно проводит узкую сверку старой реализации и фиксирует в существующей Issue `REUSE / ADAPT / REFERENCE / REJECT` до написания кода. Так повторно используются проверенные assets, UX, алгоритмы и тесты, а новый baseline остаётся нормативным источником требований.
 
 - **[Аудит 28.10.2026 — AUDIT-20261028.md](https://github.com/1troitsky/photobunker/blob/main/docs/AUDIT-20261028.md)** — исторический диагноз; требования «не повторять» уже внесены в [07 Quality](docs/07-QUALITY-AND-RELEASE.md).
 - **[Legacy CHECKLIST.md](https://github.com/1troitsky/photobunker/blob/main/docs/CHECKLIST.md)** — исторический источник; актуальные обязательные требования **полностью выделены** в [13 — Product Acceptance Baseline](docs/13-PRODUCT-ACCEPTANCE-BASELINE.md).
@@ -52,10 +54,11 @@ PhotoBunker — защищённое фотоприложение: камера,
 - **[11 — Identity / User / Device / Recovery](docs/11-IDENTITY-AND-KEYS.md)** — новые устройства и будущие независимые подписки/модули.
 - **[12 — Local storage / Trusted Time](docs/12-CLIENT-STORAGE-AND-TRUSTED-TIME.md)** — Dexie, OPFS/fallback, Safari и clock rollback.
 - **[13 — Самостоятельный baseline требований](docs/13-PRODUCT-ACCEPTANCE-BASELINE.md)** — всё, что агент должен реализовать, без обязательного чтения legacy.
+- **[14 — Независимая реализация/stacked PR и заменяемый UI](docs/14-INDEPENDENT-DEVELOPMENT-PIPELINE.md)** — утверждённые правила процесса с 2026-10-29.
 
 ## Текущее состояние GitHub и следующий шаг
 
-[Issues #1–#26](https://github.com/1troitsky/photobunker-new/issues) добавлены в **[PhotoBunker New — Development](https://github.com/users/1troitsky/projects/14)** со стадиями Backlog/Ready/In Progress/Review/Integrated/Accepted/Blocked/Cancelled. ChatGPT работает в отдельной ветке и передаёт Draft PR; Codex проверяет, тестирует, допиливает, самостоятельно сливает технически готовый PR в `main`, обновляет Project и выдаёт следующую Ready Issue. ChatGPT сам merge не выполняет.
+[Issues #1–#26](https://github.com/1troitsky/photobunker-new/issues) добавлены в **[PhotoBunker New — Development](https://github.com/users/1troitsky/projects/14)** со стадиями Backlog/Ready/In Progress/Review/Integrated/Accepted/Blocked/Cancelled. ChatGPT независимо реализует Issues в stacked Draft PR без слияния функциональных PR до завершения всей разработки. Затем Codex проводит проверку/исправления/последовательную интеграцию, обновляет Project и передаёт владельцу подтверждённый build. ChatGPT сам merge не выполняет.
 
 ## Локальная разработка
 
