@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto'
 import {expect} from '@playwright/test'
 import {command} from './matrix-drill.mjs'
-export const origin=process.env.LOCAL_APP_URL??'http://localhost:8080'
+export const origin=process.env.LOCAL_APP_URL??'http://localhost:8081'
 if(!['localhost','127.0.0.1','[::1]','photobunker.orb.local'].includes(new URL(origin).hostname))throw new Error('Use a loopback origin')
 export const headers={'X-PhotoBunker':'identity-v1','Origin':origin}
 export const button=(page,name)=>page.getByRole('button',{name,exact:true})

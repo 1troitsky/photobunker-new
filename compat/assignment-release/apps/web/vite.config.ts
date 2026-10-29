@@ -19,7 +19,10 @@ function appShellWorker(): Plugin {
     async closeBundle() {
       const assets = (await readdir(resolve(outputDirectory, 'assets'))).sort()
       const paths = [
-        '/', '/manifest.webmanifest', '/icons/favicon.svg',
+        '/', '/manifest.webmanifest', '/favicon.ico',
+        '/icons/favicon.svg', '/icons/favicon-96x96.png',
+        '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png',
+        '/icons/brand-logo.png',
         ...assets.filter((name) => /\.(?:js|css)$/.test(name)).map((name) => `/assets/${name}`),
       ]
       const digest = createHash('sha256')
