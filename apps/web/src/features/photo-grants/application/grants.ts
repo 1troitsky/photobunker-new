@@ -273,8 +273,13 @@ export async function thumbnailShareResult(row:ThumbnailShareRow,
   await grantDb.transaction('rw',grantDb.thumbnailShares,async()=>{
     const saved=await grantDb.thumbnailShares.get(row.id)
     if(!saved||saved.operationId!==row.operationId||
-      saved.contract!==row.contract||saved.signature!==row.signature)
+      saved.contract!==row.contract||saved.signature!==row.signature||
+      JSON.stringify(saved.proof)!==JSON.stringify(row.proof))
       throw Error('grant.share_changed')
+    // Terminal ACK is monotonic: a late failure from another tab must never
+    // turn a confirmed submission into a retriable or conflicting operation.
+    if(saved.state==='acknowledged')return
+    if(saved.state==='conflict'&&outcome==='retry')return
     if(outcome==='ack'){
       await grantDb.thumbnailShares.update(row.id,{
         state:'acknowledged',lastError:null,retryAt:0,

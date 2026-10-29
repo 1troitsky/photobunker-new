@@ -28,16 +28,25 @@ jobs:
           cache: pnpm
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile
-      - name: Check architecture
-        run: pnpm test:architecture
-      - name: ESLint
-        run: pnpm lint
-      - name: Vue and TypeScript
-        run: pnpm typecheck
-      - name: Unit tests
-        run: pnpm test:unit
-      - name: Build and bundle checks
-        run: pnpm build
+      - name: Run full web quality checks and capture output
+        shell: bash
+        run: |
+          failures=0
+          for task in test:architecture lint typecheck test:unit build; do
+            echo "=== pnpm ${task} ===" | tee -a web-check.log
+            pnpm "${task}" 2>&1 | tee -a web-check.log
+            status=${PIPESTATUS[0]}
+            if [ "${status}" -ne 0 ]; then failures=1; fi
+          done
+          exit "${failures}"
+      - name: Keep diagnostics from failed checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pb2-web-check-output
+          path: web-check.log
+          if-no-files-found: ignore
+          retention-days: 7
 
   php:
     name: Laravel PHP 8.4 and PHPUnit
@@ -55,7 +64,24 @@ jobs:
           coverage: none
       - name: Install locked Composer dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
-      - name: PHP syntax
-        run: find app tests database -name '*.php' -print0 | xargs -0 -n1 php -l
-      - name: PHPUnit – isolated testing SQLite
-        run: php vendor/bin/phpunit
+      - name: PHP syntax and tests with diagnostics
+        shell: bash
+        run: |
+          failures=0
+          echo '=== PHP lint ===' | tee -a php-check.log
+          find app tests database -name '*.php' -print0 | xargs -0 -n1 php -l 2>&1 | tee -a php-check.log
+          status=${PIPESTATUS[0]}
+          if [ "${status}" -ne 0 ]; then failures=1; fi
+          echo '=== PHPUnit ===' | tee -a php-check.log
+          php vendor/bin/phpunit 2>&1 | tee -a php-check.log
+          status=${PIPESTATUS[0]}
+          if [ "${status}" -ne 0 ]; then failures=1; fi
+          exit "${failures}"
+      - name: Keep diagnostics from failed checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pb2-php-check-output
+          path: apps/api/php-check.log
+          if-no-files-found: ignore
+          retention-days: 7
