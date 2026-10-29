@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import FoundationView from './features/foundation/ui/FoundationView.vue'
+import { assignmentReleaseUrl } from './features/assignment-release'
 
 const WelcomeView = () => import('./features/ui-preview/ui/WelcomeView.vue')
 const IdentityPage = () => import('./features/identity/ui/IdentityPage.vue')
@@ -33,4 +34,14 @@ export const router = createRouter({
     { path: '/foundation', name: 'foundation', component: FoundationView },
     { path: '/:pathMatch(.*)*', redirect: '/welcome' },
   ],
+})
+
+// Assignment Release uses exactly one Identity/crypto realm. PB2 pages must not
+// run alongside legacy authenticated pages in the same user journey.
+router.beforeEach(to => {
+  const destination = assignmentReleaseUrl(to.path)
+  if (destination) {
+    window.location.assign(destination)
+    return false
+  }
 })
