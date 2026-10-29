@@ -63,6 +63,9 @@ Route::prefix('photos/v1')->middleware('throttle:100,1,photos')->group(function 
 
 // Owner-only anonymous encrypted Assignment aggregate; separate rate-limit budget.
 Route::prefix('assignments/v1')->middleware('throttle:60,1,assignments')->group(function(){
+    // Explicit assignment invitation lifecycle only. No PhotoSync read grant.
+    Route::get('/grants', [\App\Http\Controllers\AssignmentGrantController::class,'index']);
+    Route::put('/grants/operations/{operationId}', [\App\Http\Controllers\AssignmentGrantController::class,'mutate']);
     Route::get('/list',[\App\Http\Controllers\AssignmentController::class,'index']);
     Route::get('/{assignmentId}/history',[\App\Http\Controllers\AssignmentController::class,'history']);
     Route::get('/{assignmentId}',[\App\Http\Controllers\AssignmentController::class,'show']);
