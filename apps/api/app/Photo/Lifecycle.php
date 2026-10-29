@@ -46,6 +46,7 @@ final class Lifecycle
             if(!$row)return;
             abort_unless($row->state==='deleting',409);
             // Erase encrypted review comments/responses and private assignment binding.
+            DB::table('photo_edit_operations_v1')->where('photo_id',$photoId)->delete();
             DB::table('assignment_review_operations_v1')->where('photo_id',$photoId)->delete();
             DB::table('assignment_photo_bindings_v1')->where('photo_id',$photoId)->delete();
             DB::table('photo_objects')->where('photo_id',$photoId)->delete();
@@ -81,6 +82,28 @@ final class Lifecycle
                 }
                 $removed++;
             }catch(\Throwable){ /* bounded next scheduler retry, never log storage credentials */ }
+        }
+        // Edited masters/thumbnails are immediately inaccessible after CAS.
+        // Reclaim their physical ciphertext even if the initial cleanup job
+        // exhausted its retries or the queue worker was temporarily unavailable.
+        $retired=DB::table('photo_objects as o')
+          ->join('photo_records as p','p.id','=','o.photo_id')
+          ->where('p.state','active')->where('o.state','retiring')
+          ->where('o.updated_at','<',$old)->orderBy('o.updated_at')
+          ->limit($batch)->select('o.id','o.photo_id','o.object_key','o.sha256')->get();
+        foreach($retired as $object){
+          try{
+            $photo=DB::table('photo_records')->where('id',$object->photo_id)->first();
+            if(!$photo||$photo->edit_asset_id===$object->id||
+              $photo->metadata_asset_id===$object->id)continue;
+            $disk=Storage::disk(config('photo_sync.disk'));
+            if($disk->exists($object->object_key) &&
+              (!$disk->delete($object->object_key)||$disk->exists($object->object_key)))
+              throw new \RuntimeException('photo.edit_retired_cleanup_retry');
+            DB::table('photo_objects')->where('id',$object->id)
+              ->where('state','retiring')->delete();
+            $removed++;
+          }catch(\Throwable){ /* next scheduler pass; no raw storage path in logs */ }
         }
         return $removed;
     }

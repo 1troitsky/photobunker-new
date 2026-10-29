@@ -73,12 +73,25 @@ export async function hydratePhoto(photo:CloudPhoto):Promise<boolean>{
   const current=identity.value
   if(!current)throw Error('gallery.locked')
   const vault=openLocalPhotoVault()
-  if(await vault.readHeader(photo.photoId))return false
+  const existing=await vault.readHeader(photo.photoId)
+  if(existing && (photo.editRevision??0)<=(existing.editRevision??0))return false
   const assets=await manifests(photo.photoId)
+  if(existing){
+    const revision=photo.editRevision??0
+    const asset=assets.find(x=>x.assetId===photo.editAssetId&&x.revision===revision)
+    if(!asset)throw Error('gallery.cloud_edit_missing')
+    guard(current.accountId,current.deviceId)
+    const ciphertext=await cloudCiphertext(photo.photoId,asset)
+    guard(current.accountId,current.deviceId)
+    return vault.adoptCloudEdit(photo,asset,ciphertext)
+  }
   guard(current.accountId,current.deviceId)
   const currentObjects=assets.filter(x=>x.kind==='master'||x.kind==='original'
-    ||x.kind==='thumbnail'||(x.kind==='metadata'&&x.assetId===photo.metadataAssetId))
-  if(!currentObjects.some(x=>x.kind==='metadata')||!currentObjects.some(x=>x.kind==='master'||x.kind==='original'))
+    ||x.kind==='thumbnail'||(x.kind==='edit'&&x.assetId===photo.editAssetId)
+    ||(x.kind==='metadata'&&x.assetId===photo.metadataAssetId))
+  if(!currentObjects.some(x=>x.kind==='metadata')||
+    !currentObjects.some(x=>x.kind==='master'||x.kind==='original')||
+    ((photo.editRevision??0)>0&&!currentObjects.some(x=>x.assetId===photo.editAssetId)))
     throw Error('gallery.cloud_incomplete')
   const fetched=[]
   for(const asset of currentObjects){
@@ -92,6 +105,8 @@ export async function thumbnail(photoId:string):Promise<Blob|null>{
   if(!identity.value)return null
   const vault=openLocalPhotoVault()
   const header=await vault.readHeader(photoId)
+  // Offline mode-3 edit: never display the retired master's stale thumbnail.
+  if(header && (header.editRevision??0)>0&&!header.thumbnailAssetId)return null
   if(header?.thumbnailAssetId){
     try{
       const bytes=await vault.read(photoId,header.thumbnailAssetId)

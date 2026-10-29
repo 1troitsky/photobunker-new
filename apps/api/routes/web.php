@@ -37,6 +37,9 @@ Route::prefix('photos/v1')->middleware('throttle:100,1,photos')->group(function 
     Route::post('/{photoId}/metadata/reserve', [PhotoMetadataController::class,'reserve']);
     Route::put('/{photoId}/metadata/{assetId}', [PhotoMetadataController::class,'upload']);
     Route::post('/{photoId}/metadata/finalize', [PhotoMetadataController::class,'finalize']);
+    Route::post('/{photoId}/edits/reserve', [\App\Http\Controllers\PhotoEditController::class,'reserve']);
+    Route::put('/{photoId}/edits/{assetId}', [\App\Http\Controllers\PhotoEditController::class,'upload']);
+    Route::post('/{photoId}/edits/finalize', [\App\Http\Controllers\PhotoEditController::class,'finalize']);
     Route::post('/reserve', [PhotoSyncController::class,'reserve']);
     Route::put('/{photoId}/objects/{assetId}', [PhotoSyncController::class,'upload']);
     Route::post('/{photoId}/finalize', function (\Illuminate\Http\Request $r,string $photoId,Finalization $f) {

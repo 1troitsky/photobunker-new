@@ -6,6 +6,7 @@ import { encryptAsset, decryptAsset, identifier, invalid, manifestValid, sha } f
 import { probeStorageCapabilities } from './capabilities'
 import { BrowserTimeAuthority, clearLiveTime } from './time'
 import { MAX_CLOCK_SKEW_MS, retentionValid } from '../domain/time-policy'
+import { assertJpegWithoutMetadata } from './jpeg'
 
 const metadataEncoder=new TextEncoder()
 const metadataDecoder=new TextDecoder('utf-8',{fatal:true})
@@ -272,7 +273,7 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     const row=await this.current(photoId)
     const storedAsset=await db.assets.get(assetKey(this.scope,photoId,assetId))
     invalid(!!storedAsset && storedAsset.accountId===this.scope.accountId && storedAsset.photoId===photoId &&
-      (assetId===row.assetId || assetId===row.metadataAssetId || assetId===row.thumbnailAssetId),'storage.asset_unavailable')
+      (assetId===row.assetId || assetId===row.sourceAssetId || assetId===row.metadataAssetId || assetId===row.thumbnailAssetId),'storage.asset_unavailable')
     // `key` is a Dexie-only index and is not part of the authenticated manifest
     // protocol. Never feed storage bookkeeping into the exact-field validator.
     const assetRecord:Partial<ManifestRow>={...storedAsset}
@@ -383,6 +384,154 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     }
   }
   /** R2-10 review decisions share the existing encrypted photo outbox, no extra queue. */
+  /** Edit output is ephemeral until encrypted and readback-verified. A mode-3
+   *  swap never removes its sole source before the new durable ciphertext exists. */
+  async saveEdit(photoId:string,pixels:Blob):Promise<{operationId:string;revision:number;assetId:string}>{
+    this.check();await this.clockReady();identifier(photoId)
+    invalid(pixels instanceof Blob&&pixels.type==='image/jpeg'&&pixels.size>0&&
+      pixels.size<=64*1024*1024,'editor.invalid_jpeg')
+    const header=await this.current(photoId)
+    const metadata=await this.readMetadata(photoId) as {mode?:number;policy?:{mode?:number}}
+    const mode=metadata?.mode
+    invalid((mode===2||mode===3)&&metadata.policy?.mode===mode&&
+      (!header.capture||header.capture.mode===mode),'editor.mode_mismatch')
+    const originalUpload=await db.outbox.get(this.scope.accountId+'/'+header.operationId)
+    invalid(!!originalUpload&&originalUpload.intent==='upload'&&
+      originalUpload.state==='acknowledged','editor.upload_original_first')
+    const pending=await db.outbox.where('accountId').equals(this.scope.accountId)
+      .filter(x=>x.photoId===photoId&&x.intent==='edit'&&
+        !['cancelled','acknowledged'].includes(x.state)).first()
+    invalid(!pending,'editor.pending_edit')
+    await assertJpegWithoutMetadata(pixels)
+    const backend=await this.init()
+    const operationId=crypto.randomUUID(),assetId=crypto.randomUUID(),attempt=crypto.randomUUID()
+    const revision=(header.editRevision??0)+1,kind=mode===2?'edit':'master'
+    const path=assetKey(this.scope,photoId,assetId)+'/'+attempt
+    const reference=photoKey(this.scope,photoId),journalKey=reference+'/'+attempt
+    await db.journal.add({key:journalKey,accountId:this.scope.accountId,deviceId:this.scope.deviceId,
+      photoId,operationId,attemptId:attempt,
+      assetKeys:backend==='opfs'?['opfs|'+path,'idb-blob|'+path]:['idb-blob|'+path],
+      createdAt:this.time.now(),state:'staging'})
+    let committed=false,actualBackend=backend
+    try{
+      const {key,wrapped}=await this.grant.create(assetId,String(header.expiresAt))
+      const result=await encryptAsset(this.scope,photoId,assetId,kind,revision,header.expiresAt,
+        pixels,key,wrapped,backend,path,()=>{this.check();this.time.now()})
+      let manifest:CipherManifest={...result.manifest,backend,storageKey:path}
+      try{
+        await writeCiphertext(backend,path,result.blob,this.scope)
+        const check=await readCiphertext(backend,path)
+        const clear=await decryptAsset(manifest,check,key,this.scope,()=>{this.check();this.time.now()})
+        invalid(clear.size===pixels.size,'editor.readback_failed')
+      }catch(e){
+        if(backend!=='opfs'||!(await probeStorageCapabilities()).fallbackBlob)throw e
+        await writeCiphertext('idb-blob',path,result.blob,this.scope)
+        actualBackend='idb-blob'
+        manifest={...result.manifest,backend:actualBackend,storageKey:path}
+        const check=await readCiphertext(actualBackend,path)
+        const clear=await decryptAsset(manifest,check,key,this.scope,()=>{this.check();this.time.now()})
+        invalid(clear.size===pixels.size,'editor.readback_failed')
+      }
+      await db.transaction('rw',[db.photos,db.assets,db.outbox,db.journal,db.tombstones],async()=>{
+        this.check()
+        const row=await db.photos.get(reference)
+        invalid(!!row&&row.state==='local'&&row.assetId===header.assetId &&
+          (row.editRevision??0)===(revision-1)&&row.expiresAt===header.expiresAt,
+          'editor.revision_conflict')
+        invalid(!await db.tombstones.get(reference)&&row.expiresAt>this.time.now(),
+          'editor.expired')
+        const other=await db.outbox.where('accountId').equals(this.scope.accountId)
+          .filter(x=>x.photoId===photoId&&x.intent==='edit'&&
+            !['cancelled','acknowledged'].includes(x.state)).first()
+        invalid(!other,'editor.concurrent_edit')
+        await db.assets.add({key:assetKey(this.scope,photoId,assetId),...manifest})
+        await db.photos.update(reference,{
+          assetId,editRevision:revision,
+          ...(mode===2?{sourceAssetId:row.sourceAssetId??row.assetId}:
+            {thumbnailAssetId:undefined,sourceAssetId:undefined}),
+        })
+        await db.outbox.add({key:this.scope.accountId+'/'+operationId,
+          accountId:this.scope.accountId,photoId,operationId,
+          intent:'edit',editAssetId:assetId,editMode:mode,expectedRevision:revision-1,
+          state:'pending',attempts:0,nextAttemptAt:0,expiresAt:header.expiresAt})
+        await db.journal.update(journalKey,{state:'cleanup'})
+      })
+      committed=true
+      // Local mode 3 must not keep a second master once the replacement is durable.
+      await this.cleanReplacedRenditions(photoId)
+      // OPFS→IDB fallback can leave a failed OPFS candidate. Delete every
+      // unreferenced backend before deleting the durable recovery journal.
+      if(backend!==actualBackend)await deleteCiphertext(backend,path)
+      await db.journal.delete(journalKey)
+      if(typeof window!=='undefined')window.dispatchEvent(new Event('photobunker-outbox'))
+      return{operationId,revision,assetId}
+    }catch(e){
+      if(!committed){
+        const pointer=await db.assets.get(assetKey(this.scope,photoId,assetId))
+        if(!pointer){
+          let cleaned=true
+          for(const target of [...new Set([backend,actualBackend])] as StorageBackend[]){
+            try{await deleteCiphertext(target,path)}catch{cleaned=false}
+          }
+          if(cleaned)await db.journal.delete(journalKey).catch(()=>{})
+        }
+      }
+      throw e
+    }
+  }
+  /** Removes only ciphertext no longer named by an active photo pointer. */
+  private async cleanReplacedRenditions(photoId:string):Promise<void>{
+    const current=await this.current(photoId)
+    const objects=await db.assets.where('[accountId+photoId]')
+      .equals([this.scope.accountId,photoId]).toArray()
+    for(const a of objects){
+      this.check()
+      if(!['master','edit','thumbnail'].includes(a.kind)||
+        a.assetId===current.assetId||a.assetId===current.sourceAssetId||
+        a.assetId===current.thumbnailAssetId)continue
+      // Do not delete until another master/edit has been stored and CAS committed.
+      await deleteCiphertext(a.backend,a.storageKey)
+      await db.assets.delete(a.key)
+      if(a.kind==='thumbnail')await db.thumbnailCache.delete(a.key)
+    }
+  }
+  async editDelivery(operationId:string):Promise<{photoId:string;operationId:string;
+    expectedRevision:number;mode:2|3;asset:SyncSnapshot['assets'][number]}>{
+    this.check();identifier(operationId)
+    const task=await db.outbox.get(this.scope.accountId+'/'+operationId)
+    invalid(!!task&&task.intent==='edit'&&!!task.editAssetId&&
+      (task.editMode===2||task.editMode===3)&&Number.isSafeInteger(task.expectedRevision),
+      'editor.outbox_missing')
+    const photo=await this.current(task.photoId)
+    invalid(photo.expiresAt===task.expiresAt&&photo.assetId===task.editAssetId&&
+      photo.editRevision===task.expectedRevision!+1,'editor.edit_conflict')
+    const record=await db.assets.get(assetKey(this.scope,photo.photoId,task.editAssetId!))
+    invalid(!!record&&record.kind===(task.editMode===2?'edit':'master'),
+      'editor.asset_missing')
+    const {key,backend,storageKey,...manifest}=record
+    void key
+    manifestValid({...manifest,backend,storageKey},{scope:this.scope,photoId:photo.photoId,
+      assetId:record.assetId})
+    const ciphertext=await readCiphertext(backend,storageKey)
+    invalid(ciphertext.size===record.cipherBytes,'editor.ciphertext_missing')
+    const digest=await sha(new Uint8Array(await ciphertext.arrayBuffer()))
+    this.check()
+    return{photoId:photo.photoId,operationId,expectedRevision:task.expectedRevision!,
+      mode:task.editMode!,asset:{assetId:record.assetId,kind:record.kind,revision:record.revision,
+        bytes:record.cipherBytes,sha256:digest,manifest,ciphertext}}
+  }
+  async acknowledgeEdit(operationId:string,assetId:string,revision:number):Promise<void>{
+    const edit=await this.editDelivery(operationId)
+    invalid(edit.asset.assetId===assetId && edit.expectedRevision+1===revision,
+      'editor.ack_conflict')
+    await db.outbox.update(this.scope.accountId+'/'+operationId,
+      {state:'acknowledged',lastError:undefined,attempts:0,nextAttemptAt:0})
+  }
+  async markEditConflict(operationId:string):Promise<void>{
+    await this.editDelivery(operationId)
+    await db.outbox.update(this.scope.accountId+'/'+operationId,
+      {state:'conflict',lastError:'editor.server_conflict'})
+  }
   async queueReview(photoId:string,action:'review'|'respond',state:Exclude<ReviewDecision,'pending'>|null,comment:string):Promise<string>{
     this.check();await this.clockReady();identifier(photoId)
     invalid(action==='review'&&['accepted','correction','reshoot','rejected'].includes(state??'')||
@@ -542,8 +691,8 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     const all=await db.outbox.where('accountId').equals(this.scope.accountId).toArray()
     this.check()
     return all.filter(x=>x.state!=='cancelled'&&x.state!=='acknowledged'&&x.state!=='conflict'&&x.expiresAt>now)
-      .sort((a,b)=>(a.intent==='upload'?0:a.intent==='metadata'?1:2)-
-        (b.intent==='upload'?0:b.intent==='metadata'?1:2)||
+      .sort((a,b)=>(a.intent==='upload'?0:a.intent==='metadata'?1:a.intent==='edit'?2:3)-
+        (b.intent==='upload'?0:b.intent==='metadata'?1:b.intent==='edit'?2:3)||
         (a.reviewContract?.expectedRevision??0)-(b.reviewContract?.expectedRevision??0))
   }
   async retry(operationId:string):Promise<void>{
@@ -695,9 +844,11 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     if(await db.tombstones.get(photoKey(this.scope,photo.photoId)))return false
     if(await db.photos.get(photoKey(this.scope,photo.photoId)))return false
     const originals=downloaded.filter(x=>x.asset.kind==='master'||x.asset.kind==='original')
+    const edits=downloaded.filter(x=>x.asset.kind==='edit')
     const metadata=downloaded.filter(x=>x.asset.kind==='metadata'&&x.asset.assetId===photo.metadataAssetId)
     const thumbnails=downloaded.filter(x=>x.asset.kind==='thumbnail')
-    invalid(originals.length===1&&metadata.length===1&&thumbnails.length<=1,'gallery.cloud_objects_invalid')
+    invalid(originals.length===1&&edits.length<=1&&metadata.length===1&&thumbnails.length<=1,
+      'gallery.cloud_objects_invalid')
     const backend=await this.init()
     const attempt=crypto.randomUUID(),journalKey=photoKey(this.scope,photo.photoId)+'/'+attempt
     const paths=downloaded.map(x=>assetKey(this.scope,photo.photoId,x.asset.assetId)+'/'+attempt)
@@ -723,9 +874,12 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
         await writeCiphertext(backend,path,blob,this.scope)
         staged.push(m)
       }
-      const main=originals[0]!.asset
+      const main=edits[0]?.asset??originals[0]!.asset
+      invalid((photo.editRevision??0)===0 || main.assetId===photo.editAssetId,'gallery.edit_pointer_mismatch')
       const stored:PhotoRow={key:photoKey(this.scope,photo.photoId),accountId:this.scope.accountId,
         photoId:photo.photoId,assetId:main.assetId,metadataAssetId:photo.metadataAssetId,
+        editRevision:photo.editRevision??0,
+        ...(edits.length?{sourceAssetId:originals[0]!.asset.assetId}:{}),
         thumbnailAssetId:thumbnails[0]?.asset.assetId,expiresAt:photo.expiresAt,
         state:'local',revision:photo.metadataRevision,operationId:photo.photoId,
         ...(photo.nameId?{nameId:photo.nameId,namePending:false}:{namePending:true})}
@@ -753,6 +907,78 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     }
   }
 
+  /** Authenticated cloud revision from another trusted device. Refuse to
+   * overwrite a locally pending edit; never persist a decrypted staging copy. */
+  async adoptCloudEdit(photo:CloudPhoto,asset:CloudAsset,ciphertext:Blob):Promise<boolean>{
+    this.check();await this.clockReady()
+    const row=await this.current(photo.photoId)
+    const next=photo.editRevision??0,previous=row.editRevision??0
+    if(next<=previous)return false
+    invalid(next===previous+1 || next>previous,'editor.cloud_revision_invalid')
+    invalid(!!photo.editAssetId&&asset.assetId===photo.editAssetId&&
+      asset.revision===next,'editor.cloud_asset_invalid')
+    const metadata=await this.readMetadata(photo.photoId) as {mode?:number}
+    const kind=metadata.mode===2?'edit':metadata.mode===3?'master':null
+    invalid(kind!==null&&asset.kind===kind&&photo.expiresAt===row.expiresAt,
+      'editor.cloud_mode_mismatch')
+    const outstanding=await db.outbox.where('accountId').equals(this.scope.accountId)
+      .filter(task=>task.photoId===photo.photoId&&task.state!=='acknowledged'&&
+        task.state!=='cancelled').first()
+    if(outstanding)return false
+    invalid(asset.manifest.accountId===this.scope.accountId&&
+      asset.manifest.photoId===photo.photoId&&
+      asset.manifest.assetId===asset.assetId&&asset.manifest.kind===asset.kind&&
+      asset.manifest.expiresAt===row.expiresAt,'editor.cloud_scope')
+    invalid(ciphertext.size===asset.bytes&&
+      await sha(new Uint8Array(await ciphertext.arrayBuffer()))===asset.sha256,
+      'editor.cloud_digest')
+    const backend=await this.init(),attempt=crypto.randomUUID()
+    const path=assetKey(this.scope,photo.photoId,asset.assetId)+'/'+attempt
+    const journalKey=photoKey(this.scope,photo.photoId)+'/'+attempt
+    const key=await this.grant.open(asset.assetId,String(row.expiresAt),asset.manifest.wrappedDEK)
+    const manifest:CipherManifest={...asset.manifest,backend,storageKey:path}
+    manifestValid(manifest,{scope:this.scope,photoId:photo.photoId,assetId:asset.assetId})
+    await decryptAsset(manifest,ciphertext,key,this.scope,()=>{this.check();this.time.now()})
+    await db.journal.add({key:journalKey,accountId:this.scope.accountId,deviceId:this.scope.deviceId,
+      photoId:photo.photoId,operationId:photo.photoId,attemptId:attempt,
+      assetKeys:[backend+'|'+path],state:'staging',createdAt:this.time.now()})
+    let committed=false
+    try{
+      await writeCiphertext(backend,path,ciphertext,this.scope)
+      await decryptAsset(manifest,await readCiphertext(backend,path),key,
+        this.scope,()=>{this.check();this.time.now()})
+      await db.transaction('rw',[db.photos,db.assets,db.outbox,db.journal,db.tombstones],async()=>{
+        this.check()
+        const now=await db.photos.get(photoKey(this.scope,photo.photoId))
+        invalid(!!now&&now.assetId===row.assetId&&
+          (now.editRevision??0)===previous&&now.expiresAt===photo.expiresAt,
+          'editor.concurrent_cloud_edit')
+        invalid(!await db.tombstones.get(now.key)&&now.expiresAt>this.time.now(),
+          'editor.cloud_expired')
+        const queued=await db.outbox.where('accountId').equals(this.scope.accountId)
+          .filter(x=>x.photoId===photo.photoId&&!['acknowledged','cancelled'].includes(x.state)).first()
+        invalid(!queued,'editor.local_changes_pending')
+        await db.assets.add({key:assetKey(this.scope,photo.photoId,asset.assetId),...manifest})
+        await db.photos.update(now.key,{assetId:asset.assetId,editRevision:next,
+          ...(kind==='edit'?{sourceAssetId:now.sourceAssetId??now.assetId}:
+            {sourceAssetId:undefined,thumbnailAssetId:undefined})})
+        await db.journal.update(journalKey,{state:'cleanup'})
+      })
+      committed=true
+      await this.cleanReplacedRenditions(photo.photoId)
+      await db.journal.delete(journalKey)
+      return true
+    }catch(e){
+      if(!committed){
+        const live=await db.assets.get(assetKey(this.scope,photo.photoId,asset.assetId))
+        if(!live){
+          try{await deleteCiphertext(backend,path);await db.journal.delete(journalKey)}
+          catch{/* journal cleanup at next restart */}
+        }
+      }
+      throw e
+    }
+  }
   /** A same-origin authenticated 410 is authoritative even before local wall-clock expiry. */
   async revokeFromServer(photoId:string):Promise<void>{
     this.check();identifier(photoId)
@@ -834,6 +1060,13 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
       const expired=await db.photos.where('[accountId+expiresAt]')
         .between([this.scope.accountId,0],[this.scope.accountId,this.time.now()],true,true).toArray()
       for(const row of expired)await this.confirmExpiry(row.photoId)
+      // Restart after mode3 pointer CAS: scrub old master blobs even if the
+      // browser crashed between durable commit and delete.
+      const live=await db.photos.where('accountId').equals(this.scope.accountId).toArray()
+      for(const row of live){
+        if(row.state==='local'&&row.expiresAt>this.time.now()&&(row.editRevision??0)>0)
+          await this.cleanReplacedRenditions(row.photoId)
+      }
     }
   }
 }
