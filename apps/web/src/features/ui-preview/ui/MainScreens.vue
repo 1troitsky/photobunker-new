@@ -12,17 +12,11 @@ import { assignmentFixtures, photoFixtures } from './fixtures'
 
 const route = useRoute()
 const search = ref('')
-const selectedFilter = ref<'all'|'active'|'personal'>('all')
 const view = ref<'grid'|'list'>('grid')
 const selectedFolder = ref('ALFA')
 const editorTool = ref<'brush'|'text'|'shape'>('brush')
 
-watch(() => route.path, () => { search.value = ''; selectedFilter.value = 'all' })
-const assignments = computed(() => assignmentFixtures.filter(a =>
-  (selectedFilter.value !== 'active' || a.status === 'active') &&
-  (a.title[language.value].toLocaleLowerCase().includes(search.value.toLocaleLowerCase()) ||
-  a.id.toLowerCase().includes(search.value.toLowerCase()))
-))
+watch(() => route.path, () => { search.value = '' })
 const browserPhotos = computed(() => photoFixtures.filter(p => p.assignment === selectedFolder.value &&
   (p.title[language.value].toLowerCase().includes(search.value.toLowerCase()) ||
     p.id.toLowerCase().includes(search.value.toLowerCase()))))
@@ -79,82 +73,6 @@ const title = computed(() => {
       </template>
       <template v-else-if="route.path==='/camera'">
         <CameraScreen />
-      </template>
-
-      <!-- ASSIGNMENTS: local search/filter, cards never imply actual creation -->
-      <template v-else-if="route.path==='/assignments'">
-        <div class="section-heading">
-          <div><span class="eyebrow">{{ text.demo }}</span><h2>{{ text.assignments }}</h2><p>{{ text.tasksHint }}</p></div>
-          <button
-            class="subtle-button"
-            type="button"
-            disabled
-            :title="text.demoAction"
-          >
-            <AppIcon name="plus" />{{ text.new }}
-          </button>
-        </div>
-        <div class="toolbar">
-          <label class="search-field"><AppIcon name="search" /><span class="sr-only">{{ text.searchAssignments }}</span><input
-            v-model="search"
-            type="search"
-            :placeholder="text.searchAssignments"
-            :aria-label="text.searchAssignments"
-          ></label>
-          <div
-            class="pill-group"
-            :aria-label="text.filter"
-          >
-            <button
-              :aria-pressed="selectedFilter==='all'"
-              :class="{selected:selectedFilter==='all'}"
-              @click="selectedFilter='all'"
-            >
-              {{ text.all }}
-            </button>
-            <button
-              :aria-pressed="selectedFilter==='active'"
-              :class="{selected:selectedFilter==='active'}"
-              @click="selectedFilter='active'"
-            >
-              {{ text.active }}
-            </button>
-          </div>
-        </div>
-        <div
-          v-if="assignments.length"
-          class="assignments-list"
-        >
-          <article
-            v-for="assignment in assignments"
-            :key="assignment.id"
-            class="assignment-card"
-          >
-            <div class="assignment-symbol">
-              <AppIcon name="assignments" />
-            </div>
-            <div class="assignment-copy">
-              <div class="assignment-title-row">
-                <h3>{{ assignment.title[language] }}</h3><span class="state-pill">{{ assignment.status==='active'?text.active:text.new }}</span>
-              </div>
-              <p>{{ assignment.description[language] }}</p>
-              <div class="assignment-footer">
-                <span>{{ assignment.id }}</span><span>{{ assignment.count }} {{ text.photos.toLowerCase() }}</span>
-              </div>
-            </div>
-            <RouterLink
-              class="icon-button assignment-go"
-              to="/browser"
-              :aria-label="text.openBrowser"
-            ><AppIcon name="chevron" /></RouterLink>
-          </article>
-        </div>
-        <div
-          v-else
-          class="empty-state"
-        >
-          <AppIcon name="assignments" /><h2>{{ text.empty }}</h2><p>{{ text.emptyHint }}</p>
-        </div>
       </template>
 
       <!-- PHOTO BROWSER: Finder-ish selection and grid/list with local fixtures -->
@@ -331,6 +249,10 @@ const title = computed(() => {
             </div>
           </div>
         </section>
+        <nav class="profile-quicklinks" aria-label="Teams and contacts">
+          <RouterLink to="/teams" class="profile-action">{{ language==='ru'?'Команды':'Teams' }}</RouterLink>
+          <RouterLink to="/contacts" class="profile-action">{{ language==='ru'?'Контакты':'Contacts' }}</RouterLink>
+        </nav>
         <IdentityPanel />
         <StorageDiagnostics />
       </template>

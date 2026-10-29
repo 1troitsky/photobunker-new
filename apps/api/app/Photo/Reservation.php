@@ -27,10 +27,17 @@ final class Reservation
                 $existing=$row??$byOperation;
                 abort_unless($existing->id===$id&&$existing->account_id===$account->id,409);
                 abort_if($existing->expires_at<=PhotoSync::nowMs()||$existing->state==='deleting',410);
+                \App\Assignments\CaptureBinding::active($existing,$account->id);
                 abort_unless(hash_equals($existing->contract_hash,$hash),409);
                 return $existing->state==='active'
                   ?['state'=>'active','receipt'=>json_decode($existing->receipt,true)]
                   :['state'=>'pending','photoId'=>$id,'expiresAt'=>(int)$existing->expires_at];
+            }
+            if($contract['version']===2){
+                \App\Assignments\CaptureBinding::validate($contract['capture'],$account->id,$contract['expiresAt']);
+                $kind=$contract['capture']['mode']===2?'original':'master';
+                abort_unless(count(array_filter($contract['assets'],
+                    fn($asset)=>$asset['kind']===$kind))===1,422);
             }
             $need=array_sum(array_column($contract['assets'],'bytes'));
             $used=DB::table('photo_objects as o')->join('photo_records as p','o.photo_id','=','p.id')
@@ -45,6 +52,8 @@ final class Reservation
                 'metadata_asset_id'=>collect($contract['assets'])->firstWhere('kind','metadata')['assetId'],
                 'created_at'=>now(),'updated_at'=>now(),
             ]);
+            if($contract['version']===2)
+                \App\Assignments\CaptureBinding::record($id,$account->id,$contract['capture'],$contract['expiresAt']);
             foreach($contract['assets'] as $a)DB::table('photo_objects')->insert([
                 'id'=>$a['assetId'],'photo_id'=>$id,'kind'=>$a['kind'],'revision'=>1,
                 'bytes'=>$a['bytes'],'sha256'=>$a['sha256'],

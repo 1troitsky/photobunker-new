@@ -14,6 +14,11 @@ createApp(App).use(createPinia()).use(router).mount('#app')
 if (!assignmentReleaseEnabled()) {
   registerServiceWorker()
   void import('./features/identity').then(({ backgroundSessionCheck }) => backgroundSessionCheck()).catch(() => {})
-  /* PB2 Identity and photo sync are disabled whenever legacy Assignment Release is selected. */
+  
+  /* Non-blocking foreground encrypted delivery; camera never awaits network. */
   void import('./features/photo-sync').then(({startPhotoSync})=>startPhotoSync()).catch(()=>{})
+  void import('./features/assignments').then(({startAssignmentSync})=>startAssignmentSync()).catch(()=>{})
+  
+  /* R2-09: independent foreground team/contact outbox; no navigation/network gate. */
+  void import('./features/collaboration').then(({startCollaborationSync})=>startCollaborationSync()).catch(()=>{})
 }
