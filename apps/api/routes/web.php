@@ -31,6 +31,13 @@ Route::prefix('identity/v2')->middleware('throttle:40,1,identity')->group(functi
 
 // Same-origin authenticated account/device sessions, CSRF and no public S3 URLs.
 Route::prefix('photos/v1')->middleware('throttle:100,1,photos')->group(function () {
+    // Recipient thumbnail paths are separate from owner-only PhotoSync.
+    Route::put('/shared/grants/{grantId}/photos/{photoId}/assets/{assetId}',
+        [\App\Http\Controllers\PhotoRecipientController::class,'publish']);
+    Route::get('/shared/grants/{grantId}/photos/{photoId}/assets/{assetId}',
+        [\App\Http\Controllers\PhotoRecipientController::class,'manifest']);
+    Route::get('/shared/grants/{grantId}/photos/{photoId}/assets/{assetId}/ciphertext',
+        [\App\Http\Controllers\PhotoRecipientController::class,'ciphertext']);
     Route::get('/list', [GalleryController::class,'index']);
     Route::post('/names/reserve', [PhotoNamesController::class,'reserve']);
     Route::post('/names/claim', [PhotoNamesController::class,'claim']);

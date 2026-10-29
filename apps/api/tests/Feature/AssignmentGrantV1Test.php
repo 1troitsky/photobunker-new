@@ -164,4 +164,107 @@ final class AssignmentGrantV1Test extends TestCase {
         $this->getJson('/photos/v1/'.$photo.'/manifests')->assertNotFound();
         $this->getJson('/photos/v1/'.$photo.'/objects/'.Str::uuid())->assertNotFound();
     }
+
+    /** Creates a thumbnail-only frozen capture and server manifest for the same owner. */
+    private function thumbnailFixture():array{
+        $photo=(string)Str::uuid();$asset=(string)Str::uuid();
+        $expire=now()->getTimestampMs()+3600000;$digest=str_repeat('e',64);
+        DB::table('photo_records')->insert([
+            'id'=>$photo,'account_id'=>$this->accounts['owner'],
+            'device_id'=>$this->devices['owner'],'operation_id'=>(string)Str::uuid(),
+            'state'=>'active','expires_at'=>$expire,'contract_hash'=>str_repeat('f',64),
+            'contract_json'=>'{}','signature'=>P::encode(random_bytes(64)),
+            'receipt'=>'{}','created_at'=>now(),'updated_at'=>now(),
+        ]);
+        DB::table('assignment_photo_bindings_v1')->insert([
+            'photo_id'=>$photo,'assignment_id'=>$this->assignment,
+            'author_account_id'=>$this->accounts['owner'],'assignment_revision'=>2,
+            'policy_revision'=>1,'mode'=>3,'retention_days'=>1,
+            'captured_at'=>$expire-86400000,'expires_at'=>$expire,
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        DB::table('photo_objects')->insert([
+            'id'=>$asset,'photo_id'=>$photo,'kind'=>'thumbnail','revision'=>1,
+            'bytes'=>48,'sha256'=>str_repeat('a',64),'manifest_json'=>json_encode([
+                'version'=>1,'accountId'=>$this->accounts['owner'],'photoId'=>$photo,
+                'assetId'=>$asset,'kind'=>'thumbnail','revision'=>1,'expiresAt'=>$expire,
+                'cipherDigest'=>$digest,
+            ],JSON_UNESCAPED_SLASHES),'object_key'=>'cipher/v1/'.$this->accounts['owner'].'/'.$photo.'/'.$asset,
+            'state'=>'active','created_at'=>now(),'updated_at'=>now(),
+        ]);
+        return [$photo,$asset,$expire,$digest];
+    }
+    private function shareStatement(string $grant,string $photo,string $asset,int $expiry,
+        string $digest,int $generation=2):array{
+        $owner=$this->accounts['owner'];$recipient=$this->accounts['guest'];
+        $context=['grantId'=>$grant,'generation'=>$generation,'assignmentId'=>$this->assignment,
+            'ownerAccountId'=>$owner,'recipientAccountId'=>$recipient,'photoId'=>$photo,
+            'assetId'=>$asset,'kind'=>'thumbnail','revision'=>1,'expiresAt'=>$expiry,
+            'cipherDigest'=>$digest];
+        $c=['v'=>1,'operationId'=>(string)Str::uuid(),'grantId'=>$grant,'generation'=>$generation,
+            'assignmentId'=>$this->assignment,'ownerAccountId'=>$owner,'recipientAccountId'=>$recipient,
+            'photoId'=>$photo,'assetId'=>$asset,'kind'=>'thumbnail','assetRevision'=>1,
+            'expiresAt'=>$expiry,'cipherDigest'=>$digest,
+            'envelope'=>['v'=>1,'context'=>$context,'iv'=>P::encode(random_bytes(12)),
+                'ciphertext'=>P::encode(random_bytes(48))]];
+        $raw=json_encode($c,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        return ['contract'=>$raw,
+            'signature'=>$this->sign("photobunker.photo-recipient.v1\n".$raw)];
+    }
+    public function test_recipient_thumbnail_read_requires_signed_current_grant_and_feature_gate():void{
+        $this->acceptedContact();$grant=(string)Str::uuid();
+        $this->send($this->action('invite',$grant))->assertOk();
+        $this->be('guest');
+        $this->send($this->action('accept',$grant,1))->assertOk();
+        $this->be('owner');[$photo,$asset,$expiry,$digest]=$this->thumbnailFixture();
+        $route="/photos/v1/shared/grants/$grant/photos/$photo/assets/$asset";
+        $publish=$this->shareStatement($grant,$photo,$asset,$expiry,$digest);
+        $this->putJson($route,$publish)->assertOk()->assertJsonPath('accepted',true);
+        $this->putJson($route,$publish)->assertOk()->assertJsonPath('replayed',true);
+        $this->assertSame(1,DB::table('photo_recipient_keys_v1')->count());
+        $this->be('guest');
+        // Feature remains disabled unless security verification explicitly enables it.
+        $this->getJson($route)->assertNotFound();
+        config()->set('photo_sync.recipient_thumbnail_reads_enabled',true);
+        $this->getJson($route)->assertOk()->assertJsonPath('assetId',$asset)
+            ->assertJsonPath('manifest.cipherDigest',$digest);
+        // The original owner's PhotoSync API never grants recipient access.
+        $this->getJson("/photos/v1/$photo/manifests")->assertNotFound();
+        $this->be('owner');
+        $this->send($this->action('revoke',$grant,2))->assertOk();
+        $this->be('guest');
+        $this->getJson($route)->assertNotFound();
+    }
+    public function test_thumbnail_share_rejects_wrong_digest_wrong_actor_block_and_original_kind():void{
+        $this->acceptedContact();$grant=(string)Str::uuid();
+        $this->send($this->action('invite',$grant))->assertOk();
+        $this->be('guest');$this->send($this->action('accept',$grant,1))->assertOk();
+        $this->be('owner');[$photo,$asset,$expiry,$digest]=$this->thumbnailFixture();
+        $route="/photos/v1/shared/grants/$grant/photos/$photo/assets/$asset";
+        $bad=$this->shareStatement($grant,$photo,$asset,$expiry,str_repeat('b',64));
+        $this->putJson($route,$bad)->assertNotFound();
+        $statement=$this->shareStatement($grant,$photo,$asset,$expiry,$digest);
+        $other=$statement;$other['signature']=P::encode(random_bytes(64));
+        $this->putJson($route,$other)->assertUnauthorized();
+        $payload=json_decode($statement['contract'],true);$payload['kind']='original';
+        $altered=$statement;
+        $altered['contract']=json_encode($payload,JSON_UNESCAPED_SLASHES);
+        $this->putJson($route,$altered)->assertStatus(422);
+        DB::table('contact_blocks_v1')->insert([
+            'account_id'=>$this->accounts['owner'],'blocked_account_id'=>$this->accounts['guest'],
+            'created_at'=>now(),
+        ]);
+        $this->putJson($route,$statement)->assertNotFound();
+        DB::table('contact_blocks_v1')->delete();
+        $this->be('guest');
+        $this->putJson($route,$statement)->assertUnauthorized();
+        $this->be('owner');
+        $this->putJson($route,$statement)->assertOk();
+        config()->set('photo_sync.recipient_thumbnail_reads_enabled',true);
+        $this->be('outsider');$this->getJson($route)->assertNotFound();
+        $this->be('guest');$this->getJson($route)->assertOk();
+        DB::table('photo_records')->where('id',$photo)->update(['expires_at'=>now()->getTimestampMs()-1]);
+        $this->getJson($route)->assertNotFound();
+    }
+
 }

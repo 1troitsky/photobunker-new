@@ -11,3 +11,4 @@ export type {
 export { default as StorageDiagnostics } from './ui/StorageDiagnostics.vue'
 
 export {takeReservedName,reserveNameRange,claimName} from './infrastructure/names'
+export {decryptRecipientThumbnail} from './application/recipient-thumbnail'

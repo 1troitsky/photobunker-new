@@ -1,4 +1,5 @@
-export {inviteToAssignment,acceptAssignmentGrant,changeAssignmentGrant,fetchAssignmentGrants,grantOutboxStatus} from './application/grants'
+export {inviteToAssignment,acceptAssignmentGrant,changeAssignmentGrant,fetchAssignmentGrants,grantOutboxStatus,publishRecipientThumbnail} from './application/grants'
 export {startGrantSync,flushGrantOperations} from './application/sync'
 export type {ServerGrant,GrantRole} from './domain/grants'
 export type {GrantOutboxState} from './application/grants'
+export {readRecipientThumbnail} from './application/recipient-thumbnail'

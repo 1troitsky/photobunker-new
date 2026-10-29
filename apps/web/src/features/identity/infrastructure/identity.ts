@@ -2,7 +2,7 @@ import { computed, shallowRef } from 'vue'
 import { call, challenge, currentGeneration, envelopeHash, invalidateRequests, resetCsrf } from '../infrastructure/api'
 import { b64, createPB2, digest, exportECDHPublic, freshPackage, hex, importSigner, newPairingKey,
   openDevice, openPairing, openRecovery, parsePB2, random, sealDevice, sealPairing,
-  sealRecovery, sign, uuid, exchangeKey, wrapAssetDEK, unwrapAssetDEK } from '../infrastructure/crypto'
+  sealRecovery, sign, uuid, exchangeKey, wrapAssetDEK, unwrapAssetDEK, withTransientOwnerDEK, importSpki, verify } from '../infrastructure/crypto'
 import type { PackageV2 } from '../infrastructure/crypto'
 import { getPending, listDevices, newLocalDevice, openIdentityDB, probeCapabilities,
   putPending, reservePending, dropPending, saveDevice, getRecoveryPending, saveRecoveryPending,
@@ -366,6 +366,41 @@ export function acquireStorageKeys() {
   return {scope,check,create,open}
 }
 /** An authenticated HTTPS server clock sample, never a caller-supplied wall time. */
+/**
+ * Internal use case capability: only the current owner can create a
+ * recipient-specific encrypted envelope. The raw DEK is never returned to UI.
+ */
+/** Verify the author's detached device signature over the exact received statement.
+ * The server supplies the enrolled author device SPKI, not the recipient.
+ */
+export async function verifyOwnerThumbnailStatement(statement:string,signature:string,
+  enrolledSignerSpki:string):Promise<boolean>{
+  if(statement.length<200||statement.length>8000)return false
+  try{
+    return await verify(await importSpki(enrolledSignerSpki),
+      'photobunker.photo-recipient.v1\n'+statement,signature)
+  }catch{return false}
+}
+export async function withCurrentOwnerAssetDEK<T>(assetId:string,expiry:number,
+  wrapped:{iv:string;ciphertext:string},
+  operation:(bytes:Uint8Array<ArrayBuffer>)=>Promise<T>):Promise<T>{
+  const active=state.value,epoch=currentGeneration()
+  if(!active)throw Error('identity.account_locked')
+  if(!Number.isSafeInteger(expiry)||expiry<=Date.now())throw Error('identity.asset_expired')
+  const check=()=>{assertEpoch(epoch);if(state.value!==active)
+    throw Error('identity.account_changed')}
+  check()
+  const result=await withTransientOwnerDEK(active.pkg,assetId,String(expiry),
+    wrapped,async raw=>{
+      check()
+      const envelope=await operation(raw)
+      check()
+      return envelope
+    })
+  check()
+  return result
+}
+
 export async function fetchAuthenticatedServerTime():Promise<number>{
   const active=state.value,epoch=currentGeneration()
   if(!active || active.offline)throw new Error('time.not_authenticated')

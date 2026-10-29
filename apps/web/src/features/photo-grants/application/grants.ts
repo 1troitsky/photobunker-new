@@ -1,8 +1,10 @@
-import {identity,assignmentRequest} from '../../identity'
+import {identity,assignmentRequest,photoRequest,signMetadataContract,withCurrentOwnerAssetDEK} from '../../identity'
 import {openAssignments} from '../../assignments'
+import {openLocalPhotoVault,type CloudAsset} from '../../local-storage'
 import {grantDb,scopedId,type OperationRow,type SecretRow} from '../infrastructure/database'
 import {sealLocalGrantSecret,openLocalGrantSecret} from '../infrastructure/secret'
-import {createPhotoGrantCode,photoGrantCodeHash,sealGrantSecret,openGrantSecret,
+import {createPhotoGrantCode,photoGrantCodeHash,sealGrantSecret,openGrantSecret,sealRecipientKey,
+  type KeyContext,
   type GrantInvitationContext} from '../infrastructure/key-envelope'
 import {acquireStorageKeys} from '../../identity'
 import {command,validateServerGrant,type GrantCommand,type GrantRole,type ServerGrant,type GrantOperationKind} from '../domain/grants'
@@ -156,6 +158,72 @@ export async function grantOperationResult(op:OperationRow,ok:boolean,reason='')
   })
   same(op.accountId,op.deviceId)
 }
+
+/**
+ * Owner explicitly shares only an EXISTING, current encrypted thumbnail.
+ * This never changes owner-only PhotoSync endpoints or exposes raw DEKs to Vue.
+ * Upload is online-only and idempotent if the same signed operation is retried.
+ */
+export async function publishRecipientThumbnail(grantId:string,photoId:string):
+  Promise<{assetId:string;operationId:string}>{
+  const active=online()
+  const row=(await fetchAssignmentGrants()).find(g=>g.grantId===grantId)
+  same(active.accountId,active.deviceId)
+  if(!row||row.ownerId!==active.accountId||row.state!=='accepted')
+    throw Error('grant.not_accepted')
+  const header=await openLocalPhotoVault().readHeader(photoId)
+  same(active.accountId,active.deviceId)
+  if(!header||header.accountId!==active.accountId||
+    header.capture?.assignmentId!==row.assignmentId||header.expiresAt<=Date.now())
+    throw Error('grant.photo_not_owned')
+  const response=await photoRequest('/'+photoId+'/manifests')
+  same(active.accountId,active.deviceId)
+  if(!response.ok)throw Error('grant.photo_http_'+response.status)
+  const data=await response.json() as {photoId:string;expiresAt:number;assets:CloudAsset[]}
+  same(active.accountId,active.deviceId)
+  if(data.photoId!==photoId||data.expiresAt!==header.expiresAt||!Array.isArray(data.assets))
+    throw Error('grant.invalid_manifest')
+  const thumbnail=data.assets.find(asset=>asset.kind==='thumbnail'&&
+    asset.manifest.accountId===active.accountId&&asset.manifest.photoId===photoId&&
+    asset.manifest.kind==='thumbnail'&&asset.manifest.expiresAt===header.expiresAt)
+  if(!thumbnail||!/^[a-f0-9]{64}$/.test(thumbnail.manifest.cipherDigest)||
+    !Number.isSafeInteger(thumbnail.revision)||thumbnail.revision<1)
+    throw Error('grant.thumbnail_missing')
+  const secret=await getLocalGrantSecret(row)
+  same(active.accountId,active.deviceId)
+  const ctx:KeyContext={
+    grantId:row.grantId,generation:row.generation,assignmentId:row.assignmentId,
+    ownerAccountId:row.ownerId,recipientAccountId:row.recipientId,photoId,
+    assetId:thumbnail.assetId,kind:'thumbnail',revision:thumbnail.revision,
+    expiresAt:header.expiresAt,cipherDigest:thumbnail.manifest.cipherDigest,
+  }
+  const envelope=await withCurrentOwnerAssetDEK(thumbnail.assetId,
+    header.expiresAt,thumbnail.manifest.wrappedDEK,async raw=>{
+      same(active.accountId,active.deviceId)
+      return sealRecipientKey(secret,ctx,raw)
+    })
+  same(active.accountId,active.deviceId)
+  const statement={
+    v:1,operationId:crypto.randomUUID(),grantId:row.grantId,
+    generation:row.generation,assignmentId:row.assignmentId,
+    ownerAccountId:row.ownerId,recipientAccountId:row.recipientId,
+    photoId,assetId:thumbnail.assetId,kind:'thumbnail',assetRevision:thumbnail.revision,
+    expiresAt:header.expiresAt,cipherDigest:thumbnail.manifest.cipherDigest,
+    envelope,
+  }
+  const contract=JSON.stringify(statement)
+  const signature=await signMetadataContract('photobunker.photo-recipient.v1\n'+contract)
+  same(active.accountId,active.deviceId)
+  const path='/shared/grants/'+grantId+'/photos/'+photoId+'/assets/'+thumbnail.assetId
+  const uploaded=await photoRequest(path,'PUT',JSON.stringify({contract,signature}))
+  same(active.accountId,active.deviceId)
+  if(!uploaded.ok)throw Error('grant.thumbnail_http_'+uploaded.status)
+  const receipt=await uploaded.json() as {accepted:boolean;operationId:string}
+  if(!receipt.accepted||receipt.operationId!==statement.operationId)
+    throw Error('grant.invalid_receipt')
+  return {assetId:thumbnail.assetId,operationId:statement.operationId}
+}
+
 export async function getLocalGrantSecret(row:ServerGrant):Promise<string>{
   const active=current()
   if(row.ownerId!==active.accountId&&row.recipientId!==active.accountId)

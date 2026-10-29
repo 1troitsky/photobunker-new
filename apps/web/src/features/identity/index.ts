@@ -18,3 +18,6 @@ export {signMetadataContract} from './infrastructure/identity'
 export {assignmentRequest} from './infrastructure/api'
 
 export {collaborationRequest} from './infrastructure/api'
+
+export {withCurrentOwnerAssetDEK} from './infrastructure/identity'
+export {verifyOwnerThumbnailStatement} from './infrastructure/identity'
