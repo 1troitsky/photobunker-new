@@ -1,6 +1,6 @@
 # 07. Quality gates, testing, acceptance и выпуск
 
-**Принцип:** качество не равно количеству тестов, PR или зелёному dev. Основа — production-навигация, безопасные данные и сквозные сценарии, воспроизводимые независимой проверкой. [История провала](https://github.com/1troitsky/photobunker/blob/main/docs/AUDIT-20261028.md).
+**Принцип:** качество не равно количеству тестов, PR или зелёному dev. С 2026-10-29 Phase I = самостоятельная реализация stacked Draft PR, а Codex выполняет общую Phase II verification/integration после окончания всех Issues. [14 Process](14-INDEPENDENT-DEVELOPMENT-PIPELINE.md). Основа — production-навигация, безопасные данные и сквозные сценарии, воспроизводимые независимой проверкой. [История провала](https://github.com/1troitsky/photobunker/blob/main/docs/AUDIT-20261028.md).
 
 ## 1. Автоматические гейты — обязательны для каждого relevant PR
 
@@ -15,12 +15,13 @@
 
 ## 2. Definition of Done: separate proof levels
 
-- `Backlog`: defined, may have open owner decisions.
-- `Ready`: complete acceptance, decisions closed, dependencies integrated.
-- `Review`: single Draft PR handed over; evidence may still be missing.
-- `Integrated`: ChatGPT реализовал основную Issue, Codex установил/подготовил зависимости, независимо проверил diff и production build/target tests/E2E, **при необходимости сам исправил и дополнил код в том же PR**; merge после разрешения владельца. Известных P0 дефектов нет.
-- `Accepted`: owner performed scenario **on real deployed phone/desktop**, result recorded; includes honest caveats.
-- `Released`: candidate passes **release gate** and rollback/backup drill, versioned and deployed. Accepted for individual Issue ≠ entire product release.
+- `Backlog / Ready` — существующие Project states, **не самостоятельный запрет** на Phase I, если scope и upstream код доступны. Не переписывать статус Project без реальной операции.
+- `Implementation Ready` (факт, не автоматический Project status): требования определены, owner decisions приняты, зависимости доступны в main **или stacked ветках**; нет опасного неподтверждённого предположения.
+- `Implemented (Draft)`: законченная scoped реализация и один Draft PR, полный own diff и матрица фактических проверок/NOT RUN. **Не** значит Verified/Integrated/Accepted.
+- `Verified`: Codex реально проверил финальную версию PR на полном окружении (backend/frontend, security, migrations, production build, E2E/device где требуется), предоставил результаты/исправления.
+- `Integrated`: проверенный PR действительно слит в `main` в порядке зависимостей, и downstream diff/CI актуализированы.
+- `Accepted`: владелец проверил сценарий **на реальном deployed phone/desktop** и принял UX; результат записан.
+- `Released`: кандидат прошёл **полный** release/security/backup/recovery/rollback gate, versioned и deployed. Accepted по одному Issue ≠ весь продукт релиз.
 
 **NOT RUN** is an explicit state. Mock/snapshot tests do not prove camera hardware, OS gallery behavior, secure erase, E2EE recovery, or device-specific PWA.
 
@@ -58,4 +59,4 @@ No-Go means do not label `production-ready`. Feature can be explicitly excluded 
 - **NOT RUN**, known issues and rollback;
 - conclusion: READY FOR REVIEW, INTEGRATED or ACCEPTED **with actor and evidence**.
 
-Codex имеет право самостоятельно дорабатывать и тестировать код в исходном PR, выдавать ChatGPT следующую Ready Issue и подтверждать технические gates. **Основные Issues исполняет ChatGPT из-за лимитов; Codex занимается setup, tests, review и необходимыми исправлениями.** Владелец принимает реальное device experience.
+ChatGPT самостоятельно выполняет следующие согласованные Roadmap Issues, не ожидая review/merge или выдачи Ready от Codex; на каждую Issue — один stacked Draft PR с честным NOT RUN. После завершения Phase I Codex дорабатывает и тестирует соответствующие PR, интегрирует в main по зависимости и проводит полную общую регрессию. **UI/UX redress разрешён до Accepted:** visual redesign не должен требовать изменений domain/application/infrastructure, если функциональные требования не меняются. Владелец принимает реальное device experience.
