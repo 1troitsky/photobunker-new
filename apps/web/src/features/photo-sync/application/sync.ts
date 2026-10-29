@@ -134,6 +134,52 @@ async function syncMetadata(row:OutboxEntry,accountId:string,deviceId:string):Pr
   }
 }
 
+/** Edit operations use the existing photo queue and a separate signed CAS scope. */
+async function syncEdit(row:OutboxEntry,accountId:string,deviceId:string):Promise<void>{
+  const vault=openLocalPhotoVault()
+  bound(accountId,deviceId)
+  try{
+    const edit=await vault.editDelivery(row.operationId)
+    const {ciphertext,manifest,...asset}=edit.asset
+    const contract={v:1,photoId:edit.photoId,operationId:edit.operationId,
+      expectedRevision:edit.expectedRevision,mode:edit.mode,asset:{...asset,manifest}}
+    const statement=JSON.stringify(contract)
+    const signature=await signMetadataContract('photobunker.photo-edit.v1\n'+statement)
+    bound(accountId,deviceId)
+    const body=JSON.stringify({contract:statement,signature})
+    const reserved=await photoRequest('/'+row.photoId+'/edits/reserve','POST',body)
+    if(reserved.status===409){await vault.markEditConflict(row.operationId);return}
+    if(!reserved.ok)throw httpError(reserved)
+    const state=await reserved.json() as {state:'active'|'pending';assetId:string;revision:number}
+    if(state.state==='pending'){
+      bound(accountId,deviceId)
+      const uploaded=await photoRequest('/'+row.photoId+'/edits/'+asset.assetId,'PUT',ciphertext)
+      if(!uploaded.ok)throw httpError(uploaded)
+      bound(accountId,deviceId)
+      const reply=await photoRequest('/'+row.photoId+'/edits/finalize','POST',body)
+      if(reply.status===409){await vault.markEditConflict(row.operationId);return}
+      if(!reply.ok)throw httpError(reply)
+      const receipt=await reply.json() as {revision:number;assetId:string}
+      if(receipt.assetId!==asset.assetId||receipt.revision!==edit.expectedRevision+1)
+        throw Error('editor.server_receipt_mismatch')
+    }else if(state.assetId!==asset.assetId||state.revision!==edit.expectedRevision+1)
+      throw Error('editor.server_receipt_mismatch')
+    bound(accountId,deviceId)
+    await vault.acknowledgeEdit(row.operationId,asset.assetId,edit.expectedRevision+1)
+    publish({photoId:row.photoId,state:await vault.syncState(row.photoId)})
+  }catch(e){
+    const code=e instanceof Error?e.message:'editor.network_failed'
+    if(code==='sync.account_changed')return
+    if(code==='sync.http_410'){
+      await vault.revokeFromServer(row.photoId)
+      publish({photoId:row.photoId,state:'expired'})
+      return
+    }
+    await vault.failDelivery(row.operationId,code).catch(()=>{})
+    publish({photoId:row.photoId,state:'retry',error:code})
+  }
+}
+
 async function syncReview(row:OutboxEntry,accountId:string,deviceId:string):Promise<void>{
   const vault=openLocalPhotoVault()
   bound(accountId,deviceId)
@@ -184,6 +230,10 @@ async function execute(force=false):Promise<void>{
       if(force)await vault.retry(row.operationId)
       else if(row.nextAttemptAt>vault.time.now())continue
       try{
+        if(row.intent==='edit'){
+          await syncEdit(row,accountId,deviceId)
+          continue
+        }
         if(row.intent==='review'){
           await syncReview(row,accountId,deviceId)
           continue

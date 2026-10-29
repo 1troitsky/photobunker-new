@@ -13,15 +13,15 @@ const id=computed(()=>String(route.params.photoId??''))
 const copy=computed(()=>ru.value?{
   title:'Защищённый просмотр',back:'Назад к фотографиям',loading:'Расшифровка на этом устройстве…',
   locked:'Недоступно: заблокирован аккаунт, время недостоверно или файл повреждён.',
-  local:'Только на устройстве · без облака',noSave:'Изображение не сохраняется в Photos/DCIM.',
+  local:'Защищённый снимок',noSave:'Изображение не сохраняется в Photos/DCIM.',
   account:'Откройте аккаунт, чтобы просмотреть фотографию.',
-  image:'Приватная фотография',
+  image:'Приватная фотография',edit:'Редактировать',
 }:{
   title:'Protected local viewer',back:'Back to photos',loading:'Decrypting on this device…',
   locked:'Unavailable: account locked, untrusted time or corrupt ciphertext.',
-  local:'On this device only · no cloud sync',noSave:'No system Photos/DCIM writes.',
+  local:'Protected photograph',noSave:'No system Photos/DCIM writes.',
   account:'Unlock your account to view this photo.',
-  image:'Private photograph',
+  image:'Private photograph',edit:'Edit photograph',
 })
 function clear(){
   ticket++
@@ -67,7 +67,9 @@ watch(identity,()=>{void show()})
       <RouterLink
         to="/photos"
         class="subtle-button"
-      >{{ copy.back }}</RouterLink><span>{{ copy.local }}</span>
+      >{{ copy.back }}</RouterLink>
+      <RouterLink :to="'/photos/'+id+'/edit'">{{ copy.edit }}</RouterLink>
+      <span>{{ copy.local }}</span>
     </nav>
     <h2>{{ copy.title }}</h2>
     <div class="viewer-stage">

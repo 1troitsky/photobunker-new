@@ -19,6 +19,7 @@ export type PhotoHeader = Readonly<{
   expiresAt:number; state:PhotoState; revision:number; operationId:string
   thumbnailAssetId?:string;nameId?:string;namePending?:boolean;capture?:FrozenCapture;
   leaseId?:string;nameNumber?:number
+  sourceAssetId?:string;editRevision?:number
   reviewState?:ReviewDecision;reviewRevision?:number
   reviewEnvelope?:ReviewEnvelope|null;responseEnvelope?:ReviewEnvelope|null
 }>
@@ -31,8 +32,8 @@ export type CipherManifest = Readonly<{
 }>
 export type OutboxEntry = Readonly<{
   accountId:string; photoId:string; operationId:string; state:OutboxState
-  intent:'upload'|'delete'|'metadata'|'review'; attempts:number; nextAttemptAt:number; expiresAt:number
-  lastError?:string; receiptHash?:string; metadataAssetId?:string; expectedRevision?:number;reviewContract?:ReviewContract
+  intent:'upload'|'delete'|'metadata'|'review'|'edit'; attempts:number; nextAttemptAt:number; expiresAt:number
+  lastError?:string; receiptHash?:string; metadataAssetId?:string; expectedRevision?:number;reviewContract?:ReviewContract;editAssetId?:string;editMode?:2|3
 }>
 export type CreatePhoto = Readonly<{
   operationId:string; photoId:string; assetId:string; metadataAssetId:string
@@ -91,4 +92,4 @@ export interface TimeAuthority {
 export type CloudAsset=Readonly<{assetId:string;kind:AssetKind;revision:number;
   bytes:number;sha256:string;manifest:Omit<CipherManifest,'backend'|'storageKey'>}>
 export type CloudPhoto=Readonly<{photoId:string;expiresAt:number;metadataAssetId:string;
-  metadataRevision:number;nameId:string|null}>
+  metadataRevision:number;nameId:string|null;editRevision?:number;editAssetId?:string|null}>
