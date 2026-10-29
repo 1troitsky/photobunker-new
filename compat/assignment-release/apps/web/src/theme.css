@@ -1,0 +1,47 @@
+:root {
+  color-scheme: dark;
+  --background: #111216;
+  --surface: #1b1d23;
+  --panel: #22252d;
+  --text: #f2f3f5;
+  --secondary: #b5b8c3;
+  --muted: #9298a7;
+  --accent: #c0caff;
+  --accent-ink: #1a2145;
+  --accent-dim: #a8b8ff12;
+  --border: #ffffff16;
+  --notice-border: #d7b67555;
+  --notice-text: #edce94;
+  --danger: #f1b7ad;
+  --danger-dim: #f1b7ad0a;
+  --success: #b8dcab;
+  --dock: #1b1d23f5;
+}
+:root[data-theme='light'] {
+  color-scheme: light;
+  --background: #f4f5f7;
+  --surface: #ffffff;
+  --panel: #eceef4;
+  --text: #20222c;
+  --secondary: #555b6c;
+  --muted: #656d7e;
+  --accent: #4354b8;
+  --accent-ink: #ffffff;
+  --accent-dim: #4354b80d;
+  --border: #20222c1a;
+  --notice-border: #9c6b3166;
+  --notice-text: #83531c;
+  --danger: #a7352d;
+  --danger-dim: #a7352d08;
+  --success: #356331;
+  --dock: #fffffff5;
+}
+
+/* Synchronous privacy cover, including teleported sheets, before Vue unmounts. */
+html[data-photo-background="true"]::after { content: ''; position: fixed; inset: 0; z-index: 2147483647; background: #111318; }
+.photo-security-body .form-card { display: grid; gap: 12px; min-width: 0; }
+.photo-security-body textarea, .photo-security-body input { width: 100%; box-sizing: border-box; }
+.photo-security-body input[type=checkbox] { width: auto; }
+.photo-security-body textarea { min-height: 108px; resize: vertical; overflow-wrap: anywhere; }
+.photo-security-body code { display: inline-block; max-width: 100%; overflow-wrap: anywhere; font-size: 12px; }
+.photo-security-body .check-row { display: flex; align-items: flex-start; gap: 10px; }
