@@ -409,7 +409,8 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     const path=assetKey(this.scope,photoId,assetId)+'/'+attempt
     const reference=photoKey(this.scope,photoId),journalKey=reference+'/'+attempt
     await db.journal.add({key:journalKey,accountId:this.scope.accountId,deviceId:this.scope.deviceId,
-      photoId,operationId,attemptId:attempt,assetKeys:[backend+'|'+path],
+      photoId,operationId,attemptId:attempt,
+      assetKeys:backend==='opfs'?['opfs|'+path,'idb-blob|'+path]:['idb-blob|'+path],
       createdAt:this.time.now(),state:'staging'})
     let committed=false,actualBackend=backend
     try{
@@ -458,6 +459,9 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
       committed=true
       // Local mode 3 must not keep a second master once the replacement is durable.
       await this.cleanReplacedRenditions(photoId)
+      // OPFS→IDB fallback can leave a failed OPFS candidate. Delete every
+      // unreferenced backend before deleting the durable recovery journal.
+      if(backend!==actualBackend)await deleteCiphertext(backend,path)
       await db.journal.delete(journalKey)
       if(typeof window!=='undefined')window.dispatchEvent(new Event('photobunker-outbox'))
       return{operationId,revision,assetId}
