@@ -28,7 +28,7 @@ import { warmNames } from '../local/photo-names'
 import { nameText } from '../local/photo-name-text'
 import { delivery, refreshClock, retryDelivery } from '../delivery/queue'
 import { d } from '../delivery/text'
-import { t, formatNumber } from '../i18n'
+import { t, formatNumber, locale } from '../i18n'
 import { q } from '../crypto/text'
 import { p } from '../profiles/text'
 import {
@@ -153,6 +153,7 @@ const category = ref(studioSession.value?.category ?? selectedCategory.value)
 const shot = ref('')
 const locationStatus = ref<'pending' | 'unavailable'>()
 const savedWithoutGps = ref(false)
+const requiredGpsError = ref(false)
 const lastPhoto = ref<Photo>()
 const sourceRatio = ref(4 / 3)
 const rules = computed(() => activeProfile.value?.rules ?? defaultRules())
@@ -582,19 +583,32 @@ async function capture() {
   }
   taking.value = true
   status.value = undefined
+  requiredGpsError.value = false
   const captureOwner = account.value?.id
   const profile = activeProfile.value
     ? snapshot(activeProfile.value)
     : undefined
   const settings = profile?.rules ?? defaultRules()
   const createdAt = Date.now()
-  const candidate = settings.location === 'off'
-    ? undefined : locationAt(createdAt, settings.locationWindow, settings.accuracy)
+  // Assignment Release: require a fresh <=30m real GPS fix at capture time.
+  // Never claim a GPS-secured assignment when coordinates are missing/stale.
+  const assignmentCapture = !!studioSession.value?.taskId || !!activeAssignment.value
+  const candidate = assignmentCapture
+    ? locationAt(createdAt, 30, 30)
+    : settings.location === 'off'
+      ? undefined : locationAt(createdAt, settings.locationWindow, settings.accuracy)
   const location =
     candidate &&
     Math.abs(candidate.measuredAt - createdAt) <= settings.locationWindow * 1000
       ? candidate
       : undefined
+  if (assignmentCapture && (!location || location.accuracy > 30 || mode.value !== 'live')) {
+    requiredGpsError.value = !location || location.accuracy > 30
+    if (requiredGpsError.value) enableCameraLocation()
+    status.value = mode.value === 'live' ? undefined : 'captureFailed'
+    taking.value = false
+    return
+  }
   const metadata: PhotoMetadata = {}
   if (settings.keepDate) metadata.capturedAt = createdAt
   pendingPreset = studioSession.value?.preset
@@ -612,10 +626,10 @@ async function capture() {
       mode.value === 'demo'
         ? 'PhotoBunker DEMO'
         : controller?.source() || 'Camera'
-  if (settings.location !== 'off') {
+  if (assignmentCapture || settings.location !== 'off') {
     if (location) metadata.location = location
     metadata.locationStatus =
-      location && location.accuracy <= settings.accuracy
+      location && location.accuracy <= (assignmentCapture ? 30 : settings.accuracy)
         ? undefined
         : !locationEnabled.value || locationStatus.value === 'unavailable'
           ? 'unavailable'
@@ -1002,6 +1016,10 @@ onBeforeUnmount(() => {
           }}</span>
         </button>
       </div>
+      <p v-if="requiredGpsError" class="capture-feedback" role="alert">
+        {{ locale === 'ru' ? 'Для задания необходимы свежие координаты GPS с точностью до 30 м. Разрешите геолокацию и повторите съёмку.' : 'Assignment capture needs a fresh GPS fix accurate to 30 m. Enable location and try again.' }}
+        <button type="button" class="quiet-button" @click="enableCameraLocation">{{ locale === 'ru' ? 'Включить GPS' : 'Enable GPS' }}</button>
+      </p>
       <p v-if="cameraPreparing" class="capture-feedback" role="status">{{ q('Готовим съёмку…') }}</p>
       <div v-if="cameraError" class="form-error" role="alert">
         <p>{{ cameraError }}</p>
