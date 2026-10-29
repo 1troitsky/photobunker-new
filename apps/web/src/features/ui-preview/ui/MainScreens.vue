@@ -249,6 +249,10 @@ const title = computed(() => {
             </div>
           </div>
         </section>
+        <nav class="profile-quicklinks" aria-label="Teams and contacts">
+          <RouterLink to="/teams" class="profile-action">{{ language==='ru'?'Команды':'Teams' }}</RouterLink>
+          <RouterLink to="/contacts" class="profile-action">{{ language==='ru'?'Контакты':'Contacts' }}</RouterLink>
+        </nav>
         <IdentityPanel />
         <StorageDiagnostics />
       </template>

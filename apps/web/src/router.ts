@@ -7,6 +7,7 @@ const AppShell = () => import('./features/ui-preview/ui/AppShell.vue')
 const MainScreens = () => import('./features/ui-preview/ui/MainScreens.vue')
 const LocalPhotoViewer = () => import('./features/camera/ui/LocalPhotoViewer.vue')
 const AssignmentsScreen = () => import('./features/assignments/ui/AssignmentsScreen.vue')
+const CollaborationScreen = () => import('./features/collaboration/ui/CollaborationScreen.vue')
 
 /* Shell always opens without blocking HTTP; Identity v2 is initialized lazily. */
 export const router = createRouter({
@@ -28,6 +29,9 @@ export const router = createRouter({
         { path: 'assignments/:assignmentId', name: 'assignment-detail', component: AssignmentsScreen },
         { path: 'assignments/:assignmentId/edit', name: 'assignment-edit', component: AssignmentsScreen },
         { path: 'browser', name: 'browser', component: MainScreens },
+        { path: 'contacts', name: 'contacts', component: CollaborationScreen },
+        { path: 'teams', name: 'teams', component: CollaborationScreen },
+        { path: 'teams/:teamId', name: 'team-detail', component: CollaborationScreen },
         { path: 'profile', name: 'profile', component: MainScreens },
         { path: 'editor/preview', name: 'editor-preview', component: MainScreens },
         { path: 'photo-card/preview', name: 'photo-card-preview', component: MainScreens },

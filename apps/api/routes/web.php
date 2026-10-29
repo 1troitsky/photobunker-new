@@ -62,3 +62,9 @@ Route::prefix('assignments/v1')->middleware('throttle:60,1,assignments')->group(
     Route::get('/{assignmentId}',[\App\Http\Controllers\AssignmentController::class,'show']);
     Route::put('/{assignmentId}',[\App\Http\Controllers\AssignmentController::class,'mutate']);
 });
+
+// R2-09: PB2 device-signed, account-scoped Team/Contacts operations. Never grants photo ACL.
+Route::prefix('collaboration/v1')->middleware('throttle:60,1,collaboration')->group(function(){
+    Route::get('/snapshot',[\App\Http\Controllers\CollaborationController::class,'snapshot']);
+    Route::put('/operations/{operationId}',[\App\Http\Controllers\CollaborationController::class,'mutate']);
+});

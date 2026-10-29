@@ -121,3 +121,24 @@ export async function assignmentRequest(
     return response
   }finally{controllers.delete(controller)}
 }
+
+/** R2-09: narrow same-origin collaboration capability; no raw fetch in team UI. */
+export async function collaborationRequest(path:string,method:'GET'|'PUT'='GET',body?:string):Promise<Response>{
+  if(!/^\/(?:snapshot|operations\/[a-f0-9-]{36})$/.test(path))
+    throw new IdentityError('team.invalid_path',400)
+  const epoch=currentGeneration(),controller=new AbortController()
+  controllers.add(controller)
+  try{
+    const headers:Record<string,string>={'Accept':'application/json'}
+    if(method!=='GET'){
+      headers['X-CSRF-TOKEN']=await token(epoch)
+      headers['Content-Type']='application/json'
+    }
+    assertGeneration(epoch)
+    const response=await fetch('/collaboration/v1'+path,{
+      method,credentials:'same-origin',cache:'no-store',headers,body,signal:controller.signal,
+    })
+    assertGeneration(epoch)
+    return response
+  }finally{controllers.delete(controller)}
+}
