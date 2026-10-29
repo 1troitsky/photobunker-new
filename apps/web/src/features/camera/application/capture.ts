@@ -2,12 +2,12 @@ import type {PhotoHeader,PhotoRepository,TimeAuthority} from '../../local-storag
 import {openLocalPhotoVault} from '../../local-storage'
 import {identity} from '../../identity'
 import {thumbnailWebp,captureGps,takeReservedName,gpsStatus} from '../../gallery'
-import type {CaptureMode,Method,PersonalPolicy} from '../domain/policy'
-import {personalPolicy,snapshot} from '../domain/policy'
+import type {CaptureMode,Method,CapturePolicy,FrozenAssignment} from '../domain/policy'
+import {personalPolicy,assignmentPolicy,snapshot} from '../domain/policy'
 
 export type PendingCapture=Readonly<{
   operationId:string;photoId:string;assetId:string;metadataAssetId:string
-  jpeg:Blob;policy:PersonalPolicy;method:Method;sourceWidth:number;sourceHeight:number
+  jpeg:Blob;policy:CapturePolicy;assignment?:FrozenAssignment;method:Method;sourceWidth:number;sourceHeight:number
   outputWidth:number;outputHeight:number;capturedAt:number;expiresAt:number
   thumbnail?:Blob;thumbnailAssetId?:string;gps?:ReturnType<typeof captureGps>
   nameId?:string;leaseId?:string;nameNumber?:number
@@ -41,11 +41,13 @@ export class CaptureSession{
       if(!this.time.status().trusted&&identity.value&&!identity.value.offline)await this.time.refreshFromServer()
     }catch{/* camera remains usable; capture cannot report saved without trusted UTC */}
   }
-  async prepare(source:Blob,method:Method,mode:CaptureMode,ttlDays:number,onProgress?:(s:CaptureProgress)=>void):Promise<PhotoHeader>{
+  async prepare(source:Blob,method:Method,mode:CaptureMode,ttlDays:number,onProgress?:(s:CaptureProgress)=>void,assignment?:Omit<FrozenAssignment,'capturedAt'>):Promise<PhotoHeader>{
     if(this.pending)throw new Error('camera.pending_retry_first')
     const ticket=this.generation
     this.check(ticket)
-    const policy=personalPolicy(mode,ttlDays)
+    const policy=assignment?assignmentPolicy(assignment):personalPolicy(mode,ttlDays)
+    if(assignment && (mode!==policy.mode||ttlDays!==policy.ttlDays))
+      throw Error('camera.assignment_policy_mismatch')
     const ids={operationId:crypto.randomUUID(),photoId:crypto.randomUUID(),
       assetId:crypto.randomUUID(),metadataAssetId:crypto.randomUUID()}
     const started=performance.now()
@@ -64,7 +66,12 @@ export class CaptureSession{
     const gps=captureGps(metadata.capturedAt)
     const reserved=await takeReservedName().catch(()=>null)
     this.check(ticket)
-    this.pending={...ids,jpeg:converted.blob,policy,method,
+    const frozen=policy.source==='assignment'?{
+      assignmentId:policy.assignmentId,assignmentRevision:policy.assignmentRevision,
+      policyRevision:policy.policyRevision,mode:policy.mode,
+      retentionDays:policy.ttlDays,capturedAt:metadata.capturedAt,
+    } satisfies FrozenAssignment:undefined
+    this.pending={...ids,jpeg:converted.blob,policy,assignment:frozen,method,
       ...(thumbnail?{thumbnail,thumbnailAssetId:crypto.randomUUID()}: {}),gps,
       ...(reserved?{nameId:reserved.nameId,leaseId:reserved.leaseId,nameNumber:reserved.number}:{}),
       sourceWidth:converted.sourceWidth,sourceHeight:converted.sourceHeight,
@@ -89,6 +96,7 @@ export class CaptureSession{
       capturedAt:pending.capturedAt,expiresAt:pending.expiresAt,
       pixels:pending.jpeg,thumbnail:pending.thumbnail,thumbnailAssetId:pending.thumbnailAssetId,
       nameId:pending.nameId,leaseId:pending.leaseId,nameNumber:pending.nameNumber,
+      capture:pending.assignment,
       metadata:{...metadata,title:'',gps:pending.gps??null,
         gpsStatus:pending.gps?'ready':gpsStatus()==='denied'?'denied':gpsStatus()==='disabled'?'disabled':gpsStatus()==='unavailable'?'unavailable':'pending'},
     }

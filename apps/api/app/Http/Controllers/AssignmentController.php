@@ -102,6 +102,13 @@ final class AssignmentController extends Controller {
                 ...$values,'id'=>$assignmentId,'account_id'=>$a->id,'created_at'=>$now,
             ]);
             else DB::table('assignments')->where('id',$assignmentId)->update($values);
+            if(!$row || (int)$row->policy_revision!==$c['policyRevision']){
+                DB::table('assignment_capture_policies_v1')->insert([
+                    'assignment_id'=>$assignmentId,'policy_revision'=>$c['policyRevision'],
+                    'assignment_revision'=>$c['revision'],'mode'=>$c['mode'],
+                    'retention_days'=>$c['retentionDays'],'effective_at'=>$now,
+                ]);
+            }
             DB::table('assignment_history')->insert([
                 'operation_id'=>$c['operationId'],'assignment_id'=>$assignmentId,
                 'account_id'=>$a->id,'action'=>$c['action'],

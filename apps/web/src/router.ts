@@ -8,6 +8,7 @@ const MainScreens = () => import('./features/ui-preview/ui/MainScreens.vue')
 const LocalPhotoViewer = () => import('./features/camera/ui/LocalPhotoViewer.vue')
 const AssignmentsScreen = () => import('./features/assignments/ui/AssignmentsScreen.vue')
 const CollaborationScreen = () => import('./features/collaboration/ui/CollaborationScreen.vue')
+const PhotoReviewScreen = () => import('./features/photo-review/ui/ReviewScreen.vue')
 
 /* Shell always opens without blocking HTTP; Identity v2 is initialized lazily. */
 export const router = createRouter({
@@ -23,6 +24,7 @@ export const router = createRouter({
       children: [
         { path: 'photos', name: 'photos', component: MainScreens },
         { path: 'photos/:photoId', name: 'local-photo-viewer', component: LocalPhotoViewer, props: true },
+        { path: 'photos/:photoId/review', name: 'photo-review', component: PhotoReviewScreen },
         { path: 'camera', name: 'camera', component: MainScreens },
         { path: 'assignments', name: 'assignments', component: AssignmentsScreen },
         { path: 'assignments/new', name: 'assignment-new', component: AssignmentsScreen },

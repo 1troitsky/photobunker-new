@@ -45,6 +45,9 @@ final class Lifecycle
             $row=DB::table('photo_records')->where('id',$photoId)->lockForUpdate()->first();
             if(!$row)return;
             abort_unless($row->state==='deleting',409);
+            // Erase encrypted review comments/responses and private assignment binding.
+            DB::table('assignment_review_operations_v1')->where('photo_id',$photoId)->delete();
+            DB::table('assignment_photo_bindings_v1')->where('photo_id',$photoId)->delete();
             DB::table('photo_objects')->where('photo_id',$photoId)->delete();
             DB::table('photo_records')->where('id',$photoId)->delete();
         },3);
