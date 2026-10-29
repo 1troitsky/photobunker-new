@@ -1,47 +1,49 @@
-# PhotoBunker New — трёхсторонняя работа / Scrumban
+# PhotoBunker New — Independent Implementation & Final Integration
 
-**Утверждённая схема (2026-10-28):** **владелец — решения и приёмка; Codex — технический координатор с доступом к окружению; ChatGPT — основной исполнитель реализации по Issues благодаря более доступным лимитам.** Codex не является бесправным «рецензентом» — он готовит инфраструктуру, ставит зависимости, распределяет задачи, тестирует и **может исправлять и дополнять код** после PR.
+**Владелец утвердил новую схему 2026-10-29.** Полная процедура, наследование PR и UI contract: [14 — Independent Development Pipeline & Replaceable UI](docs/14-INDEPENDENT-DEVELOPMENT-PIPELINE.md). Roadmap [08](docs/08-ROADMAP.md) остаётся единственным списком Issues; правила продукта/безопасности остаются в [13](docs/13-PRODUCT-ACCEPTANCE-BASELINE.md), [03](docs/03-PHOTO-STORAGE.md), [11](docs/11-IDENTITY-AND-KEYS.md), [12](docs/12-CLIENT-STORAGE-AND-TRUSTED-TIME.md).
 
-## 1. Участники
+## 1. Роли без взаимных блокировок
 
-| Роль | Делает | Что не нужно навязывать |
+| Участник | Phase I — Implementation | Phase II — Integration & Assurance |
 | --- | --- | --- |
-| **Владелец** | Принимает продуктовые решения, утверждает milestones и ручную проверку на iPhone/Android/desktop, решает о выпуске | Самому выполнять работу по настройке dev-окружения, выдавать каждому AI микрозадачи или подтверждать каждый технически готовый merge |
-| **Codex — координатор, тестирование, интеграция** | Устанавливает зависимости, настраивает локальную тестовую/production-preview среду, Project и выдаёт Ready Issues; проводит полный review и локальные тесты, **исправляет недостатки в той же ветке/PR**, после успешных обязательных проверок самостоятельно сливает PR в `main`, обновляет Project и выдаёт следующую задачу; сообщает о настоящих блокировках и готовности к приёмке | Не заставлять его тратить лимиты на всю объёмную разработку — основная масса реализации делегируется ChatGPT |
-| **ChatGPT — исполнитель** | Пишет основную массу кода по Ready Issue, создаёт Draft PR, документирует изменения и ограничения, выполняет доступные ему проверки, при необходимости исправляет адресные замечания Codex | Не делать его «главным разработчиком», руководителем Codex или ответственным за развёртывание и все тесты |
+| **Владелец** | Утверждает архитектурные/продуктовые инварианты, порядок и исключения; принимает решения OPEN | Принимает UX, реальные устройства и выпуск |
+| **ChatGPT** | **Самостоятельно** готовит `Legacy evidence`, выполняет все согласованные Issues по зависимостям и создаёт по одному Draft PR; проверки при доступности, честный NOT RUN; **не меняет main** | Передаёт стек с SHAs/diff/контрактами/тестами; при адресном запросе помогает исправлениями |
+| **Codex** | Не требуется для назначения следующей Issue или merge её зависимостей; может консультировать и готовить тестовую инфраструктуру параллельно | Самостоятельно тестирует **всю** реализацию, дорабатывает существующие PR, интегрирует по dependency order в `main`, собирает production HTTPS staging и полный release-gate |
 
-## 2. Источники истины
+Ни один AI не имеет власти менять решения владельца. Codex не «подчиняется» ChatGPT. Независимость разработки — не освобождение от проверки.
 
-- [README](README.md) и [13 Product Baseline](docs/13-PRODUCT-ACCEPTANCE-BASELINE.md) — нормативный полный scope нового приложения; legacy ссылки исключительно для исторической проверки;
-- [08 Roadmap](docs/08-ROADMAP.md) — **единственный** план и контрольные точки;
-- [03 Storage](docs/03-PHOTO-STORAGE.md) — режимы, thumbnails, S3, TTL 24ч–45д; [11 Identity](docs/11-IDENTITY-AND-KEYS.md) — anonymous key-only account/device/recovery; [12 Local Storage/Time](docs/12-CLIENT-STORAGE-AND-TRUSTED-TIME.md) — Dexie/OPFS/trusted clock;
-- [AGENTS](AGENTS.md), [CHATBOT-AGENTS](CHATBOT-AGENTS.md) — правила технической работы;
-- Issues — scope и acceptance, GitHub Project — состояние/очередь, PR — diff, review, tests;
-- [07 Quality](docs/07-QUALITY-AND-RELEASE.md) — реальная production проверка.
+## 2. Последовательность
 
-## 3. Project и WIP
+**Старт:** этот governance PR Codex проверяет и сливает в `main` по прямому указанию владельца. Это исключение для вступления процесса в силу; функциональные Draft PR остаются открыты до окончания Phase I.
 
-Project: **[PhotoBunker New — Development](https://github.com/users/1troitsky/projects/14)** с Issues #1–#26. Статусы **Backlog → Ready → In Progress → Review → Integrated → Accepted**, также **Blocked/Cancelled**. По необходимости поля Priority P0/P1/P2, Phase, Risk, Owner. Codex ведёт актуальные статусы через GitHub API; R2-01 интегрирована, R2-02 Ready 28.10.2026.
+**Phase I:**
+1. ChatGPT сверяет свежий `main` и реальный upstream head, зависимости Issues и нормативные контракты; готовит `Implementation Ready` самостоятельно. Project `Backlog/Blocked` не блокирует разработку лишь по причине ожидания Codex, но существенное owner OPEN решение не выдумывается.
+2. До написания кода читает все точные пути Legacy evidence в `1troitsky/photobunker` GitHub read-only. Если evidence отсутствует, составляет и записывает узкий список в ту же Issue. Старый проект/`_old` не изменять.
+3. Создаёт branch от фактического head уже реализованных upstream модулей. При незалитых dependencies — **stacked Draft PR** с `base=upstream branch`, иначе `base=main`. **Один PR/Issue; `Closes #N`**. Нельзя менять `main`, force-push, merge/auto-merge без отдельного разрешения.
+4. После локальных/доступных проверок и полного `base...HEAD` diff передаёт ссылку/результат и **продолжает следующую Issue без ожидания Codex**. Каждый PR остаётся `Implemented (Draft), NOT VERIFIED`, пока не доказано обратное.
+5. Изменения upstream доносятся обычными merge-коммитами в downstream; ancestry и влияние фиксируются. Не параллелить конфликтующие источники истины и не дублировать функцию в другом Issue.
 
-**WIP:** ChatGPT не берёт более одного активного Issue, Codex руководит выдачей следующих задач и тестированием с учётом своих ограниченных лимитов. Дубли Issue и конкурирующие roadmap не создавать.
+**Phase II:** по завершении всех Implementation Issues Codex получает граф PR, запускает реальный build/lint/typecheck/backend/crypto/ACL/offline/expiry/fault/mobile E2E, исправляет проблемы в исходных PR и объединяет **снизу вверх**. После каждого merge retarget dependent PR и повторный diff/CI. Финальная полная регрессия объединённого `main`, safety/backup/restore/rollback proof, владелец проверяет устройства. Codex не объявляет Accepted автоматически.
 
-## 4. Definition of Ready
+## 3. GitHub Project и состояния
 
-**Codex выдаёт ChatGPT Issue** только если её зависимости интегрированы, scope достаточно ясен, продуктовые решения по этой функции приняты, можно провести тесты и выполнен узкий read-only legacy-check. В Issue обязателен раздел `Legacy evidence` с точными путями старого репозитория и решением `REUSE / ADAPT / REFERENCE / REJECT`; отсутствие такого раздела означает, что Issue ещё не Ready. Вопросы, которые относятся к поздним стадиям (например, key recovery), не блокируют UI foundation. Вопросы технической реализации Codex решает в рамках контрактов; значимые изменения продуктовых правил согласует с владельцем.
+Project: [PhotoBunker New — Development](https://github.com/users/1troitsky/projects/14). Обычные статусы: `Backlog / Ready / In Progress / Review / Integrated / Accepted / Blocked / Cancelled`. **Отдельные факты**, не подменяющие статусы Project:
 
-Эта проверка выполняется **для каждой Issue, а не один раз на весь проект и не по памяти чата**. Codex читает релевантные локальные файлы старого проекта; ChatGPT повторно читает перечисленные пути через GitHub. Месяц прежней разработки не объявляется мусором: рабочие assets, UX, контракты, алгоритмы и тесты сохраняются после проверки, а подтверждённо дефектные связанные части не переносятся.
+- **Implementation Ready:** нормативные требования определены, upstream код доступен **хотя бы в открытых ветках**, нет блокирующего продуктового OPEN решения.
+- **Implemented (Draft):** собственный scope закоммичен, один Draft PR/Issue и проверяемые сценарии. Тесты могут быть `NOT RUN`.
+- **Verified:** Codex предоставил фактические команды, PASS, evidence и исправления для всех критических проверок.
+- **Integrated:** проверенный код реально merged в `main`.
+- **Accepted:** владелец прошёл согласованные UX/device scenarios.
+- **Released:** полный security, backup/recovery/rollback и deployment gate.
 
-## 5. Цикл по задаче
+Отсутствие Codex review, merge или владельческого UX-preview **не является причиной остановить Phase I implementation**; эти проверки остаются необходимы **для Phase II/Accepted/Released**. Critical security defect может ограничить affected task, но разрешённые независимые задачи продолжаются. Не менять статусы GitHub Project без подтверждённой операции.
 
-1. **Codex** выполняет **узкий R2-01 setup** (workspace + локальный production build/import rules, HTTPS preview, test harness, Project, `.gitignore`; **НЕ интегрирует PostgreSQL/Garage в этом Issue**). Затем передаёт ChatGPT **R2-02 Ready**. R2-03 включает anonymous key-only Create/Restore и pairing без email/password, R2-04 — Dexie/OPFS/crypto, R2-05 — Garage/DB sync.
-2. **ChatGPT** сначала читает `Legacy evidence` и только перечисленные старые пути на GitHub, затем разрабатывает код в отдельной ветке и создаёт один **Draft PR** с `Closes #N`. Старые файлы не изменяет и не переносит массово. Если окружение позволяет — запускает доступные проверки, но не дублирует весь цикл Codex и не обязан самостоятельно строить полноценную тестовую инфраструктуру.
-3. **Codex** читает полный diff, сверяет его одновременно с новой спецификацией и `Legacy evidence`, проверяет безопасность, архитектуру и production build, выполняет unit/integration/E2E/hardware tests, **сам допиливает/исправляет PR при необходимости**, либо отправляет ChatGPT конкретную следующую задачу. Повторяет тесты после своих исправлений. PR остаётся один.
-4. После review и зелёных обязательных гейтов **Codex самостоятельно интегрирует проверенный PR в `main` по постоянному разрешению владельца от 28.10.2026**, переводит Issue в `Integrated` и сразу выдаёт следующую Ready Issue. Отдельное разрешение на каждый merge не запрашивается. ChatGPT не выполняет merge; force push и auto-merge запрещены.
-5. На отмеченных в [roadmap](docs/08-ROADMAP.md) вехах **владелец** проверяет приложение на своём устройстве. Первые вехи — UI после R2-02, реальная зашифрованная локальная съёмка после R2-06 **до S3**, синхронизация и галерея после R2-05/07. Если UX не принят — следующий зависимый этап не запускается.
-6. Codex передаёт ChatGPT следующую Ready Issue. Прогресс ведётся в Project/Issues, а не в памяти одного чата.
+## 4. Правила качества и UI
 
-## 6. Stop / фактические доказательства
+Обязательные `domain/application/infrastructure/ui` границы из [02](docs/02-ARCHITECTURE.md) усилены [14](docs/14-INDEPENDENT-DEVELOPMENT-PIPELINE.md): UI — заменяемая оболочка без бизнес-логики, SDK/DB/HTTP/crypto, typed public feature API, use-cases управляют локальным состоянием/optimistic/retry, а server остаётся источником ACL/TTL. Токены и небольшая общая библиотека primitives, mobile/desktop могут иметь разные композиции без дублирования функций. Редизайн не требует переписывать существующие domain/storage/crypto modules.
 
-Codex фиксирует `PASS/FAIL/BLOCKED/NOT RUN`, команды, production build, версии браузера, следы storage/SQL/permissions и воспроизводимые ошибки. Отдельные критические причины STOP: plaintext stored, system gallery leak, нерабочая камера в production, потеря ещё неистёкших unsynced фото, доступ к expired/отозванному объекту, отсутствие фактического удаления фото/миниатюр/metadata по TTL, поломанная изоляция аккаунтов или обход E2EE/ACL.
+Реально выполнить максимально доступные проверки сразу; `NOT RUN` честно перечислить и перенести в Phase II. Security STOP: plaintext/EXIF/key leak, system gallery writes, fail-open ACL/TTL, утрата unsynced photo, ложный ACK, безвозвратная несанкционированная очистка и неудаляемые orphan assets. Нельзя обходить эти инварианты, чтобы считать Issue «готовой».
 
-**Качество проверки важнее того, какой AI внёс правку.** Codex может чинить, тестировать и дополнять без бюрократического возврата каждой мелочи ChatGPT. Все важные продуктовые решения и допуски к реальному релизу принадлежат владельцу.
+## 5. Передача стека в конце Phase I
+
+Для каждого PR: Issue, branch, base SHA/head SHA/merge-base, upstream PR, краткий scope/diff, legacy evidence, миграции, security/ACL/TTL/keys impact, rollback, actual PASS/FAIL/NOT RUN, device/scenario gates. Codex проверяет и объединяет эту цепочку; ChatGPT никогда самостоятельно не сливает `main` и не выдаёт «production-ready» без независимых доказательств.
