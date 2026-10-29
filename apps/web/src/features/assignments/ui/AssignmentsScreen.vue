@@ -4,10 +4,12 @@ import {useRoute,useRouter} from 'vue-router'
 import {identity,onIdentityCleanup} from '../../identity'
 import {language} from '../../ui-preview'
 import {openAssignments,flushAssignments,onAssignmentChange,fetchServerAssignment,steps} from '../index'
+import {listAssignmentPhotos} from '../../photo-review'
 import type {AssignmentView,AssignmentStatus,AssignmentFields} from '../domain/model'
 
 const route=useRoute(),router=useRouter(),ru=computed(()=>language.value==='ru')
 const rows=ref<AssignmentView[]>([]),selected=ref<AssignmentView|null>(null)
+const assignmentPhotos=ref<{photoId:string;capturedAt:number}[]>([])
 const loading=ref(false),saving=ref(false),error=ref(''),filter=ref(''),statusFilter=ref('all')
 const form=ref<AssignmentFields>({title:'',instructions:'',mode:3,retentionDays:45})
 const serverRevision=ref<number|null>(null),serverVersion=ref<Awaited<ReturnType<typeof fetchServerAssignment>>|null>(null)
@@ -37,7 +39,7 @@ const copy=computed(()=>ru.value?{
   back:'К заданиям',recheck:'Загрузить версию сервера',keep:'Оставить мой локальный черновик',
   choose:'Сравните изменения перед повторной отправкой.',
   serverRev:'Текущая версия сервера',replace:'Принять версию сервера',retryDraft:'Повторить мои изменения',
-  nameInvalid:'Укажите название от 1 до 80 символов.',instructionsInvalid:'Инструкции — не более 4000 символов.',
+  capture:'Снимать в задании',photos:'Фото задания',noPhotos:'Снимков на этом устройстве пока нет',review:'Проверка',nameInvalid:'Укажите название от 1 до 80 символов.',instructionsInvalid:'Инструкции — не более 4000 символов.',
 }:{
   title:'Assignments',new:'New assignment',search:'Search titles',all:'All statuses',
   empty:'No assignments yet',emptyFiltered:'Nothing matches',emptyHelp:'Create your first private assignment.',
@@ -56,7 +58,7 @@ const copy=computed(()=>ru.value?{
   back:'Assignments',recheck:'Load server version',keep:'Keep my local draft',
   choose:'Compare both versions before retrying.',
   serverRev:'Current server revision',replace:'Accept server version',retryDraft:'Retry my changes',
-  nameInvalid:'Title must be 1–80 characters.',instructionsInvalid:'Instructions must not exceed 4000 characters.',
+  capture:'Capture in assignment',photos:'Assignment photos',noPhotos:'No local photos yet',review:'Review',nameInvalid:'Title must be 1–80 characters.',instructionsInvalid:'Instructions must not exceed 4000 characters.',
 })
 const filtered=computed(()=>rows.value.filter(a=>
   (statusFilter.value==='all'||a.status===statusFilter.value)&&
@@ -68,7 +70,7 @@ const cleanup=onIdentityCleanup(()=>{epoch++;rows.value=[];selected.value=null;s
 function hasIdentity(){return Boolean(identity.value)}
 async function reload(){
   const token=++epoch,who=identity.value
-  if(!who){rows.value=[];selected.value=null;return}
+  if(!who){rows.value=[];selected.value=null;assignmentPhotos.value=[];return}
   loading.value=true
   try{
     const vault=openAssignments()
@@ -77,6 +79,11 @@ async function reload(){
        identity.value?.deviceId!==who.deviceId)return
     rows.value=current
     selected.value=details.value?current.find(x=>x.id===details.value)??null:null
+    const photos=details.value?await listAssignmentPhotos(details.value):[]
+    if(ended||token!==epoch||identity.value?.accountId!==who.accountId)return
+    assignmentPhotos.value=photos.map(x=>({
+      photoId:x.photoId,capturedAt:x.capture?.capturedAt??0,
+    })).sort((a,b)=>b.capturedAt-a.capturedAt)
     if(edit.value&&selected.value)form.value={
       title:selected.value.title,instructions:selected.value.instructions,
       mode:selected.value.mode,retentionDays:selected.value.retentionDays}
@@ -197,8 +204,21 @@ onUnmounted(()=>{ended=true;epoch++;cleanup();unlisten()})
             <span>{{ copy.retention }}: {{ selected.retentionDays }}</span>
           </div>
           <p class="assignment-hint">{{ copy.noRetro }}</p>
+          <section class="assignment-local-photos">
+            <h3>{{ copy.photos }}</h3>
+            <p v-if="!assignmentPhotos.length" class="assignment-hint">{{ copy.noPhotos }}</p>
+            <ul v-else class="assignment-list">
+              <li v-for="photo in assignmentPhotos" :key="photo.photoId">
+                <RouterLink :to="'/photos/'+photo.photoId+'/review'" class="assignment-item">
+                  {{ photo.photoId }} · {{ copy.review }}
+                </RouterLink>
+              </li>
+            </ul>
+          </section>
           <p :class="{ 'assignment-conflict':selected.sync==='conflict' }" role="status">{{ syncLabel(selected) }}</p>
           <div class="assignment-actions">
+            <RouterLink v-if="selected.status==='in_progress'&&selected.sync==='synced'"
+              :to="{path:'/camera',query:{assignment:selected.id}}" class="primary-button">{{ copy.capture }}</RouterLink>
             <RouterLink :to="'/assignments/'+selected.id+'/edit'" class="subtle-button">{{ copy.edit }}</RouterLink>
             <button type="button" @click="duplicate" :disabled="saving">{{ copy.duplicate }}</button>
             <button type="button" @click="remove" :disabled="saving">{{ copy.remove }}</button>

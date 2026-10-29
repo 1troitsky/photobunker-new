@@ -42,6 +42,8 @@ Route::prefix('photos/v1')->middleware('throttle:100,1,photos')->group(function 
     Route::post('/{photoId}/finalize', function (\Illuminate\Http\Request $r,string $photoId,Finalization $f) {
         return response()->json($f->finalize($r,$photoId))->header('Cache-Control','no-store');
     });
+    Route::get('/{photoId}/review', [\App\Http\Controllers\AssignmentPhotoReviewController::class,'show']);
+    Route::put('/{photoId}/review', [\App\Http\Controllers\AssignmentPhotoReviewController::class,'mutate']);
     Route::get('/{photoId}/receipt', [PhotoSyncController::class,'receipt']);
     Route::get('/{photoId}/manifests', [PhotoSyncController::class,'manifests']);
     Route::get('/{photoId}/objects/{assetId}', [PhotoSyncController::class,'read']);

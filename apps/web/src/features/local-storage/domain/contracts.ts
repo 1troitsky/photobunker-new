@@ -3,12 +3,24 @@ export type AssetKind = 'master'|'original'|'edit'|'thumbnail'|'metadata'
 export type Scope = Readonly<{ accountId:string; deviceId:string; generation:number }>
 export type StorageBackend = 'opfs'|'idb-blob'
 export type PhotoState = 'local'|'expired'|'delete_pending'
-export type OutboxState = 'pending'|'retry'|'acknowledged'|'cancelled'
+export type OutboxState = 'pending'|'retry'|'acknowledged'|'cancelled'|'conflict'
+export type FrozenCapture=Readonly<{assignmentId:string;assignmentRevision:number;
+  policyRevision:number;mode:2|3;retentionDays:number;capturedAt:number}>
+export type ReviewDecision='pending'|'accepted'|'correction'|'reshoot'|'rejected'
+export type ReviewEnvelope=Readonly<{v:1;accountId:string;photoId:string;operationId:string;
+  revision:number;iv:string;wrappedDEK:WrappedDEK;ciphertext:string}>
+export type ReviewContract=Readonly<{v:1;photoId:string;operationId:string;
+  expectedRevision:number;action:'review'|'respond';state:Exclude<ReviewDecision,'pending'>|null;
+  envelope:ReviewEnvelope}>
+export type ReviewSnapshot=Readonly<{photoId:string;assignmentId:string;state:ReviewDecision;
+  revision:number;reviewEnvelope:ReviewEnvelope|null;responseEnvelope:ReviewEnvelope|null}>
 export type PhotoHeader = Readonly<{
   accountId:string; photoId:string; assetId:string; metadataAssetId:string
   expiresAt:number; state:PhotoState; revision:number; operationId:string
-  thumbnailAssetId?:string;nameId?:string;namePending?:boolean;
+  thumbnailAssetId?:string;nameId?:string;namePending?:boolean;capture?:FrozenCapture;
   leaseId?:string;nameNumber?:number
+  reviewState?:ReviewDecision;reviewRevision?:number
+  reviewEnvelope?:ReviewEnvelope|null;responseEnvelope?:ReviewEnvelope|null
 }>
 export type WrappedDEK = Readonly<{iv:string;ciphertext:string}>
 export type CipherFrame = Readonly<{index:number; offset:number; bytes:number; plainBytes:number; iv:string; digest:string}>
@@ -19,15 +31,15 @@ export type CipherManifest = Readonly<{
 }>
 export type OutboxEntry = Readonly<{
   accountId:string; photoId:string; operationId:string; state:OutboxState
-  intent:'upload'|'delete'|'metadata'; attempts:number; nextAttemptAt:number; expiresAt:number
-  lastError?:string; receiptHash?:string; metadataAssetId?:string; expectedRevision?:number
+  intent:'upload'|'delete'|'metadata'|'review'; attempts:number; nextAttemptAt:number; expiresAt:number
+  lastError?:string; receiptHash?:string; metadataAssetId?:string; expectedRevision?:number;reviewContract?:ReviewContract
 }>
 export type CreatePhoto = Readonly<{
   operationId:string; photoId:string; assetId:string; metadataAssetId:string
   kind:Exclude<AssetKind,'metadata'>; revision:1
   capturedAt:number; expiresAt:number; pixels:Blob; metadata:unknown
   thumbnail?:Blob;thumbnailAssetId?:string
-  nameId?:string;leaseId?:string;nameNumber?:number
+  nameId?:string;leaseId?:string;nameNumber?:number;capture?:FrozenCapture
 }>
 export type TimeStatus = Readonly<{
   trusted:boolean; now:number|null; reason:'fresh'|'restored'|'missing'|'reload'|'corrupt'|'wall_jump'|'monotonic_lost'
@@ -55,7 +67,7 @@ export type SyncAsset = Readonly<{
   assetId:string;kind:AssetKind;revision:number;bytes:number;sha256:string
   manifest:Omit<CipherManifest,'backend'|'storageKey'>;ciphertext:Blob
 }>
-export type SyncSnapshot = Readonly<{photoId:string;operationId:string;expiresAt:number;assets:SyncAsset[]}>
+export type SyncSnapshot = Readonly<{photoId:string;operationId:string;expiresAt:number;assets:SyncAsset[];capture?:FrozenCapture}>
 export type SyncReceipt = Readonly<{photoId:string;operationId:string;expiresAt:number;
   assets:ReadonlyArray<Readonly<{assetId:string;kind:AssetKind;bytes:number;sha256:string}>>;receiptHash:string}>
 export type SyncState = 'local'|'syncing'|'synced'|'retry'|'expired'

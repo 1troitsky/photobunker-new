@@ -26,8 +26,11 @@ export function signedContract(snapshot:SyncSnapshot):string{
   const assets=snapshot.assets.map(({assetId,kind,revision,bytes,sha256,manifest})=>({
     assetId,kind,revision,bytes,sha256,manifest,
   })).sort((a,b)=>a.assetId<b.assetId?-1:a.assetId>b.assetId?1:0)
-  return JSON.stringify({version:1,photoId:snapshot.photoId,operationId:snapshot.operationId,
-    expiresAt:snapshot.expiresAt,assets})
+  return snapshot.capture
+    ? JSON.stringify({version:2,photoId:snapshot.photoId,operationId:snapshot.operationId,
+      expiresAt:snapshot.expiresAt,assets,capture:snapshot.capture})
+    : JSON.stringify({version:1,photoId:snapshot.photoId,operationId:snapshot.operationId,
+      expiresAt:snapshot.expiresAt,assets})
 }
 type Reserve={state:'pending';photoId:string;expiresAt:number}|
   {state:'active';receipt:SyncReceipt}
@@ -131,6 +134,40 @@ async function syncMetadata(row:OutboxEntry,accountId:string,deviceId:string):Pr
   }
 }
 
+async function syncReview(row:OutboxEntry,accountId:string,deviceId:string):Promise<void>{
+  const vault=openLocalPhotoVault()
+  bound(accountId,deviceId)
+  try{
+    const contract=await vault.reviewDelivery(row.operationId)
+    const body=JSON.stringify(contract)
+    const signature=await signMetadataContract('photobunker.photo-review.v1\n'+body)
+    bound(accountId,deviceId)
+    const response=await photoRequest('/'+row.photoId+'/review','PUT',JSON.stringify({contract:body,signature}))
+    bound(accountId,deviceId)
+    if(response.status===409){
+      await vault.conflictReview(row.operationId)
+      publish({photoId:row.photoId,state:'retry',error:'review.conflict'})
+      return
+    }
+    if(!response.ok)throw httpError(response)
+    const receipt=await response.json() as {accepted:boolean;revision:number}
+    if(!receipt.accepted)throw Error('review.rejected')
+    bound(accountId,deviceId)
+    await vault.acknowledgeReview(row.operationId,receipt.revision)
+    publish({photoId:row.photoId,state:await vault.syncState(row.photoId)})
+  }catch(e){
+    const code=e instanceof Error?e.message:'review.network_failed'
+    if(code==='sync.account_changed')return
+    if(code==='sync.http_410'){
+      await vault.revokeFromServer(row.photoId)
+      publish({photoId:row.photoId,state:'expired'})
+      return
+    }
+    await vault.failDelivery(row.operationId,code).catch(()=>{})
+    publish({photoId:row.photoId,state:'retry',error:code})
+  }
+}
+
 async function execute(force=false):Promise<void>{
   if(!identity.value||identity.value.offline||!navigator.onLine||document.hidden)return
   const {accountId,deviceId}=identity.value
@@ -147,6 +184,10 @@ async function execute(force=false):Promise<void>{
       if(force)await vault.retry(row.operationId)
       else if(row.nextAttemptAt>vault.time.now())continue
       try{
+        if(row.intent==='review'){
+          await syncReview(row,accountId,deviceId)
+          continue
+        }
         if(row.intent==='metadata'){
           await syncMetadata(row,accountId,deviceId)
           continue

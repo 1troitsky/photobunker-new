@@ -34,8 +34,13 @@ final class PhotoSync
         abort_unless(strlen($json)>40&&strlen($json)<=200000,422);
         try{$c=json_decode($json,true,64,JSON_THROW_ON_ERROR);}catch(\Throwable){abort(422);}
         abort_unless(is_array($c)&&!array_is_list($c),422);
-        self::exact($c,['version','photoId','operationId','expiresAt','assets']);
-        abort_unless($c['version']===1&&is_int($c['expiresAt'])&&
+        $version=$c['version']??null;
+        abort_unless($version===1||$version===2,422);
+        self::exact($c,$version===2
+            ?['version','photoId','operationId','expiresAt','assets','capture']
+            :['version','photoId','operationId','expiresAt','assets']);
+        if($version===2)abort_unless(is_array($c['capture'])&&!array_is_list($c['capture']),422);
+        abort_unless(is_int($c['expiresAt'])&&
             $c['expiresAt']>self::nowMs()&&$c['expiresAt']<=self::nowMs()+45*86400000,422);
         P::uuid($c['photoId']);P::uuid($c['operationId']);
         abort_unless(is_array($c['assets'])&&count($c['assets'])>=2&&count($c['assets'])<=3,422);
@@ -113,6 +118,7 @@ final class PhotoSync
         $row=DB::table('photo_records')->where('id',$id)->where('account_id',$actor)->first();
         if(!$row){abort_if(DB::table('photo_tombstones')->where('photo_id',$id)->where('account_id',$actor)->exists(),410);abort(404);}
         abort_if($row->state==='deleting'||$row->expires_at<=self::nowMs(),410);
+        \App\Assignments\CaptureBinding::active($row,$actor);
         if($activeOnly)abort_unless($row->state==='active',409);
         return $row;
     }

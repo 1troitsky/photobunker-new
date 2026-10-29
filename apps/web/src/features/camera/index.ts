@@ -2,8 +2,8 @@
 import {createCaptureSession} from './application/capture'
 import {compressCapture} from './infrastructure/compression'
 export {BrowserCamera,captureError} from './infrastructure/browser-camera'
-export {personalPolicy,geometry,COMPRESSION_V1,MIN_TTL_DAYS,MAX_TTL_DAYS,DEFAULT_TTL_DAYS,snapshot} from './domain/policy'
-export type {CaptureMode,Facing,Method,CaptureMetadata,PersonalPolicy} from './domain/policy'
+export {personalPolicy,assignmentPolicy,geometry,COMPRESSION_V1,MIN_TTL_DAYS,MAX_TTL_DAYS,DEFAULT_TTL_DAYS,snapshot} from './domain/policy'
+export type {CaptureMode,Facing,Method,CaptureMetadata,PersonalPolicy,AssignmentPolicy,FrozenAssignment} from './domain/policy'
 export type {CaptureSession,CaptureProgress} from './application/capture'
 export {openLocalPhotos} from './application/capture'
 export function openCaptureSession(){return createCaptureSession(compressCapture)}
