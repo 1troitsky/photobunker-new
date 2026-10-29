@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest'
 import {createPhotoGrantCode,photoGrantCodeHash,sealRecipientKey,openRecipientKey,
- type KeyContext} from './key-envelope'
+ type KeyContext,sealGrantSecret,openGrantSecret} from './key-envelope'
 const id=()=>crypto.randomUUID()
 const context=():KeyContext=>({grantId:id(),generation:1,assignmentId:id(),
   ownerAccountId:id(),recipientAccountId:id(),photoId:id(),assetId:id(),
@@ -37,5 +37,23 @@ describe('P0 scoped per-recipient photo DEK transport, not ACL',()=>{
     const c=context(),code=createPhotoGrantCode()
     await expect(sealRecipientKey(code,{...c,public:true} as KeyContext,
       crypto.getRandomValues(new Uint8Array(32)))).rejects.toThrow()
+  })
+})
+
+describe('separate out-of-band invite and per-grant transport secret',()=>{
+  it('seals a new grant secret to exact invitation context and reuses it only after unwrapping',async()=>{
+    const c=context(),oob=createPhotoGrantCode(),grantSecret=createPhotoGrantCode()
+    const invite={grantId:c.grantId,assignmentId:c.assignmentId,
+      ownerAccountId:c.ownerAccountId,recipientAccountId:c.recipientAccountId}
+    const sealed=await sealGrantSecret(oob,grantSecret,invite)
+    expect(JSON.stringify(sealed)).not.toContain(oob)
+    expect(JSON.stringify(sealed)).not.toContain(grantSecret)
+    expect(await openGrantSecret(oob,sealed,invite)).toBe(grantSecret)
+    await expect(openGrantSecret(createPhotoGrantCode(),sealed,invite)).rejects.toThrow()
+    await expect(openGrantSecret(oob,sealed,{...invite,recipientAccountId:id()})).rejects.toThrow()
+    const dek=crypto.getRandomValues(new Uint8Array(32))
+    const photo=await sealRecipientKey(grantSecret,c,dek)
+    expect([...await openRecipientKey(await openGrantSecret(oob,sealed,invite),photo,c,Date.now())])
+      .toEqual([...dek])
   })
 })
