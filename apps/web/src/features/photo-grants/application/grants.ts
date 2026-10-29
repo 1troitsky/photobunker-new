@@ -5,7 +5,7 @@ import {sealLocalGrantSecret,openLocalGrantSecret} from '../infrastructure/secre
 import {createPhotoGrantCode,photoGrantCodeHash,sealGrantSecret,openGrantSecret,
   type GrantInvitationContext} from '../infrastructure/key-envelope'
 import {acquireStorageKeys} from '../../identity'
-import {command,validateServerGrant,type GrantCommand,type GrantRole,type ServerGrant} from '../domain/grants'
+import {command,validateServerGrant,type GrantCommand,type GrantRole,type ServerGrant,type GrantOperationKind} from '../domain/grants'
 
 function current(){
   const active=identity.value
@@ -110,6 +110,20 @@ export async function changeAssignmentGrant(row:ServerGrant,
   same(active.accountId,active.deviceId)
   wake()
 }
+export type GrantOutboxState=Readonly<{
+  opId:string;grantId:string;kind:GrantOperationKind;state:'pending'|'retry'|'conflict';
+  error:string|null
+}>
+/** Technical status only; never return an invitation code or secret to UI. */
+export async function grantOutboxStatus():Promise<GrantOutboxState[]>{
+  const {accountId,deviceId}=current()
+  const rows=await grantDb.operations.where('[accountId+deviceId]')
+    .equals([accountId,deviceId]).toArray()
+  same(accountId,deviceId)
+  return rows.map(row=>({opId:row.contract.opId,grantId:row.grantId,
+    kind:row.contract.kind,state:row.state,error:row.lastError}))
+}
+
 export async function pendingGrantOperations():Promise<OperationRow[]>{
   const {accountId,deviceId}=current()
   const operations=await grantDb.operations.where('[accountId+deviceId]')

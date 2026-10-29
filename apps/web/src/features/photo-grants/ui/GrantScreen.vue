@@ -4,11 +4,12 @@ import {identity,onIdentityCleanup} from '../../identity'
 import {language} from '../../ui-preview'
 import {openAssignments} from '../../assignments'
 import {inviteToAssignment,acceptAssignmentGrant,changeAssignmentGrant,
-  fetchAssignmentGrants,flushGrantOperations,type ServerGrant,type GrantRole} from '../index'
+  fetchAssignmentGrants,flushGrantOperations,grantOutboxStatus,
+  type ServerGrant,type GrantRole,type GrantOutboxState} from '../index'
 
 const ru=computed(()=>language.value==='ru')
 const copy=computed(()=>ru.value?{
- title:'Участники заданий',note:'Приглашение не открывает фотографии. Общий доступ будет включён только после проверки E2EE и серверных прав.',
+ title:'Участники заданий',pendingOp:'В очереди',retryOp:'Повтор после ошибки',conflictOp:'Сервер отклонил операцию — требуется проверка',state:'Состояние операций',note:'Приглашение не открывает фотографии. Общий доступ будет включён только после проверки E2EE и серверных прав.',
  back:'К заданиям',loading:'Загружаем приглашения…',
  account:'Сначала откройте аккаунт',offline:'Приглашения требуют подключения к серверу.',
  new:'Пригласить участника',assignment:'Задание',recipient:'ID аккаунта получателя',
@@ -23,7 +24,7 @@ const copy=computed(()=>ru.value?{
  queued:'Операция записана в зашифрованную очередь. Подтверждение ожидается.',
  error:'Операция не выполнена.',refresh:'Обновить',
 }:{
- title:'Assignment participants',note:'An invitation does not unlock photos. Sharing remains disabled until independent E2EE and server ACL verification.',
+ title:'Assignment participants',pendingOp:'Queued locally',retryOp:'Retry scheduled',conflictOp:'Server rejected operation — review required',state:'Operations',note:'An invitation does not unlock photos. Sharing remains disabled until independent E2EE and server ACL verification.',
  back:'Assignments',loading:'Loading invitations…',account:'Unlock account first',
  offline:'Invitations require an online connection.',
  new:'Invite a participant',assignment:'Assignment',recipient:'Recipient account ID',
@@ -40,12 +41,12 @@ const copy=computed(()=>ru.value?{
 })
 const assignments=ref<{id:string;title:string}[]>([])
 const selected=ref(''),recipient=ref(''),role=ref<GrantRole>('contributor')
-const grants=ref<ServerGrant[]>([]),inputCode=ref<Record<string,string>>({})
+const grants=ref<ServerGrant[]>([]),outbox=ref<GrantOutboxState[]>([]),inputCode=ref<Record<string,string>>({})
 const invitation=ref<{grantId:string;code:string}|null>(null)
 const busy=ref(false),loading=ref(false),notice=ref(''),error=ref('')
 let epoch=0,stopped=false
 function clear(){
-  epoch++;grants.value=[];assignments.value=[];invitation.value=null
+  epoch++;grants.value=[];outbox.value=[];assignments.value=[];invitation.value=null
   inputCode.value={};notice.value='';error.value=''
 }
 const release=onIdentityCleanup(clear)
@@ -59,6 +60,8 @@ async function reload(){
     const assignmentsNow=await openAssignments().list()
     if(token!==epoch||stopped||identity.value?.accountId!==active.accountId||
        identity.value?.deviceId!==active.deviceId)return
+    outbox.value=await grantOutboxStatus()
+    if(token!==epoch||stopped)return
     assignments.value=assignmentsNow.filter(a=>a.sync==='synced'&&a.status!=='completed')
       .map(a=>({id:a.id,title:a.title}))
     if(!assignments.value.some(x=>x.id===selected.value))selected.value=assignments.value[0]?.id??''
@@ -74,6 +77,7 @@ async function invite(){
     const created=await inviteToAssignment(selected.value,recipient.value.trim(),role.value)
     // Code exists in reactive runtime memory only; it is never saved to storage or URL.
     invitation.value=created;recipient.value='';notice.value=copy.value.queued
+    outbox.value=await grantOutboxStatus()
     void flushGrantOperations()
   }catch(e){error.value=e instanceof Error?e.message:copy.value.error}
   finally{busy.value=false}
@@ -88,6 +92,7 @@ async function act(row:ServerGrant,kind:'accept'|'decline'|'revoke'|'leave'){
     }else await changeAssignmentGrant(row,kind)
     inputCode.value[row.grantId]=''
     notice.value=copy.value.queued
+    outbox.value=await grantOutboxStatus()
     void flushGrantOperations()
   }catch(e){error.value=e instanceof Error?e.message:copy.value.error}
   finally{busy.value=false}
@@ -162,6 +167,15 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
           <button type="button" class="subtle-button" @click="invitation=null">{{ copy.close }}</button>
         </div>
       </div>
+      <div v-if="outbox.length" class="grant-panel" role="status">
+        <h2>{{ copy.state }}</h2>
+        <p v-for="op in outbox" :key="op.opId" class="grant-operation">
+          <strong>{{ op.kind }}</strong> · {{ op.grantId }}
+          · {{ op.state==='conflict'?copy.conflictOp:
+            op.state==='retry'?copy.retryOp:copy.pendingOp }}
+          <small v-if="op.error">{{ op.error }}</small>
+        </p>
+      </div>
       <div class="grant-panel">
         <header><h2>{{ copy.incoming }}</h2>
           <button class="subtle-button" type="button" @click="reload">{{ copy.refresh }}</button></header>
@@ -169,7 +183,7 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
         <article v-for="item in incoming" :key="item.grantId" class="grant-entry">
           <strong>{{ item.assignmentId }}</strong><small>{{ item.role }} · {{ item.state==='pending'?copy.pending:copy.accepted }}</small>
           <template v-if="item.state==='pending'">
-            <input v-model="inputCode[item.grantId]" type="text" autocomplete="off"
+            <input v-model="inputCode[item.grantId]" type="password" autocomplete="off"
               autocapitalize="none" spellcheck="false" :placeholder="copy.enterCode">
             <button class="subtle-button" type="button" :disabled="busy||identity.offline"
               @click="act(item,'accept')">{{ copy.accept }}</button>
@@ -213,5 +227,7 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
 .grant-code{border:1px solid var(--border);padding:12px;border-radius:10px;margin-top:20px}
 .grant-code code{display:block;overflow-wrap:anywhere;margin:12px 0;font-size:13px}
 .grant-code p{font-size:12px}
+.grant-operation{overflow-wrap:anywhere;font-size:12px}
+.grant-operation small{display:block;color:var(--secondary)}
 @media(max-width:650px){.grant-form{grid-template-columns:1fr}}
 </style>
