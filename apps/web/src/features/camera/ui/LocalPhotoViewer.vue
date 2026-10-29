@@ -15,13 +15,13 @@ const copy=computed(()=>ru.value?{
   locked:'Недоступно: заблокирован аккаунт, время недостоверно или файл повреждён.',
   local:'Защищённый снимок',noSave:'Изображение не сохраняется в Photos/DCIM.',
   account:'Откройте аккаунт, чтобы просмотреть фотографию.',
-  image:'Приватная фотография',edit:'Редактировать',
+  image:'Приватная фотография',edit:'Редактировать',card:'Карточка',
 }:{
   title:'Protected local viewer',back:'Back to photos',loading:'Decrypting on this device…',
   locked:'Unavailable: account locked, untrusted time or corrupt ciphertext.',
   local:'Protected photograph',noSave:'No system Photos/DCIM writes.',
   account:'Unlock your account to view this photo.',
-  image:'Private photograph',edit:'Edit photograph',
+  image:'Private photograph',edit:'Edit photograph',card:'Photo Card',
 })
 function clear(){
   ticket++
@@ -69,6 +69,7 @@ watch(identity,()=>{void show()})
         class="subtle-button"
       >{{ copy.back }}</RouterLink>
       <RouterLink :to="'/photos/'+id+'/edit'">{{ copy.edit }}</RouterLink>
+      <RouterLink :to="'/photos/'+id+'/card'">{{ copy.card }}</RouterLink>
       <span>{{ copy.local }}</span>
     </nav>
     <h2>{{ copy.title }}</h2>
