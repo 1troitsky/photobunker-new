@@ -24,7 +24,7 @@ if (apiExists && credentialKeys.some(key => !unquote(existing[key] ?? ''))) {
   process.exit(1)
 }
 const defaults = {
-  COMPOSE_PROJECT_NAME: 'photobunker', APP_PORT: '8080', S3_PORT: '3900',
+  COMPOSE_PROJECT_NAME: 'photobunker-assignment-release', APP_PORT: '8081', S3_PORT: '3901',
   POSTGRES_DB: 'photobunker', POSTGRES_USER: 'photobunker',
   POSTGRES_PASSWORD: randomBytes(24).toString('hex'),
   GARAGE_RPC_SECRET: randomBytes(32).toString('hex'),
@@ -58,7 +58,7 @@ if (!apiExists) {
     AWS_SECRET_ACCESS_KEY: env.GARAGE_DEFAULT_SECRET_KEY, AWS_DEFAULT_REGION: 'garage',
     AWS_BUCKET: env.GARAGE_DEFAULT_BUCKET, AWS_ENDPOINT: 'http://garage:3900', AWS_USE_PATH_STYLE_ENDPOINT: 'true',
     AWS_BROWSER_ENDPOINT: `http://localhost:${s3Port}`,
-    AWS_CORS_ALLOWED_ORIGINS: `http://localhost:${appPort},http://127.0.0.1:${appPort},http://photobunker.orb.local,https://photobunker.orb.local`,
+    AWS_CORS_ALLOWED_ORIGINS: `http://localhost:${appPort},http://127.0.0.1:${appPort},http://assignment-release.photobunker.orb.local,https://assignment-release.photobunker.orb.local`,
   }
   const lines = template.split('\n').map(line => {
     const match = line.match(/^([A-Z][A-Z0-9_]*)=/)

@@ -19,10 +19,7 @@ function appShellWorker(): Plugin {
     async closeBundle() {
       const assets = (await readdir(resolve(outputDirectory, 'assets'))).sort()
       const paths = [
-        '/', '/manifest.webmanifest', '/favicon.ico',
-        '/icons/favicon.svg', '/icons/favicon-96x96.png',
-        '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png',
-        '/icons/brand-logo.png',
+        '/', '/manifest.webmanifest', '/icons/favicon.svg',
         ...assets.filter((name) => /\.(?:js|css)$/.test(name)).map((name) => `/assets/${name}`),
       ]
       const digest = createHash('sha256')
@@ -43,7 +40,7 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: 5173,
       strictPort: true,
-      allowedHosts: ['localhost', 'photobunker.orb.local'],
+      allowedHosts: ['localhost', 'assignment-release.photobunker.orb.local'],
       cors: false,
       // Docker Desktop/OrbStack bind mounts can miss native file watcher events.
       watch: { usePolling: true, interval: 500 },
@@ -53,6 +50,6 @@ export default defineConfig(({ mode }) => {
         '/api': { target: env.API_PROXY_TARGET || 'http://127.0.0.1:8000' },
       },
     },
-    preview: { allowedHosts: ['localhost', 'photobunker.orb.local'] },
+    preview: { allowedHosts: ['localhost', 'assignment-release.photobunker.orb.local'] },
   }
 })

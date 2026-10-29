@@ -1,7 +1,7 @@
-name: photobunker
+name: photobunker-assignment-release
 
 x-api: &api
-  image: photobunker-php:local
+  image: photobunker-assignment-php:local
   build:
     context: .
     dockerfile: infra/php/Dockerfile
@@ -62,10 +62,10 @@ services:
       - garage-meta:/var/lib/garage/meta
       - garage-data:/var/lib/garage/data
     ports:
-      - "127.0.0.1:${S3_PORT:-3900}:3900"
+      - "127.0.0.1:${S3_PORT:-3901}:3900"
     networks: [local]
     labels:
-      dev.orbstack.domains: s3.photobunker.orb.local
+      dev.orbstack.domains: s3.assignment-release.photobunker.orb.local
       dev.orbstack.http-port: "3900"
     healthcheck:
       test: [CMD, /garage, status]
@@ -114,12 +114,12 @@ services:
   gateway:
     image: nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
     ports:
-      - "127.0.0.1:${APP_PORT:-8080}:80"
+      - "127.0.0.1:${APP_PORT:-8081}:80"
     volumes:
       - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     networks: [local, matrix-internal]
     labels:
-      dev.orbstack.domains: photobunker.orb.local
+      dev.orbstack.domains: assignment-release.photobunker.orb.local
       dev.orbstack.http-port: "80"
     depends_on:
       api:

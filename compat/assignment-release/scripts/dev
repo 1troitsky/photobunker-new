@@ -40,12 +40,12 @@ case "${1:-help}" in
     docker compose build api
     docker compose pull postgres garage web gateway
     docker compose run --rm --no-deps api composer install --prefer-dist --no-interaction
-    docker compose run --rm --no-deps web npm ci --no-fund
+    docker compose run --rm --no-deps web npm install --no-audit --no-fund
     docker compose up -d --wait postgres garage
     docker compose run --rm api php artisan migrate --force
     docker compose run --rm api php artisan photobunker:storage-configure
     docker compose up -d --wait
-    printf '%s\n' 'PhotoBunker: http://localhost:8080 or https://photobunker.orb.local'
+    printf '%s\n' 'PhotoBunker Assignment Release: http://localhost:8081 or https://assignment-release.photobunker.orb.local'
     ;;
   up)
     require_env
