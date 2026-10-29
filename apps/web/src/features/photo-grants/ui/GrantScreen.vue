@@ -10,7 +10,7 @@ import {inviteToAssignment,acceptAssignmentGrant,changeAssignmentGrant,
 
 const ru=computed(()=>language.value==='ru')
 const copy=computed(()=>ru.value?{
- title:'Участники заданий',viewPhotos:'Полученные миниатюры',choosePhoto:'Выберите снимок',publish:'Подготовить миниатюру для участника',published:'Зашифрованная миниатюра подготовлена.',shareQueued:'Зашифрованная миниатюра поставлена в очередь отправки (не подтверждена сервером).',pendingOp:'В очереди',retryOp:'Повтор после ошибки',conflictOp:'Сервер отклонил операцию — требуется проверка',state:'Состояние операций',note:'Приглашение не открывает фотографии. Общий доступ будет включён только после проверки E2EE и серверных прав.',
+ title:'Участники заданий',viewPhotos:'Полученные миниатюры',choosePhoto:'Выберите снимок',publish:'Подготовить миниатюру для участника',published:'Зашифрованная миниатюра подготовлена.',shareQueued:'Зашифрованная миниатюра поставлена в очередь отправки (не подтверждена сервером).',pendingOp:'В очереди',retryOp:'Повтор после ошибки',delivered:'Подтверждено сервером',conflictOp:'Сервер отклонил операцию — требуется проверка',state:'Состояние операций',note:'Приглашение не открывает фотографии. Общий доступ будет включён только после проверки E2EE и серверных прав.',
  back:'К заданиям',loading:'Загружаем приглашения…',
  account:'Сначала откройте аккаунт',offline:'Приглашения требуют подключения к серверу.',
  new:'Пригласить участника',assignment:'Задание',recipient:'ID аккаунта получателя',
@@ -25,7 +25,7 @@ const copy=computed(()=>ru.value?{
  queued:'Операция записана в зашифрованную очередь. Подтверждение ожидается.',
  error:'Операция не выполнена.',refresh:'Обновить',
 }:{
- title:'Assignment participants',viewPhotos:'Received thumbnails',choosePhoto:'Select a photo',publish:'Prepare encrypted thumbnail',published:'Encrypted thumbnail prepared.',shareQueued:'Encrypted thumbnail queued; server delivery is not confirmed yet.',pendingOp:'Queued locally',retryOp:'Retry scheduled',conflictOp:'Server rejected operation — review required',state:'Operations',note:'An invitation does not unlock photos. Sharing remains disabled until independent E2EE and server ACL verification.',
+ title:'Assignment participants',viewPhotos:'Received thumbnails',choosePhoto:'Select a photo',publish:'Prepare encrypted thumbnail',published:'Encrypted thumbnail prepared.',shareQueued:'Encrypted thumbnail queued; server delivery is not confirmed yet.',pendingOp:'Queued locally',retryOp:'Retry scheduled',delivered:'Server confirmed',conflictOp:'Server rejected operation — review required',state:'Operations',note:'An invitation does not unlock photos. Sharing remains disabled until independent E2EE and server ACL verification.',
  back:'Assignments',loading:'Loading invitations…',account:'Unlock account first',
  offline:'Invitations require an online connection.',
  new:'Invite a participant',assignment:'Assignment',recipient:'Recipient account ID',
@@ -202,7 +202,7 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
         <p v-for="share in shareOutbox" :key="share.operationId" class="grant-operation">
           <strong>{{ share.photoId }}</strong> · {{ share.grantId }} ·
           {{ share.state==='conflict'?copy.conflictOp:
-            share.state==='retry'?copy.retryOp:copy.pendingOp }}
+            share.state==='retry'?copy.retryOp:share.state==='acknowledged'?copy.delivered:copy.pendingOp }}
           <small v-if="share.lastError">{{ share.lastError }}</small>
         </p>
       </div>

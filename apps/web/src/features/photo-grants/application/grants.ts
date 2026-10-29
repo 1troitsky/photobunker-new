@@ -146,16 +146,18 @@ export async function grantOperationResult(op:OperationRow,ok:boolean,reason='')
       throw Error('grant.operation_changed')
     if(ok){
       await grantDb.operations.delete(op.id)
-      if(['revoke','leave','decline'].includes(op.contract.kind))
-        await grantDb.secrets.delete(scopedId(op.accountId,op.deviceId,op.grantId))
+      // Removing the encrypted grant secret is a separate, explicit credential
+      // retirement flow. An ACK is not proof no concurrent read/other device
+      // needs it. Preserve until a trusted cleanup policy is implemented.
+      // Never destroy the only secret as a side-effect of an outbox response.
     }else{
       const attempts=Math.min(24,saved.attempts+1)
       const conflict=/^grant\.http_4(00|03|04|09|10|22)$/.test(reason)
       await grantDb.operations.update(op.id,{state:conflict?'conflict':'retry',
         attempts,retryAt:Date.now()+Math.min(300000,1000*2**Math.min(attempts,8)),
         lastError:reason.slice(0,90)})
-      // Permanent rejection must not leave an orphaned recipient grant key.
-      if(conflict)await grantDb.secrets.delete(scopedId(op.accountId,op.deviceId,op.grantId))
+      // Keep the ciphertext-wrapped grant secret on every error, including
+      // rejected/ambiguous responses. Never silently destroy recovery material.
     }
   })
   same(op.accountId,op.deviceId)
@@ -179,6 +181,8 @@ export async function publishRecipientThumbnail(grantId:string,photoId:string):
   same(active.accountId,active.deviceId)
   if(prior){
     if(prior.state==='conflict')throw Error('grant.thumbnail_conflict')
+    // Preserve the immutable operation identity for pending, retried AND
+    // confirmed shares. One click cannot generate a different envelope.
     return {assetId:prior.assetId,operationId:prior.operationId}
   }
   const header=await openLocalPhotoVault().readHeader(photoId)
@@ -271,7 +275,12 @@ export async function thumbnailShareResult(row:ThumbnailShareRow,
     if(!saved||saved.operationId!==row.operationId||
       saved.contract!==row.contract||saved.signature!==row.signature)
       throw Error('grant.share_changed')
-    if(outcome==='ack'){await grantDb.thumbnailShares.delete(row.id);return}
+    if(outcome==='ack'){
+      await grantDb.thumbnailShares.update(row.id,{
+        state:'acknowledged',lastError:null,retryAt:0,
+      })
+      return
+    }
     const attempts=Math.min(24,saved.attempts+1)
     await grantDb.thumbnailShares.update(row.id,{
       state:outcome,attempts,

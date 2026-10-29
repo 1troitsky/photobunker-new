@@ -13,7 +13,7 @@ export type OperationRow={
 export type ThumbnailShareRow=Readonly<{
   id:string;accountId:string;deviceId:string;grantId:string;photoId:string;
   assetId:string;generation:number;operationId:string;expiresAt:number;
-  contract:string;signature:string;proof:{deviceId:string;deviceSpki:string;rootSignature:string};state:'pending'|'retry'|'conflict';
+  contract:string;signature:string;proof:{deviceId:string;deviceSpki:string;rootSignature:string};state:'pending'|'retry'|'conflict'|'acknowledged';
   retryAt:number;attempts:number;lastError:string|null
 }>
 class GrantsDB extends Dexie{
@@ -27,6 +27,14 @@ class GrantsDB extends Dexie{
       operations:'&id,[accountId+deviceId],grantId,state,retryAt',
     })
     this.version(2).stores({
+      secrets:'&id,[accountId+deviceId],grantId',
+      operations:'&id,[accountId+deviceId],grantId,state,retryAt',
+      thumbnailShares:'&id,[accountId+deviceId],grantId,state,retryAt,expiresAt,&[accountId+deviceId+grantId+photoId+generation]',
+    })
+    // Dexie migration preserves v1/v2 data. The unique compound key also
+    // prevents two concurrent tabs from creating different recipient DEKs
+    // for the same grant generation and photo.
+    this.version(3).stores({
       secrets:'&id,[accountId+deviceId],grantId',
       operations:'&id,[accountId+deviceId],grantId,state,retryAt',
       thumbnailShares:'&id,[accountId+deviceId],grantId,state,retryAt,expiresAt,&[accountId+deviceId+grantId+photoId+generation]',
