@@ -19,7 +19,10 @@ export function assignmentReleaseUrl(currentPath:string):string|null {
   const safePath = currentPath.startsWith('/') ? currentPath : '/welcome'
   let path = '/welcome'
   if (safePath==='/photos') path='/gallery'
-  else if (safePath.startsWith('/photos/')) path='/gallery/'+encodeURIComponent(safePath.slice('/photos/'.length).split('/')[0]!)
+  else if (safePath.startsWith('/photos/')) {
+    const rest=safePath.slice('/photos/'.length).split('/')
+    path='/gallery/'+encodeURIComponent(rest[0]!)+(rest[1]==='edit'?'/edit':'')
+  }
   else if (safePath==='/editor/preview') path='/gallery'
   else if (safePath.startsWith('/assignments')) path=safePath
   else if (safePath==='/camera'||safePath==='/profile'||safePath==='/gallery') path=safePath

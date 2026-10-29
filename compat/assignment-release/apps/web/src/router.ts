@@ -7,6 +7,7 @@ import AccountAuthView from './views/AccountAuthView.vue'
 import AccountEditView from './views/AccountEditView.vue'
 import ContactsView from './views/ContactsView.vue'
 import PersonProfileView from './views/PersonProfileView.vue'
+const CompatibilityPhotoBootstrap = () => import('./views/MessagesView.vue')
 import PhotoSecurityView from './views/PhotoSecurityView.vue'
 import AccountSecurityView from './views/AccountSecurityView.vue'
 import CameraView from './views/CameraView.vue'
@@ -68,6 +69,9 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
       // Messenger is unavailable in Assignment Release. Matrix is retained only as a
       // compatibility dependency for the old account/security lifecycle.
       { path: '/messages', redirect: '/assignments' },
+      // The old photo-key enrollment is still coupled to the Matrix setup UI.
+      // Do not link this internal route from any user-facing navigation.
+      { path: '/_compat/photo-bootstrap', name:'messages', component: CompatibilityPhotoBootstrap },
       { path: '/people/:handle', name: 'person-profile', component: PersonProfileView },
       { path: '/join', name: 'join', component: JoinView },
       {

@@ -5,7 +5,7 @@ import {origin,headers,button,label,accountFixture,cleanupFixtures,monitorRuntim
 import {enrollPhotos,unlockPhotos,preparePhotos,capture,jobs,received} from './photo-qa.mjs'
 const base=`${origin}/api/v1/identity/workspace`
 async function contact(one,two){for(const [owner,person] of [[one,two],[two,one]])assert.equal((await owner.context.request.post(`${origin}/api/v1/identity/contacts`,{headers,data:{publicId:person.me.account.publicId}})).status(),200)}
-async function protect(fixture){const page=fixture.page;await page.goto(`${origin}/messages`);await expect(page.locator('.messages-screen')).toHaveAttribute('data-crypto-stage','ready',{timeout:90000});await expect(page.locator('.messages-screen')).toHaveAttribute('data-history-backup','true')}
+async function protect(fixture){const page=fixture.page;await page.goto(`${origin}/_compat/photo-bootstrap`);await expect(page.locator('.messages-screen')).toHaveAttribute('data-crypto-stage','ready',{timeout:90000});await expect(page.locator('.messages-screen')).toHaveAttribute('data-history-backup','true')}
 async function participant(page,person){await button(page,'Добавить участника').click();await label(page,'ID участника').fill(person.me.account.publicId);await button(page,'Готово').click()}
 async function accept(f,name){await f.page.goto(`${origin}/assignments`);await f.page.locator('.workspace-invitations .form-card').filter({hasText:name}).getByRole('button',{name:'Принять',exact:true}).click();await expect(f.page.locator('.workspace-invitations .form-card').filter({hasText:name})).toHaveCount(0)}
 for(const engine of(process.env.PHOTO_BROWSERS??'chromium,webkit').split(',')){
