@@ -42,7 +42,7 @@
 
 ## 2. Открытые продуктовые решения — обязательный gate перед реализации зависимой функции
 
-В [03-PHOTO-STORAGE.md](03-PHOTO-STORAGE.md) утверждены ST-01/02/03/05/06/09/12/13, первый S3 backend Garage. **ST-04 recovery технический baseline уже зафиксирован** в [11](11-IDENTITY-AND-KEYS.md); capture compression profile v1 зафиксирован как **ST-08 technical baseline** в [03](03-PHOTO-STORAGE.md); **ST-16 browser storage** и **ST-17 trusted-time** — в [12](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md). Перед соответствующими задачами Codex делает crypto/device/storage/memory review, но **не возвращает вопросы хранения в общий дизайн-блокер**. Поздние OPEN — редакторская история (ST-07), shares (ST-10), legacy migration (ST-11), изменение уже существующего TTL (ST-15).
+В [03-PHOTO-STORAGE.md](03-PHOTO-STORAGE.md) утверждены ST-01/02/03/05/06/09/12/13, первый S3 backend Garage. **ST-04 recovery технический baseline уже зафиксирован** в [11](11-IDENTITY-AND-KEYS.md); capture compression profile v1 зафиксирован как **ST-08 technical baseline** в [03](03-PHOTO-STORAGE.md); **ST-16 browser storage** и **ST-17 trusted-time** — в [12](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md). В Phase I ChatGPT выполняет предварительную проверку контрактов в пределах доступного GitHub-кода; до `Verified`/интеграции Codex независимо проводит crypto/device/storage/memory review. Это **не возвращает вопросы хранения в общий дизайн-блокер**. Поздние OPEN — редакторская история (ST-07), shares (ST-10), legacy migration (ST-11), изменение уже существующего TTL (ST-15).
 
 Для первой версии режим 1 (no additional compression) показан **disabled**, не имитируется. Mode 2 хранит compressed source и отдельный edited current, mode 3 default безопасно заменяет compressed master. **Миниатюры и 24ч–45д TTL уже закреплены, см. ST-05/06/09**; каждая редакторская версия, derivative и связанная metadata удаляются по expiry.
 
@@ -107,7 +107,9 @@ Photo Card (card-only policy), encrypted share with isolated rendition, Browser 
 ### R2-7 Release: R2-23–24
 Cross-module failure tests, independent security review, production build E2E, real iOS/Android checks, backup/restore and deployment. Stop/release decision based on evidence.
 
-## 5. Stage gates: нельзя двигаться дальше без
+## 5. Stage gates интеграции, приёмки и релиза
+
+Эти gates запрещают выставлять `Verified`, интегрировать зависимый рискованный код, принимать или выпускать продукт без доказательств. Они **не запрещают Phase I** писать последующие decoupled/stacked Draft PR по утверждённым контрактам; критический STOP ограничивает только затронутый небезопасный сценарий.
 
 - **Gate A (после R2-02):** архитектура APPROVED; локальные обязательные проверки и import-boundaries реально выполнены, production HTTPS preview работает; владелец проверил UI на телефоне/desktop **без Garage/PostgreSQL**.
 - **Gate Identity/Keys (после R2-03):** key-only bootstrap, Recovery Key confirm/restore, signed challenge, pairing, two accounts and partial retry — тесты Codex PASS, без device-unconfirmed deadlock и global content key.
@@ -118,7 +120,7 @@ Cross-module failure tests, independent security review, production build E2E, r
 - **Gate D**: Card/Browser scopes/TTL/revoke independent, no data leaks/false public grants.
 - **Gate E**: PIN destructive flows and backup/restore/recovery tested, release checklist and owner acceptance.
 
-В каждой Issue должны быть: цель, scope, dependencies, acceptance, failure paths и подготовленный Codex раздел `Legacy evidence` с точными read-only путями и решением `REUSE / ADAPT / REFERENCE / REJECT`; детали установки и локальной тестовой проверки определяет Codex. **ChatGPT реализует основную массу задач; Codex ставит зависимости, выдаёт Issues, проверяет и может исправлять/допиливать код в том же PR.**
+В каждой Issue должны быть: цель, scope, dependencies, acceptance, failure paths и раздел `Legacy evidence` с точными read-only путями и решением `REUSE / ADAPT / REFERENCE / REJECT`. В Phase I ChatGPT самостоятельно готовит missing evidence и реализует Issue; после завершения стека Codex устанавливает тестовое окружение, независимо проверяет evidence и код и может исправлять/допиливать тот же PR.
 
 ## 6. Вне scope
 
@@ -126,4 +128,4 @@ Messages/Matrix, LiveKit, voice/video calls, chat attachment, Presence, group ch
 
 ## 7. Актуализация
 
-Переходы статусов ведутся **только в Project/Issues**. Roadmap меняется при утверждённых scope/архитектурных решениях владельца. **Codex** ведёт техническую очередь Issues/Project, окружение и результаты проверки; **ChatGPT** выполняет выданные задачи через Draft PR. Оба читают README + AGENTS + этот roadmap. Роли не переводить в выдуманную иерархию «ChatGPT — начальник Codex».
+Переходы статусов ведутся **только в Project/Issues**. Roadmap меняется при утверждённых scope/архитектурных решениях владельца. В Phase I **ChatGPT** самостоятельно идёт по графу согласованных Issues и ведёт stacked Draft PR; в Phase II **Codex** ведёт техническую проверку, окружение, интеграцию и подтверждённые статусы Project. Оба заново читают README + AGENTS + этот roadmap. Роли не переводить в выдуманную иерархию «ChatGPT — начальник Codex».
