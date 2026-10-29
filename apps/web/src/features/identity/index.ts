@@ -16,3 +16,5 @@ export { photoRequest } from './infrastructure/api'
 export {signMetadataContract} from './infrastructure/identity'
 
 export {assignmentRequest} from './infrastructure/api'
+
+export {collaborationRequest} from './infrastructure/api'
