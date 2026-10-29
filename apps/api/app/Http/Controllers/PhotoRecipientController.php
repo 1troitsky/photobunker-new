@@ -7,6 +7,7 @@ use App\Photo\PhotoSync;
 use App\Photo\RecipientGrantAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Storage;
 
 /** Only one explicitly approved ciphertext thumbnail per grant/photo/asset. */
@@ -104,6 +105,81 @@ final class PhotoRecipientController extends Controller {
             ]);
             return $this->sync->json(['accepted'=>true,'operationId'=>$c['operationId']]);
         },3);
+    }
+
+
+    /**
+     * Cursor scans opaque photo IDs; every returned row must pass the same
+     * live, revision-specific ACL as its manifest and ciphertext endpoints.
+     * No metadata or raw object paths are exposed in this list.
+     */
+    public function sharedPhotos(Request $r,string $grantId){
+        [$actor]=$this->sync->actor($r);
+        P::uuid($grantId);
+        abort_unless(config('photo_sync.recipient_thumbnail_reads_enabled',false)===true,404);
+        $grant=DB::table('assignment_grants_v1')->where('id',$grantId)
+            ->where('recipient_account_id',$actor->id)->where('state','accepted')
+            ->whereNotNull('accepted_at')->whereNull('revoked_at')->first();
+        abort_unless($grant,404);
+        $after=$r->query('after','');
+        abort_unless(is_string($after),422);
+        $last='';
+        if($after!==''){
+            abort_unless(strlen($after)>=40&&strlen($after)<=768&&
+                preg_match('/^[A-Za-z0-9_-]+$/D',$after)===1,422);
+            try{
+                $encoded=strtr($after,'-_','+/');
+                $encoded.=str_repeat('=',(4-strlen($encoded)%4)%4);
+                $cursor=json_decode(Crypt::decryptString($encoded),true,12,JSON_THROW_ON_ERROR);
+            }catch(\Throwable){abort(422);}
+            abort_unless(is_array($cursor)&&!array_is_list($cursor)&&
+                array_keys($cursor)===['v','account','grant','generation','last','until']&&
+                $cursor['v']===1&&$cursor['account']===$actor->id&&
+                $cursor['grant']===$grantId&&$cursor['generation']===(int)$grant->generation&&
+                is_int($cursor['until'])&&$cursor['until']>=time()&&
+                is_string($cursor['last']),422);
+            P::uuid($cursor['last']);
+            $last=$cursor['last'];
+        }
+        $size=$r->query('limit','30');
+        abort_unless(is_string($size)&&ctype_digit($size)&&
+            (int)$size>=1&&(int)$size<=50,422);
+        $limit=(int)$size;
+        // Use the next scanned cursor, not the last visible item: otherwise
+        // a long streak of revoked assets can cause pagination to loop.
+        $query=DB::table('photo_recipient_keys_v1 as k')
+            ->join('photo_objects as o','o.id','=','k.asset_id')
+            ->where('k.grant_id',$grantId)->where('k.generation',$grant->generation)
+            ->where('o.kind','thumbnail')->where('o.state','active');
+        if($last!=='')$query->where('k.photo_id','>',$last);
+        $candidates=$query->select('k.photo_id')
+            ->selectRaw('MIN(CAST(k.asset_id AS TEXT)) as asset_id')
+            ->groupBy('k.photo_id')->orderBy('k.photo_id')
+            ->limit($limit+1)->get();
+        $results=[];
+        foreach($candidates->take($limit) as $candidate){
+            try{
+                [, $photo,$asset]=$this->access->resolved($grantId,
+                    $candidate->photo_id,$candidate->asset_id,$actor->id);
+                $results[]=[
+                    'photoId'=>$photo->id,'assetId'=>$asset->id,
+                    'expiresAt'=>(int)$photo->expires_at,
+                ];
+            }catch(\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $e){
+                if($e->getStatusCode()!==404&&$e->getStatusCode()!==410)throw $e;
+            }
+        }
+        $scanned=$candidates->take($limit);
+        $next=null;
+        if($candidates->count()>$limit&&$scanned->isNotEmpty()){
+            $opaque=Crypt::encryptString(json_encode([
+                'v'=>1,'account'=>$actor->id,'grant'=>$grantId,
+                'generation'=>(int)$grant->generation,
+                'last'=>$scanned->last()->photo_id,'until'=>time()+1800,
+            ],JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR));
+            $next=rtrim(strtr($opaque,'+/','-_'),'=');
+        }
+        return $this->sync->json(['photos'=>$results,'nextCursor'=>$next]);
     }
 
     private function authorized(Request $request,string $grantId,string $photoId,string $assetId):array {

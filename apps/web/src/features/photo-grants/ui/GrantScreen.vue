@@ -3,13 +3,14 @@ import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
 import {identity,onIdentityCleanup} from '../../identity'
 import {language} from '../../ui-preview'
 import {openAssignments} from '../../assignments'
+import {localGallery} from '../../gallery'
 import {inviteToAssignment,acceptAssignmentGrant,changeAssignmentGrant,
-  fetchAssignmentGrants,flushGrantOperations,grantOutboxStatus,
+  fetchAssignmentGrants,flushGrantOperations,grantOutboxStatus,publishRecipientThumbnail,
   type ServerGrant,type GrantRole,type GrantOutboxState} from '../index'
 
 const ru=computed(()=>language.value==='ru')
 const copy=computed(()=>ru.value?{
- title:'Участники заданий',pendingOp:'В очереди',retryOp:'Повтор после ошибки',conflictOp:'Сервер отклонил операцию — требуется проверка',state:'Состояние операций',note:'Приглашение не открывает фотографии. Общий доступ будет включён только после проверки E2EE и серверных прав.',
+ title:'Участники заданий',viewPhotos:'Полученные миниатюры',choosePhoto:'Выберите снимок',publish:'Подготовить миниатюру для участника',published:'Зашифрованная миниатюра отправлена. Просмотр пока отключён на сервере.',pendingOp:'В очереди',retryOp:'Повтор после ошибки',conflictOp:'Сервер отклонил операцию — требуется проверка',state:'Состояние операций',note:'Приглашение не открывает фотографии. Общий доступ будет включён только после проверки E2EE и серверных прав.',
  back:'К заданиям',loading:'Загружаем приглашения…',
  account:'Сначала откройте аккаунт',offline:'Приглашения требуют подключения к серверу.',
  new:'Пригласить участника',assignment:'Задание',recipient:'ID аккаунта получателя',
@@ -24,7 +25,7 @@ const copy=computed(()=>ru.value?{
  queued:'Операция записана в зашифрованную очередь. Подтверждение ожидается.',
  error:'Операция не выполнена.',refresh:'Обновить',
 }:{
- title:'Assignment participants',pendingOp:'Queued locally',retryOp:'Retry scheduled',conflictOp:'Server rejected operation — review required',state:'Operations',note:'An invitation does not unlock photos. Sharing remains disabled until independent E2EE and server ACL verification.',
+ title:'Assignment participants',viewPhotos:'Received thumbnails',choosePhoto:'Select a photo',publish:'Prepare encrypted thumbnail',published:'Encrypted thumbnail prepared. Recipient viewing remains disabled on server.',pendingOp:'Queued locally',retryOp:'Retry scheduled',conflictOp:'Server rejected operation — review required',state:'Operations',note:'An invitation does not unlock photos. Sharing remains disabled until independent E2EE and server ACL verification.',
  back:'Assignments',loading:'Loading invitations…',account:'Unlock account first',
  offline:'Invitations require an online connection.',
  new:'Invite a participant',assignment:'Assignment',recipient:'Recipient account ID',
@@ -40,6 +41,8 @@ const copy=computed(()=>ru.value?{
  error:'Operation failed.',refresh:'Refresh',
 })
 const assignments=ref<{id:string;title:string}[]>([])
+const photoOptions=ref<{id:string;assignmentId:string;title:string}[]>([])
+const selectedPhoto=ref<Record<string,string>>({})
 const selected=ref(''),recipient=ref(''),role=ref<GrantRole>('contributor')
 const grants=ref<ServerGrant[]>([]),outbox=ref<GrantOutboxState[]>([]),inputCode=ref<Record<string,string>>({})
 const invitation=ref<{grantId:string;code:string}|null>(null)
@@ -47,11 +50,14 @@ const busy=ref(false),loading=ref(false),notice=ref(''),error=ref('')
 let epoch=0,stopped=false
 function clear(){
   epoch++;grants.value=[];outbox.value=[];assignments.value=[];invitation.value=null
-  inputCode.value={};notice.value='';error.value=''
+  inputCode.value={};selectedPhoto.value={};photoOptions.value=[];notice.value='';error.value=''
 }
 const release=onIdentityCleanup(clear)
 const own=computed(()=>grants.value.filter(x=>x.ownerId===identity.value?.accountId))
 const incoming=computed(()=>grants.value.filter(x=>x.recipientId===identity.value?.accountId))
+function photoChoices(row:ServerGrant){
+  return photoOptions.value.filter(x=>x.assignmentId===row.assignmentId)
+}
 async function reload(){
   const active=identity.value,token=++epoch
   if(!active){clear();return}
@@ -67,6 +73,15 @@ async function reload(){
     if(!assignments.value.some(x=>x.id===selected.value))selected.value=assignments.value[0]?.id??''
     if(active.offline||!navigator.onLine){notice.value=copy.value.offline;return}
     grants.value=await fetchAssignmentGrants()
+    if(token!==epoch||stopped)return
+    try{
+      const photos=await localGallery()
+      if(token!==epoch||stopped)return
+      photoOptions.value=photos.filter(p=>p.state==='synced'&&
+        p.header.capture?.assignmentId&&p.header.thumbnailAssetId&&
+        p.header.expiresAt>Date.now()).map(p=>({id:p.header.photoId,
+          assignmentId:p.header.capture!.assignmentId,title:p.title||p.nameId||p.header.photoId}))
+    }catch{photoOptions.value=[]}
   }catch(e){if(token===epoch)error.value=e instanceof Error?e.message:copy.value.error}
   finally{if(token===epoch)loading.value=false}
 }
@@ -97,6 +112,19 @@ async function act(row:ServerGrant,kind:'accept'|'decline'|'revoke'|'leave'){
   }catch(e){error.value=e instanceof Error?e.message:copy.value.error}
   finally{busy.value=false}
 }
+
+async function publish(row:ServerGrant){
+  const photo=selectedPhoto.value[row.grantId]
+  if(busy.value||!photo)return
+  busy.value=true;error.value='';notice.value=''
+  try{
+    await publishRecipientThumbnail(row.grantId,photo)
+    notice.value=copy.value.published
+    delete selectedPhoto.value[row.grantId]
+  }catch(e){error.value=e instanceof Error?e.message:copy.value.error}
+  finally{busy.value=false}
+}
+
 async function copyCode(){
   if(!invitation.value)return
   const copied=invitation.value.code
@@ -190,8 +218,13 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
             <button class="subtle-button" type="button" :disabled="busy||identity.offline"
               @click="act(item,'decline')">{{ copy.decline }}</button>
           </template>
-          <button v-else class="subtle-button" type="button" :disabled="busy||identity.offline"
-            @click="act(item,'leave')">{{ copy.leave }}</button>
+          <template v-else>
+            <RouterLink class="subtle-button" :to="'/assignment-grants/'+item.grantId+'/photos'">
+              {{ copy.viewPhotos }}
+            </RouterLink>
+            <button class="subtle-button" type="button" :disabled="busy||identity.offline"
+              @click="act(item,'leave')">{{ copy.leave }}</button>
+          </template>
         </article>
       </div>
       <div class="grant-panel">
@@ -199,6 +232,18 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
         <article v-for="item in own" :key="item.grantId" class="grant-entry">
           <strong>{{ item.recipientId }}</strong>
           <small>{{ item.role }} · {{ item.state==='pending'?copy.pending:copy.accepted }}</small>
+          <template v-if="item.state==='accepted'">
+            <select v-model="selectedPhoto[item.grantId]" :aria-label="copy.choosePhoto"
+              :disabled="busy||identity.offline||!photoChoices(item).length">
+              <option value="">{{ copy.choosePhoto }}</option>
+              <option v-for="photo in photoChoices(item)" :key="photo.id" :value="photo.id">
+                {{ photo.title }}
+              </option>
+            </select>
+            <button type="button" class="subtle-button"
+              :disabled="busy||identity.offline||!selectedPhoto[item.grantId]"
+              @click="publish(item)">{{ copy.publish }}</button>
+          </template>
           <button class="subtle-button" type="button" :disabled="busy||identity.offline"
             @click="act(item,'revoke')">{{ copy.revoke }}</button>
         </article>
@@ -223,7 +268,7 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
   border-top:1px solid var(--border);padding:12px 0}
 .grant-entry strong{font-size:12px;overflow-wrap:anywhere;flex:1 1 220px}
 .grant-entry small{font-size:12px;color:var(--secondary)}
-.grant-entry input{flex:1 1 180px}
+.grant-entry input,.grant-entry select{flex:1 1 180px;min-height:44px;background:var(--background);color:var(--text);border:1px solid var(--border);border-radius:9px}
 .grant-code{border:1px solid var(--border);padding:12px;border-radius:10px;margin-top:20px}
 .grant-code code{display:block;overflow-wrap:anywhere;margin:12px 0;font-size:13px}
 .grant-code p{font-size:12px}

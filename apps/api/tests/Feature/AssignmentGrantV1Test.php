@@ -230,6 +230,12 @@ final class AssignmentGrantV1Test extends TestCase {
             ->assertJsonPath('manifest.cipherDigest',$digest);
         // The original owner's PhotoSync API never grants recipient access.
         $this->getJson("/photos/v1/$photo/manifests")->assertNotFound();
+        // Device retirement must invalidate its published signer as well.
+        DB::table('identity_devices')->where('id',$this->devices['owner'])
+            ->update(['revoked_at'=>now()]);
+        $this->getJson($route)->assertNotFound();
+        DB::table('identity_devices')->where('id',$this->devices['owner'])
+            ->update(['revoked_at'=>null]);
         $this->be('owner');
         $this->send($this->action('revoke',$grant,2))->assertOk();
         $this->be('guest');
@@ -265,6 +271,61 @@ final class AssignmentGrantV1Test extends TestCase {
         $this->be('guest');$this->getJson($route)->assertOk();
         DB::table('photo_records')->where('id',$photo)->update(['expires_at'=>now()->getTimestampMs()-1]);
         $this->getJson($route)->assertNotFound();
+    }
+
+
+    public function test_recipient_list_is_acl_scoped_paginated_and_disabled_by_default():void{
+        $this->acceptedContact();$grant=(string)Str::uuid();
+        $this->send($this->action('invite',$grant))->assertOk();
+        $this->be('guest');$this->send($this->action('accept',$grant,1))->assertOk();
+        $this->be('owner');
+        [$photo,$asset,$expiry,$digest]=$this->thumbnailFixture();
+        $path="/photos/v1/shared/grants/$grant/photos/$photo/assets/$asset";
+        $this->putJson($path,$this->shareStatement($grant,$photo,$asset,$expiry,$digest))
+            ->assertOk();
+        $list="/photos/v1/shared/grants/$grant/photos";
+        $this->be('guest');
+        $this->getJson($list)->assertNotFound();
+        config()->set('photo_sync.recipient_thumbnail_reads_enabled',true);
+        $this->getJson($list)->assertOk()->assertJsonCount(1,'photos')
+            ->assertJsonPath('photos.0.photoId',$photo)
+            ->assertJsonPath('photos.0.assetId',$asset)
+            ->assertJsonPath('nextCursor',null);
+        // A raw photo ID is not a cursor and must be rejected.
+        $this->getJson($list.'?after='.$photo.'&limit=1')->assertUnprocessable();
+        // A second authorized photo yields an encrypted, account-bound cursor.
+        $this->be('owner');
+        [$second,$secondAsset,$secondExpiry,$secondDigest]=$this->thumbnailFixture();
+        $this->putJson("/photos/v1/shared/grants/$grant/photos/$second/assets/$secondAsset",
+            $this->shareStatement($grant,$second,$secondAsset,$secondExpiry,$secondDigest))
+            ->assertOk();
+        $this->be('guest');
+        $first=$this->getJson($list.'?limit=1')->assertOk()
+            ->assertJsonCount(1,'photos');
+        $token=$first->json('nextCursor');
+        $this->assertIsString($token);
+        $this->assertStringNotContainsString($photo,$token);
+        $this->assertStringNotContainsString($second,$token);
+        $this->getJson($list.'?after='.$token.'&limit=1')->assertOk()
+            ->assertJsonCount(1,'photos')->assertJsonPath('nextCursor',null);
+        $corrupted=substr_replace($token,$token[5]==='A'?'B':'A',5,1);
+        $this->getJson($list.'?after='.$corrupted.'&limit=1')->assertUnprocessable();
+
+        $this->getJson($list.'?after=invalid&limit=1')->assertUnprocessable();
+        $this->getJson($list.'?after='.$photo.'&limit=99')->assertUnprocessable();
+        $this->be('outsider');$this->getJson($list)->assertNotFound();
+        $this->be('guest');
+        DB::table('contact_blocks_v1')->insert([
+            'account_id'=>$this->accounts['guest'],
+            'blocked_account_id'=>$this->accounts['owner'],'created_at'=>now(),
+        ]);
+        $this->getJson($list)->assertOk()->assertJsonCount(0,'photos');
+        DB::table('contact_blocks_v1')->delete();
+        DB::table('assignments')->where('id',$this->assignment)->update(['status'=>'completed']);
+        $this->getJson($list)->assertOk()->assertJsonCount(0,'photos');
+        DB::table('assignments')->where('id',$this->assignment)->update(['status'=>'in_progress']);
+        $this->be('owner');$this->send($this->action('revoke',$grant,2))->assertOk();
+        $this->be('guest');$this->getJson($list)->assertNotFound();
     }
 
 }

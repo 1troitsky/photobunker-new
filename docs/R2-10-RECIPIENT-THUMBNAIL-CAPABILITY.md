@@ -17,3 +17,11 @@ Added `withTransientOwnerDEK` (identity internal helper): decrypt only the selec
 Added `readRecipientThumbnail`: a recipient first checks live accepted grant, obtains the authenticated owner-signed ciphertext manifest from the gated endpoint, verifies detached signature and exact context/generation, unlocks the per-grant transport secret in scoped local storage, decrypts the per-asset DEK in memory, independently verifies ciphertext SHA-256 and the existing owner-scoped frame authentication; returns only a volatile WebP Blob. No OPFS/IndexedDB or system gallery writes. New tests target owner key zeroization, wrong context, owner AAD and corrupted bytes.
 
 **No release:** server recipient-read config remains false; signing key distribution, policy/roles, offline time, code recovery, actual multiple devices, race/revoke/E2E and real builds must be independently reviewed. Signed thumbnail transport is not equivalent to finished cross-account photo sharing.
+
+## Recipient discovery + controlled UI
+
+Added a read-only cursor-paginated endpoint `GET /photos/v1/shared/grants/{grantId}/photos` that never exposes original/storage filenames, owner metadata or unauthorized photos. Every result passes the exact same accepted-grant-generation, owner/device, block/contact, assignment binding, active thumbnail, manifest and expiry gate used by recipient ciphertext reads. Scanned cursor state is encrypted with Laravel Crypt and scoped to the current recipient account, grant ID and grant generation with a 30-minute timeout; raw IDs of ineligible rows are never exposed in pagination. Limit 1–50, default 30.
+
+The native PB2 recipient gallery has an explicit “decrypt” action per thumbnail and renders only volatile object URLs; identity cleanup, backgrounding and navigation revoke them. Owner's assignment-grants screen offers a per-grant, locally synced photo selection and a signed encrypted-thumbnail preparation action. The UI says when server access is disabled.
+
+Tests authored for disabled-by-default listing, multi-page encrypted cursor, tampering, contact block, completed assignment, grant revoke and owner device revoke. **None of the new tests or PHP/TS builds have been executed.** The current read flag remains deliberately hardcoded false. This is a Draft integration slice, not a release or evidence of end-to-end confidentiality.

@@ -8,6 +8,7 @@ const AppShell = () => import('./features/ui-preview/ui/AppShell.vue')
 const MainScreens = () => import('./features/ui-preview/ui/MainScreens.vue')
 const LocalPhotoViewer = () => import('./features/camera/ui/LocalPhotoViewer.vue')
 const PrivateCardScreen = () => import('./features/photo-card/ui/PrivateCardScreen.vue')
+const RecipientGalleryScreen = () => import('./features/photo-grants/ui/RecipientGalleryScreen.vue')
 const GrantScreen = () => import('./features/photo-grants/ui/GrantScreen.vue')
 const BrowserScreen = () => import('./features/photo-browser/ui/BrowserScreen.vue')
 const EditorScreen = () => import('./features/editor/ui/EditorScreen.vue')
@@ -35,6 +36,7 @@ export const router = createRouter({
         { path: 'camera', name: 'camera', component: MainScreens },
         { path: 'assignments', name: 'assignments', component: AssignmentsScreen },
         { path: 'assignment-grants', name: 'assignment-grants', component: GrantScreen },
+        { path: 'assignment-grants/:grantId/photos', name: 'recipient-gallery', component: RecipientGalleryScreen },
         { path: 'assignments/new', name: 'assignment-new', component: AssignmentsScreen },
         { path: 'assignments/:assignmentId', name: 'assignment-detail', component: AssignmentsScreen },
         { path: 'assignments/:assignmentId/edit', name: 'assignment-edit', component: AssignmentsScreen },
