@@ -31,25 +31,58 @@ Route::prefix('identity/v2')->middleware('throttle:40,1,identity')->group(functi
 
 // Same-origin authenticated account/device sessions, CSRF and no public S3 URLs.
 Route::prefix('photos/v1')->middleware('throttle:100,1,photos')->group(function () {
+    // Recipient thumbnail paths are separate from owner-only PhotoSync.
+    Route::get('/shared/grants/{grantId}/photos',
+        [\App\Http\Controllers\PhotoRecipientController::class,'sharedPhotos']);
+    Route::put('/shared/grants/{grantId}/photos/{photoId}/assets/{assetId}',
+        [\App\Http\Controllers\PhotoRecipientController::class,'publish']);
+    Route::get('/shared/grants/{grantId}/photos/{photoId}/assets/{assetId}',
+        [\App\Http\Controllers\PhotoRecipientController::class,'manifest']);
+    Route::get('/shared/grants/{grantId}/photos/{photoId}/assets/{assetId}/ciphertext',
+        [\App\Http\Controllers\PhotoRecipientController::class,'ciphertext']);
     Route::get('/list', [GalleryController::class,'index']);
     Route::post('/names/reserve', [PhotoNamesController::class,'reserve']);
     Route::post('/names/claim', [PhotoNamesController::class,'claim']);
     Route::post('/{photoId}/metadata/reserve', [PhotoMetadataController::class,'reserve']);
     Route::put('/{photoId}/metadata/{assetId}', [PhotoMetadataController::class,'upload']);
     Route::post('/{photoId}/metadata/finalize', [PhotoMetadataController::class,'finalize']);
+    Route::post('/{photoId}/edits/reserve', [\App\Http\Controllers\PhotoEditController::class,'reserve']);
+    Route::put('/{photoId}/edits/{assetId}', [\App\Http\Controllers\PhotoEditController::class,'upload']);
+    Route::post('/{photoId}/edits/finalize', [\App\Http\Controllers\PhotoEditController::class,'finalize']);
     Route::post('/reserve', [PhotoSyncController::class,'reserve']);
     Route::put('/{photoId}/objects/{assetId}', [PhotoSyncController::class,'upload']);
     Route::post('/{photoId}/finalize', function (\Illuminate\Http\Request $r,string $photoId,Finalization $f) {
         return response()->json($f->finalize($r,$photoId))->header('Cache-Control','no-store');
     });
+    Route::get('/{photoId}/review', [\App\Http\Controllers\AssignmentPhotoReviewController::class,'show']);
+    Route::put('/{photoId}/review', [\App\Http\Controllers\AssignmentPhotoReviewController::class,'mutate']);
     Route::get('/{photoId}/receipt', [PhotoSyncController::class,'receipt']);
     Route::get('/{photoId}/manifests', [PhotoSyncController::class,'manifests']);
     Route::get('/{photoId}/objects/{assetId}', [PhotoSyncController::class,'read']);
     Route::delete('/{photoId}',function(\Illuminate\Http\Request $r,string $photoId,Lifecycle $life,\App\Photo\PhotoSync $sync) {
         $sync->origin($r);[$a]=$sync->actor($r);
-        $p=$sync->requirePhoto($photoId,$a->id);
+        // An owner may still delete their photo after an assignment is retired.
+        $p=$sync->requirePhoto($photoId,$a->id,false,false);
         $life->mark($p->id,'revoked');
         \App\Jobs\PhotoCleanupJob::dispatch($p->id);
         return $sync->json(['state'=>'deleting'],202);
     });
+});
+
+
+// Owner-only anonymous encrypted Assignment aggregate; separate rate-limit budget.
+Route::prefix('assignments/v1')->middleware('throttle:60,1,assignments')->group(function(){
+    // Explicit assignment invitation lifecycle only. No PhotoSync read grant.
+    Route::get('/grants', [\App\Http\Controllers\AssignmentGrantController::class,'index']);
+    Route::put('/grants/operations/{operationId}', [\App\Http\Controllers\AssignmentGrantController::class,'mutate']);
+    Route::get('/list',[\App\Http\Controllers\AssignmentController::class,'index']);
+    Route::get('/{assignmentId}/history',[\App\Http\Controllers\AssignmentController::class,'history']);
+    Route::get('/{assignmentId}',[\App\Http\Controllers\AssignmentController::class,'show']);
+    Route::put('/{assignmentId}',[\App\Http\Controllers\AssignmentController::class,'mutate']);
+});
+
+// R2-09: PB2 device-signed, account-scoped Team/Contacts operations. Never grants photo ACL.
+Route::prefix('collaboration/v1')->middleware('throttle:60,1,collaboration')->group(function(){
+    Route::get('/snapshot',[\App\Http\Controllers\CollaborationController::class,'snapshot']);
+    Route::put('/operations/{operationId}',[\App\Http\Controllers\CollaborationController::class,'mutate']);
 });

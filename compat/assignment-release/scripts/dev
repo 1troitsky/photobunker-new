@@ -1,0 +1,123 @@
+#!/bin/sh
+set -eu
+cd "$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+
+require_env() {
+  if [ ! -f .env ] || [ ! -f apps/api/.env ]; then
+    printf '%s\n' 'Run ./scripts/dev setup first.' >&2
+    exit 1
+  fi
+}
+
+compose_down() {
+  if [ -f infra/rtc/.local/livekit.yaml ]; then
+    docker compose --profile matrix -f compose.yaml -f compose.offline.yaml -f compose.rtc.yaml down
+  else
+    docker compose --profile matrix -f compose.yaml -f compose.offline.yaml down
+  fi
+}
+
+ensure_network() {
+  # Compose versions differ in their handling of changed network settings.
+  # Recreate containers/network when switching modes; named volumes survive.
+  container=$(docker compose ps --all --quiet postgres)
+  if [ -n "$container" ]; then
+    network=$(docker inspect --format '{{range $name, $network := .NetworkSettings.Networks}}{{$name}}{{end}}' "$container")
+    if [ -n "$network" ]; then
+      internal=$(docker network inspect --format '{{.Internal}}' "$network")
+      if [ "$internal" != "$1" ]; then
+        compose_down
+      fi
+    fi
+  fi
+}
+
+case "${1:-help}" in
+  setup)
+    node scripts/setup-local.mjs
+    docker compose config --quiet
+    ensure_network false
+    docker compose build api
+    docker compose pull postgres garage web gateway
+    docker compose run --rm --no-deps api composer install --prefer-dist --no-interaction
+    docker compose run --rm --no-deps web npm ci --no-audit --no-fund
+    docker compose up -d --wait postgres garage
+    docker compose run --rm api php artisan migrate --force
+    docker compose run --rm api php artisan photobunker:storage-configure
+    docker compose up -d --wait
+    printf '%s\n' 'PhotoBunker Assignment Release: http://localhost:8081 or https://assignment-release.photobunker.orb.local'
+    ;;
+  up)
+    require_env
+    ensure_network false
+    docker compose up -d --wait
+    ;;
+  matrix)
+    require_env
+    node scripts/setup-matrix.mjs
+    # Apply newly prepared env_file settings to API and long-running workers.
+    docker compose up -d --wait api worker scheduler gateway
+    docker compose --profile matrix up -d matrix
+    docker compose exec -T api php artisan migrate --force
+    identity_probe=0
+    until docker compose exec -T api php artisan photobunker:identity-maintain --health; do
+      identity_probe=$((identity_probe + 1))
+      if [ "$identity_probe" -ge 20 ]; then exit 1; fi
+      sleep 1
+    done
+    ;;
+  rtc)
+    require_env
+    node scripts/setup-rtc.mjs
+    docker compose -f compose.yaml -f compose.rtc.yaml config --quiet
+    docker compose -f compose.yaml -f compose.rtc.yaml up -d api scheduler gateway livekit rtc-openid rtc-jwt
+    docker compose exec -T api php artisan migrate --force
+    docker compose exec -T gateway nginx -s reload
+    ;;
+  down)
+    require_env
+    compose_down
+    ;;
+  status)
+    require_env
+    docker compose ps
+    ;;
+  check)
+    require_env
+    docker compose exec -T api php artisan test
+    docker compose exec -T api vendor/bin/pint --test
+    docker compose exec -T api php artisan photobunker:storage-check --signed
+    docker compose exec -T web npm run check
+    ;;
+  smoke)
+    require_env
+    # Infrastructure and HTTP health only, NOT messenger acceptance.
+    node scripts/smoke.mjs
+    docker compose exec -T api php artisan photobunker:storage-check --signed
+    ;;
+  messenger-smoke)
+    require_env
+    # Real browser, two isolated accounts, both Write entry points and an E2EE
+    # first message. Fails rather than claiming success on HTTP health alone.
+    node tools/browser-spike/check-first-message.mjs
+    ;;
+  offline)
+    require_env
+    ensure_network true
+    docker compose -f compose.yaml -f compose.offline.yaml up -d --wait --force-recreate
+    printf '%s\n' 'Application services now block external egress; Nginx retains host ingress. ./scripts/dev up restores the regular network.'
+    ;;
+  api)
+    require_env
+    shift
+    docker compose exec -T api "$@"
+    ;;
+  web)
+    require_env
+    shift
+    docker compose exec -T web "$@"
+    ;;
+  *)
+    printf '%s\n' 'Usage: ./scripts/dev {setup|up|matrix|rtc|down|status|check|smoke|messenger-smoke|offline|api <command>|web <command>}'
+    ;;
+esac

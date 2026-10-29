@@ -7,6 +7,8 @@ export default tseslint.config(
   {
     ignores: [
       '_old/**',
+      // Legacy compatibility kernel is built/linted separately from PB2.
+      'compat/assignment-release/**',
       '**/dist/**',
       '**/coverage/**',
       '**/node_modules/**',

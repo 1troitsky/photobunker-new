@@ -1,0 +1,9 @@
+.git
+.env
+**/.env
+**/.env.*
+!**/.env.example
+.local
+**/node_modules
+**/vendor
+**/dist

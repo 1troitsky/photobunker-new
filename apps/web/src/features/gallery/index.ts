@@ -4,3 +4,7 @@ export {takeReservedName,reserveNameRange,claimName} from '../local-storage'
 export {checkMetadata,checkFix,formatName,namePattern} from './domain/metadata'
 export type {PhotoMetadataV1,LocationFix} from './domain/metadata'
 export {default as GalleryScreen} from './ui/GalleryScreen.vue'
+
+export {localGallery} from './application/library'
+export type {GalleryItem} from './application/library'
+export {default as GalleryThumbnail} from './ui/GalleryThumbnail.vue'

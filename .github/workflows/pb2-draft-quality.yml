@@ -1,0 +1,87 @@
+name: PB2 Draft quality gate
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pb2-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Vue, TS, architecture, unit, bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run full web quality checks and capture output
+        shell: bash
+        run: |
+          failures=0
+          for task in test:architecture lint typecheck test:unit build; do
+            echo "=== pnpm ${task} ===" | tee -a web-check.log
+            pnpm "${task}" 2>&1 | tee -a web-check.log
+            status=${PIPESTATUS[0]}
+            if [ "${status}" -ne 0 ]; then failures=1; fi
+          done
+          exit "${failures}"
+      - name: Keep diagnostics from failed checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pb2-web-check-output
+          path: web-check.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  php:
+    name: Laravel PHP 8.4 and PHPUnit
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, xml, openssl, sqlite3, pdo_sqlite, fileinfo, curl, zip
+          coverage: none
+      - name: Install locked Composer dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+      - name: PHP syntax and tests with diagnostics
+        shell: bash
+        run: |
+          failures=0
+          echo '=== PHP lint ===' | tee -a php-check.log
+          find app tests database -name '*.php' -print0 | xargs -0 -n1 php -l 2>&1 | tee -a php-check.log
+          status=${PIPESTATUS[0]}
+          if [ "${status}" -ne 0 ]; then failures=1; fi
+          echo '=== PHPUnit ===' | tee -a php-check.log
+          php vendor/bin/phpunit 2>&1 | tee -a php-check.log
+          status=${PIPESTATUS[0]}
+          if [ "${status}" -ne 0 ]; then failures=1; fi
+          exit "${failures}"
+      - name: Keep diagnostics from failed checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pb2-php-check-output
+          path: apps/api/php-check.log
+          if-no-files-found: ignore
+          retention-days: 7

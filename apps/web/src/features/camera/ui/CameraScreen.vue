@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import {computed,nextTick,onMounted,onUnmounted,ref,shallowRef,watch} from 'vue'
-import {useRouter} from 'vue-router'
+import {useRoute,useRouter} from 'vue-router'
 import {identity,onIdentityCleanup} from '../../identity'
 import {language} from '../../ui-preview'
 import {startGrantedGps} from '../../gallery'
+import {openAssignments,onAssignmentChange,policySnapshot,type AssignmentView} from '../../assignments'
 import {BrowserCamera,captureError,openCaptureSession,DEFAULT_TTL_DAYS} from '../index'
 import type {CaptureMode,Facing,CaptureProgress,CaptureSession} from '../index'
 
@@ -12,7 +13,33 @@ const video=ref<HTMLVideoElement|null>(null),frozen=ref<HTMLCanvasElement|null>(
 const started=ref(false),starting=ref(false),processing=ref(false),grid=ref(false)
 const facing=ref<Facing>('environment'),mode=ref<CaptureMode>(3),ttl=ref(DEFAULT_TTL_DAYS)
 const status=ref(''),error=ref(''),savedId=ref(''),savedCount=ref(0),clock=ref('unknown')
-const router=useRouter()
+const router=useRouter(),route=useRoute()
+const assignmentId=ref(''),availableAssignments=ref<AssignmentView[]>([]),assignmentError=ref('')
+let releaseAssignments:()=>void=()=>{}
+const chosenAssignment=computed(()=>availableAssignments.value.find(x=>x.id===assignmentId.value))
+watch(chosenAssignment,(next)=>{
+  if(next){mode.value=next.mode;ttl.value=next.retentionDays}
+})
+const assignmentCopy=computed(()=>ru.value?{
+  choose:'Задание',personal:'Личная съёмка',refresh:'Обновить задания',
+  locked:'Съёмка по заданию доступна после серверного подтверждения статуса «В работе».',
+  capture:'Съёмка по заданию',frozen:'Режим, TTL и ревизия задания фиксируются при съёмке.',
+  invalid:'Нет разрешения или актуальной подтверждённой политики. Выберите задание снова.',
+}:{
+  choose:'Assignment',personal:'Personal capture',refresh:'Refresh assignments',
+  locked:'Assignment capture requires a server-acknowledged In progress status.',
+  capture:'Assignment capture',frozen:'Mode, TTL and assignment revisions freeze at capture.',
+  invalid:'Assignment permission or current confirmed policy is missing. Choose again.',
+})
+async function refreshAssignments(){
+  if(!identity.value){availableAssignments.value=[];assignmentId.value='';return}
+  try{
+    availableAssignments.value=(await openAssignments().list()).filter(x=>x.status==='in_progress'&&x.sync==='synced')
+    const query=typeof route.query.assignment==='string'?route.query.assignment:''
+    if(!assignmentId.value && query)assignmentId.value=query
+  }catch{availableAssignments.value=[]}
+}
+
 let controller:BrowserCamera|null=null,mounted=false
 const session=shallowRef<CaptureSession|null>(null)
 const copy=computed(()=>ru.value?{
@@ -72,12 +99,14 @@ function dispose(){
   stop();session.value?.cancel();session.value=null
   processing.value=false;status.value='';error.value='';savedId.value='';savedCount.value=0;clock.value='unknown'
 }
-const release=onIdentityCleanup(dispose)
+const release=onIdentityCleanup(()=>{dispose();availableAssignments.value=[];assignmentId.value=''})
 function hidden(){if(document.hidden)dispose()}
 function leaving(){dispose()}
 onMounted(()=>{
   mounted=true
   startGrantedGps()
+  releaseAssignments=onAssignmentChange(()=>{void refreshAssignments()})
+  void refreshAssignments()
   if(video.value)controller=new BrowserCamera(video.value)
   if(identity.value)session.value=openCaptureSession()
   void prepareTime()
@@ -85,18 +114,18 @@ onMounted(()=>{
   window.addEventListener('pagehide',leaving)
 })
 onUnmounted(()=>{
-  mounted=false;dispose();controller=null;release()
+  mounted=false;dispose();controller=null;release();releaseAssignments()
   document.removeEventListener('visibilitychange',hidden)
   window.removeEventListener('pagehide',leaving)
 })
 watch(identity,async(next,previous)=>{
   if(next?.accountId!==previous?.accountId||next?.deviceId!==previous?.deviceId){
-    dispose()
+    dispose();assignmentId.value='';availableAssignments.value=[]
     if(next){
       await nextTick()
       if(!mounted||!identity.value||!video.value)return
       controller=new BrowserCamera(video.value)
-      try{session.value=openCaptureSession();void prepareTime()}catch{/* show identity state */}
+      try{session.value=openCaptureSession();void prepareTime();void refreshAssignments()}catch{/* show identity state */}
     }
   }
 })
@@ -144,12 +173,24 @@ function progress(value:CaptureProgress){
 }
 async function shutter(){
   if(!controller||!session.value||!started.value||processing.value||session.value.hasPending)return
-  processing.value=true;error.value='';savedId.value='';status.value=copy.value.compressing
+  processing.value=true;error.value='';assignmentError.value='';savedId.value='';status.value=copy.value.compressing
   // Immediate in-memory shutter freeze; never persisted into a browser cache or file.
   freeze()
   try{
+    // Read the fresh *durable* assignment projection, never an optimistic UI row.
+    let frozen:ReturnType<typeof policySnapshot>|undefined
+    if(assignmentId.value){
+      const assignment=await openAssignments().get(assignmentId.value)
+      if(assignment.status!=='in_progress'||assignment.sync!=='synced'){
+        assignmentError.value=assignmentCopy.value.invalid
+        throw Error('camera.assignment_not_authorized')
+      }
+      frozen=policySnapshot(assignment)
+    }
     const source=await controller.take()
-    const record=await session.value.prepare(source.blob,source.method,mode.value,ttl.value,progress)
+    const selectedMode=frozen?.mode??mode.value,selectedTtl=frozen?.retentionDays??ttl.value
+    const record=await session.value.prepare(source.blob,source.method,selectedMode,selectedTtl,
+      progress,frozen)
     savedId.value=record.photoId;savedCount.value++;status.value=copy.value.saved
     clock.value='trusted'
   }catch(e){error.value=captureError(e);status.value=''}
@@ -191,8 +232,19 @@ const viewSaved=()=>savedId.value?router.push('/photos/'+savedId.value):undefine
     </div>
     <template v-else>
       <div class="capture-policy">
-        <h2>{{ copy.policy }}</h2>
-        <fieldset :disabled="processing">
+        <label class="capture-retention">{{ assignmentCopy.choose }}
+          <select v-model="assignmentId" :disabled="processing||!!session?.hasPending">
+            <option value="">{{ assignmentCopy.personal }}</option>
+            <option v-for="item in availableAssignments" :key="item.id" :value="item.id">
+              {{ item.title }}
+            </option>
+          </select>
+        </label>
+        <p v-if="assignmentId" class="camera-hint">{{ chosenAssignment?
+          assignmentCopy.frozen:assignmentCopy.locked }}</p>
+        <p v-if="assignmentError" class="camera-feedback error" role="alert">{{ assignmentError }}</p>
+        <h2>{{ chosenAssignment?assignmentCopy.capture:copy.policy }}</h2>
+        <fieldset :disabled="processing||!!chosenAssignment">
           <legend class="sr-only">
             {{ copy.policy }}
           </legend>

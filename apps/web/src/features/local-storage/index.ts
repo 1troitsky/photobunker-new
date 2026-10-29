@@ -6,7 +6,9 @@ export type {
   OutboxEntry, PersistenceStatus, PhotoHeader, PhotoRepository, PhotoSyncOutbox,
   Scope, StorageBackend, TimeAuthority, TimeStatus,
   SyncAsset, SyncSnapshot, SyncReceipt, SyncState, CloudAsset, CloudPhoto,
+  ReviewDecision,ReviewContract,ReviewEnvelope,ReviewSnapshot,
 } from './domain/contracts'
 export { default as StorageDiagnostics } from './ui/StorageDiagnostics.vue'
 
 export {takeReservedName,reserveNameRange,claimName} from './infrastructure/names'
+export {decryptRecipientThumbnail} from './application/recipient-thumbnail'

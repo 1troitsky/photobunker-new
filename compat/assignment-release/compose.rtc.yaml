@@ -1,0 +1,48 @@
+services:
+  rtc-openid:
+    image: nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
+    volumes:
+      - ./infra/rtc/openid.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./infra/rtc/.local/server.crt:/etc/rtc/server.crt:ro
+      - ./infra/rtc/.local/server.key:/etc/rtc/server.key:ro
+    networks:
+      matrix-internal:
+        aliases: [matrix.photobunker.test]
+    init: true
+    restart: unless-stopped
+    mem_limit: 64m
+  livekit:
+    logging:
+      driver: none
+    image: livekit/livekit-server:v1.13.10@sha256:89ca9ce0791e18d6e03bf6e2c49ceb27e1c754eae8bd50c989386c1a5963791a
+    command: ["--config", "/etc/livekit.yaml"]
+    volumes:
+      - ./infra/rtc/.local/livekit.yaml:/etc/livekit.yaml:ro
+    networks: [local, matrix-internal]
+    ports:
+      - "127.0.0.1:7881:7881/tcp"
+      - "127.0.0.1:7882:7882/udp"
+    init: true
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 2
+  rtc-jwt:
+    logging:
+      driver: none
+    image: ghcr.io/element-hq/lk-jwt-service:0.9.0@sha256:d210fd778ba38b7e42e6fc64e8a24a7d66ccc3b938fb20d73bd713224af2dfea
+    environment:
+      LIVEKIT_URL: ws://livekit:7880
+      LIVEKIT_KEY: ${RTC_LIVEKIT_KEY:?Run ./scripts/dev rtc first}
+      LIVEKIT_SECRET: ${RTC_LIVEKIT_SECRET:?Run ./scripts/dev rtc first}
+      LIVEKIT_FULL_ACCESS_HOMESERVERS: matrix.photobunker.test
+      LIVEKIT_CS_API_URL_OVERRIDES: matrix.photobunker.test=http://matrix:8008
+      LIVEKIT_LOG_LEVEL: error
+      SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+    volumes:
+      - ./infra/rtc/.local/ca.crt:/etc/ssl/certs/ca-certificates.crt:ro
+    networks: [matrix-internal]
+    depends_on: [livekit, rtc-openid]
+    init: true
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: 1

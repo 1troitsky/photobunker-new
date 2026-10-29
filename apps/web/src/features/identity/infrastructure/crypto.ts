@@ -179,6 +179,30 @@ export async function unwrapAssetDEK(pkg:PackageV2,assetId:string,expiresAt:stri
   if (raw.byteLength!==32) throw new Error('identity.invalid_asset_key')
   return crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['encrypt','decrypt'])
 }
+/**
+ * The owner's AKEK never encrypts photos. Briefly unwrap exactly ONE asset DEK
+ * for an application-controlled recipient wrapping operation; erase the raw
+ * byte buffer on success, error and account-switch races.
+ * Keep this capability out of UI modules and never persist callback material.
+ */
+export async function withTransientOwnerDEK<T>(pkg:PackageV2,assetId:string,
+  expiresAt:string,wrapped:{iv:string;ciphertext:string},
+  operation:(bytes:Uint8Array<ArrayBuffer>)=>Promise<T>):Promise<T>{
+  if(!/^[a-f0-9-]{36}$/.test(assetId)||!/^[1-9][0-9]{8,15}$/.test(expiresAt))
+    throw Error('identity.invalid_asset_scope')
+  const akek=unb64(pkg.akek,32)
+  try{
+    const key=await crypto.subtle.importKey('raw',akek,{name:'AES-GCM'},false,['decrypt'])
+    const plain=await decrypt(key,wrapped,descriptor({
+      version:2,purpose:'asset-dek',accountId:pkg.accountId,assetId,expiresAt,
+    }))
+    try{
+      if(plain.byteLength!==32)throw Error('identity.invalid_asset_key')
+      return await operation(plain)
+    }finally{plain.fill(0)}
+  }finally{akek.fill(0)}
+}
+
 export type Challenge = {id:string;nonce:string;expiresAt:string;digest:string;message:string}
 export async function verifyChallenge(c:Challenge,purpose:string,payload:Record<string,string>):Promise<void>{
   if (unb64(c.nonce,32).length!==32) throw new Error('identity.bad_challenge')
