@@ -53,3 +53,12 @@ Route::prefix('photos/v1')->middleware('throttle:100,1,photos')->group(function 
         return $sync->json(['state'=>'deleting'],202);
     });
 });
+
+
+// Owner-only anonymous encrypted Assignment aggregate; separate rate-limit budget.
+Route::prefix('assignments/v1')->middleware('throttle:60,1,assignments')->group(function(){
+    Route::get('/list',[\App\Http\Controllers\AssignmentController::class,'index']);
+    Route::get('/{assignmentId}/history',[\App\Http\Controllers\AssignmentController::class,'history']);
+    Route::get('/{assignmentId}',[\App\Http\Controllers\AssignmentController::class,'show']);
+    Route::put('/{assignmentId}',[\App\Http\Controllers\AssignmentController::class,'mutate']);
+});

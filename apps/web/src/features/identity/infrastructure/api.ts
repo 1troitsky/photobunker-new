@@ -96,3 +96,28 @@ export async function photoRequest(
     return response
   }finally{controllers.delete(controller)}
 }
+
+
+/** R2-08: exact same-origin, CSRF-protected request capability; no UI fetch. */
+export async function assignmentRequest(
+  path:string,method:'GET'|'PUT'='GET',body?:string,
+):Promise<Response>{
+  if(!/^\/(?:list|[a-f0-9-]{36}(?:\/history)?)$/.test(path))
+    throw new IdentityError('assignment.invalid_path',400)
+  const epoch=currentGeneration(),controller=new AbortController()
+  controllers.add(controller)
+  try{
+    const headers:Record<string,string>={'Accept':'application/json'}
+    if(method!=='GET'){
+      headers['X-CSRF-TOKEN']=await token(epoch)
+      headers['Content-Type']='application/json'
+    }
+    assertGeneration(epoch)
+    const response=await fetch('/assignments/v1'+path,{
+      method,credentials:'same-origin',cache:'no-store',headers,
+      body,signal:controller.signal,
+    })
+    assertGeneration(epoch)
+    return response
+  }finally{controllers.delete(controller)}
+}
