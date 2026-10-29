@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest'
 import {createPhotoGrantCode} from './key-envelope'
-import {sealLocalGrantSecret,openLocalGrantSecret} from './secret'
+import {sealLocalGrantSecret,openLocalGrantSecret,openLocalGrantIdentity} from './secret'
 import type {acquireStorageKeys} from '../../identity'
 const id=()=>crypto.randomUUID()
 describe('PB2 device/account-scoped encrypted Assignment grant secret',()=>{
@@ -15,9 +15,11 @@ describe('PB2 device/account-scoped encrypted Assignment grant secret',()=>{
     const c={grantId:id(),assignmentId:id(),ownerAccountId:g.scope.accountId,
       recipientAccountId:id()}
     const secret=createPhotoGrantCode()
-    const wire=await sealLocalGrantSecret(g,c,secret)
+    const root='A'.repeat(120)
+    const wire=await sealLocalGrantSecret(g,c,secret,root)
     expect(JSON.stringify(wire)).not.toContain(secret)
     expect(await openLocalGrantSecret(g,c,wire)).toBe(secret)
+    expect(await openLocalGrantIdentity(g,c,wire)).toEqual({secret,ownerAccountSpki:root})
     const other={...g,scope:{...g.scope,accountId:id()}} as typeof g
     await expect(openLocalGrantSecret(other,c,wire)).rejects.toThrow()
     const device={...g,scope:{...g.scope,deviceId:id()}} as typeof g

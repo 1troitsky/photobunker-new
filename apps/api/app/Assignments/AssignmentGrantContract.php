@@ -26,10 +26,13 @@ final class AssignmentGrantContract {
             $e=$c['sealedKey'];
             abort_unless(is_array($e)&&!array_is_list($e),422);
             P::exact($e,['v','iv','ciphertext']);
-            abort_unless($e['v']===1&&is_string($e['iv'])&&is_string($e['ciphertext']),422);
+            abort_unless(in_array($e['v'],[1,2],true)&&is_string($e['iv'])&&
+                is_string($e['ciphertext']),422);
             P::b64($e['iv'],12);
-            // A sealed 32-byte random assignment/grant secret + 16-byte AEAD tag.
-            P::b64($e['ciphertext'],48);
+            $plain=P::b64($e['ciphertext']);
+            // V2 additionally pins the owner's account SPKI encrypted under the OOB code.
+            abort_unless($e['v']===1?strlen($plain)===48:
+                (strlen($plain)>=86&&strlen($plain)<=525),422);
         }else{
             abort_unless($c['targetId']===null&&$c['role']===null&&$c['expiresAt']===null
                 &&$c['codeHash']===null&&$c['sealedKey']===null

@@ -2,7 +2,7 @@ import {acquireStorageKeys} from '../../identity'
 import type {GrantInvitationContext} from './key-envelope'
 type StorageGrant=ReturnType<typeof acquireStorageKeys>
 export type SealedLocalSecret=Readonly<{
-  v:1;iv:string;ciphertext:string;wrap:{iv:string;ciphertext:string}
+  v:1|2;iv:string;ciphertext:string;wrap:{iv:string;ciphertext:string}
 }>
 const utf8=new TextEncoder(),decoder=new TextDecoder('utf-8',{fatal:true})
 function b64(bytes:Uint8Array){
@@ -24,7 +24,7 @@ function aad(account:string,device:string,c:GrantInvitationContext):Uint8Array<A
   }))
 }
 /** Ciphertext and AKEK-wrapped DEK only: never store grantSecret or invitation code in IndexedDB. */
-export async function sealLocalGrantSecret(g:StorageGrant,c:GrantInvitationContext,secret:string):
+export async function sealLocalGrantSecret(g:StorageGrant,c:GrantInvitationContext,secret:string,ownerAccountSpki:string|null=null):
   Promise<SealedLocalSecret>{
   const checked=bytes(secret)
   if(checked.byteLength!==32){checked.fill(0);throw Error('grant.secret_invalid')}
@@ -32,18 +32,18 @@ export async function sealLocalGrantSecret(g:StorageGrant,c:GrantInvitationConte
   g.check()
   const {key,wrapped}=await g.create(c.grantId,'grant-secret-v1')
   const iv=crypto.getRandomValues(new Uint8Array(12))
-  const plaintext=utf8.encode(secret)
+  const plaintext=utf8.encode(ownerAccountSpki===null?secret:JSON.stringify({secret,ownerAccountSpki}))
   try{
     const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv,
       additionalData:aad(g.scope.accountId,g.scope.deviceId,c)},key,plaintext)
     g.check()
-    return {v:1,iv:b64(iv),ciphertext:b64(new Uint8Array(encrypted)),wrap:wrapped}
+    return {v:ownerAccountSpki===null?1:2,iv:b64(iv),ciphertext:b64(new Uint8Array(encrypted)),wrap:wrapped}
   }finally{plaintext.fill(0)}
 }
-export async function openLocalGrantSecret(g:StorageGrant,c:GrantInvitationContext,
-  e:SealedLocalSecret):Promise<string>{
+export async function openLocalGrantIdentity(g:StorageGrant,c:GrantInvitationContext,
+  e:SealedLocalSecret):Promise<{secret:string;ownerAccountSpki:string|null}>{
   g.check()
-  if(e.v!==1)throw Error('grant.secret_invalid')
+  if(e.v!==1&&e.v!==2)throw Error('grant.secret_invalid')
   const key=await g.open(c.grantId,'grant-secret-v1',e.wrap)
   const raw=await crypto.subtle.decrypt({name:'AES-GCM',iv:bytes(e.iv),
     additionalData:aad(g.scope.accountId,g.scope.deviceId,c)},key,bytes(e.ciphertext))
@@ -51,7 +51,19 @@ export async function openLocalGrantSecret(g:StorageGrant,c:GrantInvitationConte
   const plaintext=new Uint8Array(raw)
   try{
     const output=decoder.decode(plaintext)
-    if(bytes(output).length!==32)throw Error('grant.secret_invalid')
-    return output
+    const parsed=e.v===2?JSON.parse(output) as {secret:string;ownerAccountSpki:string}:null
+    if(e.v===2 && (Object.keys(parsed??{}).join('|')!=='secret|ownerAccountSpki'||
+      typeof parsed?.ownerAccountSpki!=='string'||
+      !/^[A-Za-z0-9_-]{90,240}$/.test(parsed.ownerAccountSpki)))
+      throw Error('grant.secret_invalid')
+    const secret=e.v===2?parsed!.secret:output
+    const checked=bytes(secret)
+    if(checked.length!==32)throw Error('grant.secret_invalid')
+    checked.fill(0)
+    return {secret,ownerAccountSpki:e.v===2?parsed!.ownerAccountSpki:null}
   }finally{plaintext.fill(0)}
+}
+export async function openLocalGrantSecret(g:StorageGrant,c:GrantInvitationContext,
+  e:SealedLocalSecret):Promise<string>{
+  return (await openLocalGrantIdentity(g,c,e)).secret
 }

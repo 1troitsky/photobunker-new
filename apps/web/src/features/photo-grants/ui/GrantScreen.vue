@@ -5,12 +5,12 @@ import {language} from '../../ui-preview'
 import {openAssignments} from '../../assignments'
 import {localGallery} from '../../gallery'
 import {inviteToAssignment,acceptAssignmentGrant,changeAssignmentGrant,
-  fetchAssignmentGrants,flushGrantOperations,grantOutboxStatus,publishRecipientThumbnail,
-  type ServerGrant,type GrantRole,type GrantOutboxState} from '../index'
+  fetchAssignmentGrants,flushGrantOperations,grantOutboxStatus,publishRecipientThumbnail,thumbnailShareStatuses,
+  type ServerGrant,type GrantRole,type GrantOutboxState,type ThumbnailShareStatus} from '../index'
 
 const ru=computed(()=>language.value==='ru')
 const copy=computed(()=>ru.value?{
- title:'Участники заданий',viewPhotos:'Полученные миниатюры',choosePhoto:'Выберите снимок',publish:'Подготовить миниатюру для участника',published:'Зашифрованная миниатюра отправлена. Просмотр пока отключён на сервере.',pendingOp:'В очереди',retryOp:'Повтор после ошибки',conflictOp:'Сервер отклонил операцию — требуется проверка',state:'Состояние операций',note:'Приглашение не открывает фотографии. Общий доступ будет включён только после проверки E2EE и серверных прав.',
+ title:'Участники заданий',viewPhotos:'Полученные миниатюры',choosePhoto:'Выберите снимок',publish:'Подготовить миниатюру для участника',published:'Зашифрованная миниатюра подготовлена.',shareQueued:'Зашифрованная миниатюра поставлена в очередь отправки (не подтверждена сервером).',pendingOp:'В очереди',retryOp:'Повтор после ошибки',conflictOp:'Сервер отклонил операцию — требуется проверка',state:'Состояние операций',note:'Приглашение не открывает фотографии. Общий доступ будет включён только после проверки E2EE и серверных прав.',
  back:'К заданиям',loading:'Загружаем приглашения…',
  account:'Сначала откройте аккаунт',offline:'Приглашения требуют подключения к серверу.',
  new:'Пригласить участника',assignment:'Задание',recipient:'ID аккаунта получателя',
@@ -25,7 +25,7 @@ const copy=computed(()=>ru.value?{
  queued:'Операция записана в зашифрованную очередь. Подтверждение ожидается.',
  error:'Операция не выполнена.',refresh:'Обновить',
 }:{
- title:'Assignment participants',viewPhotos:'Received thumbnails',choosePhoto:'Select a photo',publish:'Prepare encrypted thumbnail',published:'Encrypted thumbnail prepared. Recipient viewing remains disabled on server.',pendingOp:'Queued locally',retryOp:'Retry scheduled',conflictOp:'Server rejected operation — review required',state:'Operations',note:'An invitation does not unlock photos. Sharing remains disabled until independent E2EE and server ACL verification.',
+ title:'Assignment participants',viewPhotos:'Received thumbnails',choosePhoto:'Select a photo',publish:'Prepare encrypted thumbnail',published:'Encrypted thumbnail prepared.',shareQueued:'Encrypted thumbnail queued; server delivery is not confirmed yet.',pendingOp:'Queued locally',retryOp:'Retry scheduled',conflictOp:'Server rejected operation — review required',state:'Operations',note:'An invitation does not unlock photos. Sharing remains disabled until independent E2EE and server ACL verification.',
  back:'Assignments',loading:'Loading invitations…',account:'Unlock account first',
  offline:'Invitations require an online connection.',
  new:'Invite a participant',assignment:'Assignment',recipient:'Recipient account ID',
@@ -44,12 +44,12 @@ const assignments=ref<{id:string;title:string}[]>([])
 const photoOptions=ref<{id:string;assignmentId:string;title:string}[]>([])
 const selectedPhoto=ref<Record<string,string>>({})
 const selected=ref(''),recipient=ref(''),role=ref<GrantRole>('contributor')
-const grants=ref<ServerGrant[]>([]),outbox=ref<GrantOutboxState[]>([]),inputCode=ref<Record<string,string>>({})
+const grants=ref<ServerGrant[]>([]),outbox=ref<GrantOutboxState[]>([]),shareOutbox=ref<ThumbnailShareStatus[]>([]),inputCode=ref<Record<string,string>>({})
 const invitation=ref<{grantId:string;code:string}|null>(null)
 const busy=ref(false),loading=ref(false),notice=ref(''),error=ref('')
 let epoch=0,stopped=false
 function clear(){
-  epoch++;grants.value=[];outbox.value=[];assignments.value=[];invitation.value=null
+  epoch++;grants.value=[];outbox.value=[];shareOutbox.value=[];assignments.value=[];invitation.value=null
   inputCode.value={};selectedPhoto.value={};photoOptions.value=[];notice.value='';error.value=''
 }
 const release=onIdentityCleanup(clear)
@@ -67,6 +67,7 @@ async function reload(){
     if(token!==epoch||stopped||identity.value?.accountId!==active.accountId||
        identity.value?.deviceId!==active.deviceId)return
     outbox.value=await grantOutboxStatus()
+    shareOutbox.value=await thumbnailShareStatuses()
     if(token!==epoch||stopped)return
     assignments.value=assignmentsNow.filter(a=>a.sync==='synced'&&a.status!=='completed')
       .map(a=>({id:a.id,title:a.title}))
@@ -119,7 +120,8 @@ async function publish(row:ServerGrant){
   busy.value=true;error.value='';notice.value=''
   try{
     await publishRecipientThumbnail(row.grantId,photo)
-    notice.value=copy.value.published
+    notice.value=copy.value.shareQueued
+    shareOutbox.value=await thumbnailShareStatuses()
     delete selectedPhoto.value[row.grantId]
   }catch(e){error.value=e instanceof Error?e.message:copy.value.error}
   finally{busy.value=false}
@@ -194,6 +196,15 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
           <button type="button" class="subtle-button" @click="copyCode">{{ copy.copy }}</button>
           <button type="button" class="subtle-button" @click="invitation=null">{{ copy.close }}</button>
         </div>
+      </div>
+      <div v-if="shareOutbox.length" class="grant-panel" role="status">
+        <h2>{{ copy.state }} · {{ copy.publish }}</h2>
+        <p v-for="share in shareOutbox" :key="share.operationId" class="grant-operation">
+          <strong>{{ share.photoId }}</strong> · {{ share.grantId }} ·
+          {{ share.state==='conflict'?copy.conflictOp:
+            share.state==='retry'?copy.retryOp:copy.pendingOp }}
+          <small v-if="share.lastError">{{ share.lastError }}</small>
+        </p>
       </div>
       <div v-if="outbox.length" class="grant-panel" role="status">
         <h2>{{ copy.state }}</h2>

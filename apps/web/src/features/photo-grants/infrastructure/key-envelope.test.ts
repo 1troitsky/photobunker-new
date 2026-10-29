@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest'
 import {createPhotoGrantCode,photoGrantCodeHash,sealRecipientKey,openRecipientKey,
- type KeyContext,sealGrantSecret,openGrantSecret} from './key-envelope'
+ type KeyContext,sealGrantSecret,openGrantSecret,sealGrantSecretPinned,openGrantSecretPinned} from './key-envelope'
 const id=()=>crypto.randomUUID()
 const context=():KeyContext=>({grantId:id(),generation:1,assignmentId:id(),
   ownerAccountId:id(),recipientAccountId:id(),photoId:id(),assetId:id(),
@@ -55,5 +55,23 @@ describe('separate out-of-band invite and per-grant transport secret',()=>{
     const photo=await sealRecipientKey(grantSecret,c,dek)
     expect([...await openRecipientKey(await openGrantSecret(oob,sealed,invite),photo,c,Date.now())])
       .toEqual([...dek])
+  })
+})
+
+describe('OOB owner account root pinning for new invitations',()=>{
+  it('pin is encrypted with the code, scoped to the exact owner/recipient/assignment',async()=>{
+    const c=context(),code=createPhotoGrantCode(),secret=createPhotoGrantCode()
+    const invite={grantId:c.grantId,assignmentId:c.assignmentId,
+      ownerAccountId:c.ownerAccountId,recipientAccountId:c.recipientAccountId}
+    const root='A'.repeat(120)
+    const sealed=await sealGrantSecretPinned(code,secret,invite,root)
+    expect(sealed.v).toBe(2)
+    expect(JSON.stringify(sealed)).not.toContain(root)
+    expect(await openGrantSecretPinned(code,sealed,invite))
+      .toEqual({secret,ownerAccountSpki:root})
+    await expect(openGrantSecretPinned(createPhotoGrantCode(),sealed,invite)).rejects.toThrow()
+    await expect(openGrantSecretPinned(code,sealed,{...invite,ownerAccountId:id()})).rejects.toThrow()
+    const legacy=await sealGrantSecret(code,secret,invite)
+    await expect(openGrantSecretPinned(code,legacy,invite)).rejects.toThrow()
   })
 })

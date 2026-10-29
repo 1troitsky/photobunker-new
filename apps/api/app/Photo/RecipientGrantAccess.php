@@ -61,9 +61,15 @@ final class RecipientGrantAccess {
             $manifest['expiresAt']===(int)$photo->expires_at,404);
         // The signer must still be an enrolled, non-revoked device of the
         // original photo owner, not just an arbitrary SPKI returned by storage.
-        abort_unless(DB::table('identity_devices')->where('account_id',$owner)
-            ->where('signing_spki',$envelope->signer_spki)
+        abort_unless(DB::table('identity_devices')->where('id',$envelope->publisher_device_id)
+            ->where('account_id',$owner)->where('signing_spki',$envelope->signer_spki)
             ->whereNull('revoked_at')->exists(),404);
+        $ownerRoot=DB::table('identity_accounts')->where('id',$owner)
+            ->where('status','ready')->value('account_spki');
+        abort_unless(is_string($ownerRoot)&&P::verify($ownerRoot,
+            "photobunker.photo-recipient-root.v1\n".$envelope->publisher_device_id.
+            "\n".$envelope->signer_spki."\n".$envelope->contract_json,
+            $envelope->owner_root_signature),404);
         abort_unless(P::verify($envelope->signer_spki,
             "photobunker.photo-recipient.v1\n".$envelope->contract_json,
             $envelope->signature),404);

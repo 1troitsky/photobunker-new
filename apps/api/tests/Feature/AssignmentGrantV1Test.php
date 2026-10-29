@@ -34,7 +34,8 @@ final class AssignmentGrantV1Test extends TestCase {
         $account=(string)Str::uuid();$device=(string)Str::uuid();
         DB::table('identity_accounts')->insert([
             'id'=>$account,'operation_id'=>(string)Str::uuid(),
-            'prepare_hash'=>str_repeat('a',64),'status'=>'ready',
+            'prepare_hash'=>str_repeat('a',64),'status'=>'ready','account_spki'=>P::encode(
+                base64_decode(preg_replace('/-----[^-]+-----|\s+/','',$public))),
             'reserved_until'=>now()->addDay(),'created_at'=>now(),'updated_at'=>now(),
         ]);
         DB::table('identity_devices')->insert([
@@ -208,8 +209,14 @@ final class AssignmentGrantV1Test extends TestCase {
             'envelope'=>['v'=>1,'context'=>$context,'iv'=>P::encode(random_bytes(12)),
                 'ciphertext'=>P::encode(random_bytes(48))]];
         $raw=json_encode($c,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        $deviceSpki=DB::table('identity_devices')->where('id',$this->devices[$this->actor])
+            ->value('signing_spki');
+        $rootMessage="photobunker.photo-recipient-root.v1\n".$this->devices[$this->actor].
+            "\n".$deviceSpki."\n".$raw;
         return ['contract'=>$raw,
-            'signature'=>$this->sign("photobunker.photo-recipient.v1\n".$raw)];
+            'signature'=>$this->sign("photobunker.photo-recipient.v1\n".$raw),
+            'deviceId'=>$this->devices[$this->actor],'deviceSpki'=>$deviceSpki,
+            'rootSignature'=>$this->sign($rootMessage)];
     }
     public function test_recipient_thumbnail_read_requires_signed_current_grant_and_feature_gate():void{
         $this->acceptedContact();$grant=(string)Str::uuid();
@@ -252,6 +259,10 @@ final class AssignmentGrantV1Test extends TestCase {
         $statement=$this->shareStatement($grant,$photo,$asset,$expiry,$digest);
         $other=$statement;$other['signature']=P::encode(random_bytes(64));
         $this->putJson($route,$other)->assertUnauthorized();
+        $badRoot=$statement;$badRoot['rootSignature']=P::encode(random_bytes(64));
+        $this->putJson($route,$badRoot)->assertUnauthorized();
+        $badDevice=$statement;$badDevice['deviceId']=(string)Str::uuid();
+        $this->putJson($route,$badDevice)->assertUnauthorized();
         $payload=json_decode($statement['contract'],true);$payload['kind']='original';
         $altered=$statement;
         $altered['contract']=json_encode($payload,JSON_UNESCAPED_SLASHES);

@@ -16,6 +16,8 @@ return new class extends Migration {
             $t->uuid('operation_id')->unique();
             $t->char('contract_hash',64);$t->longText('contract_json');
             $t->text('signature');$t->text('signer_spki');
+            $t->foreignUuid('publisher_device_id')->constrained('identity_devices');
+            $t->text('owner_root_signature');
             $t->timestampTz('created_at');
             $t->primary(['grant_id','generation','photo_id','asset_id'],'photo_share_key_pk');
             $t->index(['recipient_account_id','photo_id']);

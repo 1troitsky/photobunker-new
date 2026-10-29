@@ -78,7 +78,7 @@ export async function sealRecipientKey(code:string,context:KeyContext,rawDEK:Uin
 export type GrantInvitationContext=Readonly<{
   grantId:string;assignmentId:string;ownerAccountId:string;recipientAccountId:string
 }>
-export type SealedGrantSecret=Readonly<{v:1;iv:string;ciphertext:string}>
+export type SealedGrantSecret=Readonly<{v:1|2;iv:string;ciphertext:string}>
 function inviteAad(c:GrantInvitationContext):Uint8Array<ArrayBuffer>{
   fail(c&&typeof c==='object'&&!Array.isArray(c))
   fail(Object.keys(c).join('|')==='grantId|assignmentId|ownerAccountId|recipientAccountId')
@@ -122,6 +122,56 @@ export async function openGrantSecret(code:string,sealed:SealedGrantSecret,
     raw.fill(0)
     return secret
   }finally{invitation.fill(0)}
+}
+
+
+/** New invitations pin the author's ACCOUNT identity through the out-of-band
+ * code. Untrusted server-controlled manifest keys alone are not provenance.
+ */
+export type PinnedGrantSecret=Readonly<{secret:string;ownerAccountSpki:string}>
+export async function sealGrantSecretPinned(code:string,secret:string,
+  c:GrantInvitationContext,ownerAccountSpki:string):Promise<SealedGrantSecret>{
+  const associated=inviteAad(c),raw=decode(secret,32),invitation=decode(code,32)
+  fail(typeof ownerAccountSpki==='string'&&/^[A-Za-z0-9_-]{90,240}$/.test(ownerAccountSpki))
+  const data=utf8.encode(JSON.stringify({secret,ownerAccountSpki}))
+  try{
+    const key=await inviteKey(invitation,c.grantId)
+    const iv=crypto.getRandomValues(new Uint8Array(12))
+    const ct=new Uint8Array(await crypto.subtle.encrypt({
+      name:'AES-GCM',iv,additionalData:associated,tagLength:128,
+    },key,data))
+    return {v:2,iv:b64(iv),ciphertext:b64(ct)}
+  }finally{raw.fill(0);invitation.fill(0);data.fill(0)}
+}
+export async function openGrantSecretPinned(code:string,wire:SealedGrantSecret,
+  c:GrantInvitationContext):Promise<PinnedGrantSecret>{
+  const associated=inviteAad(c)
+  fail(wire&&typeof wire==='object'&&Object.keys(wire).join('|')==='v|iv|ciphertext'&&wire.v===2)
+  const iv=decode(wire.iv,12),ct=decodeVariable(wire.ciphertext),invitation=decode(code,32)
+  try{
+    const key=await inviteKey(invitation,c.grantId)
+    const plain=new Uint8Array(await crypto.subtle.decrypt({
+      name:'AES-GCM',iv,additionalData:associated,tagLength:128,
+    },key,ct))
+    try{
+      const data=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(plain)) as PinnedGrantSecret
+      fail(Object.keys(data).join('|')==='secret|ownerAccountSpki')
+      const secretBytes=decode(data.secret,32)
+      secretBytes.fill(0)
+      fail(typeof data.ownerAccountSpki==='string'&&
+        /^[A-Za-z0-9_-]{90,240}$/.test(data.ownerAccountSpki))
+      return {secret:data.secret,ownerAccountSpki:data.ownerAccountSpki}
+    }finally{plain.fill(0)}
+  }finally{invitation.fill(0)}
+}
+function decodeVariable(value:string):Uint8Array<ArrayBuffer>{
+  fail(typeof value==='string'&&/^[A-Za-z0-9_-]{100,700}$/.test(value))
+  let raw:string
+  try{raw=atob(value.replace(/-/g,'+').replace(/_/g,'/'))}
+  catch{throw Error('photo_grant.invalid_envelope')}
+  const bytes=Uint8Array.from(raw,x=>x.charCodeAt(0))
+  fail(b64(bytes)===value&&bytes.length>=70&&bytes.length<=525)
+  return bytes
 }
 
 /** Caller must independently verify current signed grant and TTL before invoking. */

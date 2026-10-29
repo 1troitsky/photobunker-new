@@ -1,9 +1,9 @@
-import {identity,assignmentRequest,photoRequest,signMetadataContract,withCurrentOwnerAssetDEK} from '../../identity'
+import {identity,assignmentRequest,photoRequest,signMetadataContract,withCurrentOwnerAssetDEK,currentAccountSpki,signOwnerDeviceProof} from '../../identity'
 import {openAssignments} from '../../assignments'
 import {openLocalPhotoVault,type CloudAsset} from '../../local-storage'
-import {grantDb,scopedId,type OperationRow,type SecretRow} from '../infrastructure/database'
-import {sealLocalGrantSecret,openLocalGrantSecret} from '../infrastructure/secret'
-import {createPhotoGrantCode,photoGrantCodeHash,sealGrantSecret,openGrantSecret,sealRecipientKey,
+import {grantDb,scopedId,type OperationRow,type SecretRow,type ThumbnailShareRow} from '../infrastructure/database'
+import {sealLocalGrantSecret,openLocalGrantIdentity} from '../infrastructure/secret'
+import {createPhotoGrantCode,photoGrantCodeHash,sealGrantSecretPinned,openGrantSecretPinned,sealRecipientKey,
   type KeyContext,
   type GrantInvitationContext} from '../infrastructure/key-envelope'
 import {acquireStorageKeys} from '../../identity'
@@ -34,9 +34,9 @@ function opRow(c:GrantCommand,account:string,device:string):OperationRow{
   return {id:scopedId(account,device,c.opId),accountId:account,deviceId:device,
     grantId:c.grantId,contract:c,state:'pending',attempts:0,retryAt:0,lastError:null}
 }
-async function storeSecretAndOperation(c:GrantCommand,ctx:GrantInvitationContext,secret:string){
+async function storeSecretAndOperation(c:GrantCommand,ctx:GrantInvitationContext,secret:string,ownerAccountSpki:string|null){
   const active=current(),g=acquireStorageKeys()
-  const sealed=await sealLocalGrantSecret(g,ctx,secret)
+  const sealed=await sealLocalGrantSecret(g,ctx,secret,ownerAccountSpki)
   same(active.accountId,active.deviceId);g.check()
   const vault:SecretRow={id:scopedId(active.accountId,active.deviceId,c.grantId),
     accountId:active.accountId,deviceId:active.deviceId,grantId:c.grantId,
@@ -75,13 +75,14 @@ export async function inviteToAssignment(assignmentId:string,recipientId:string,
   const grantId=crypto.randomUUID(),code=createPhotoGrantCode()
   const secret=createPhotoGrantCode()
   const ctx={grantId,assignmentId,ownerAccountId:active.accountId,recipientAccountId:recipientId}
-  const sealedKey=await sealGrantSecret(code,secret,ctx)
+  const ownerSpki=currentAccountSpki()
+  const sealedKey=await sealGrantSecretPinned(code,secret,ctx,ownerSpki)
   const codeHash=await photoGrantCodeHash(code)
   same(active.accountId,active.deviceId)
   const c:GrantCommand={v:1,opId:crypto.randomUUID(),kind:'invite',
     grantId,assignmentId,targetId:recipientId,role,expectedGeneration:0,
     expiresAt:Date.now()+86400000,codeHash,sealedKey}
-  await storeSecretAndOperation(c,ctx,secret)
+  await storeSecretAndOperation(c,ctx,secret,ownerSpki)
   same(active.accountId,active.deviceId)
   return {grantId,code}
 }
@@ -95,9 +96,10 @@ export async function acceptAssignmentGrant(grantId:string,code:string):Promise<
     throw Error('grant.not_invited')
   if(await photoGrantCodeHash(code)!==row.codeHash)throw Error('grant.wrong_code')
   const ctx=context(row)
-  const secret=await openGrantSecret(code,row.sealedKey,ctx)
+  const pinned=await openGrantSecretPinned(code,row.sealedKey,ctx)
+  const secret=pinned.secret
   same(active.accountId,active.deviceId)
-  await storeSecretAndOperation(command('accept',row),ctx,secret)
+  await storeSecretAndOperation(command('accept',row),ctx,secret,pinned.ownerAccountSpki)
   same(active.accountId,active.deviceId)
 }
 export async function changeAssignmentGrant(row:ServerGrant,
@@ -171,6 +173,14 @@ export async function publishRecipientThumbnail(grantId:string,photoId:string):
   same(active.accountId,active.deviceId)
   if(!row||row.ownerId!==active.accountId||row.state!=='accepted')
     throw Error('grant.not_accepted')
+  const prior=await grantDb.thumbnailShares.where('[accountId+deviceId]')
+    .equals([active.accountId,active.deviceId]).filter(x=>
+      x.grantId===grantId&&x.photoId===photoId&&x.generation===row.generation).first()
+  same(active.accountId,active.deviceId)
+  if(prior){
+    if(prior.state==='conflict')throw Error('grant.thumbnail_conflict')
+    return {assetId:prior.assetId,operationId:prior.operationId}
+  }
   const header=await openLocalPhotoVault().readHeader(photoId)
   same(active.accountId,active.deviceId)
   if(!header||header.accountId!==active.accountId||
@@ -189,7 +199,10 @@ export async function publishRecipientThumbnail(grantId:string,photoId:string):
   if(!thumbnail||!/^[a-f0-9]{64}$/.test(thumbnail.manifest.cipherDigest)||
     !Number.isSafeInteger(thumbnail.revision)||thumbnail.revision<1)
     throw Error('grant.thumbnail_missing')
-  const secret=await getLocalGrantSecret(row)
+  const local=await getLocalGrantIdentity(row)
+  if(!local.ownerAccountSpki||local.ownerAccountSpki!==currentAccountSpki())
+    throw Error('grant.unpinned_owner')
+  const secret=local.secret
   same(active.accountId,active.deviceId)
   const ctx:KeyContext={
     grantId:row.grantId,generation:row.generation,assignmentId:row.assignmentId,
@@ -213,18 +226,63 @@ export async function publishRecipientThumbnail(grantId:string,photoId:string):
   }
   const contract=JSON.stringify(statement)
   const signature=await signMetadataContract('photobunker.photo-recipient.v1\n'+contract)
+  const proof=await signOwnerDeviceProof(contract)
   same(active.accountId,active.deviceId)
-  const path='/shared/grants/'+grantId+'/photos/'+photoId+'/assets/'+thumbnail.assetId
-  const uploaded=await photoRequest(path,'PUT',JSON.stringify({contract,signature}))
+  const queued:ThumbnailShareRow={
+    id:scopedId(active.accountId,active.deviceId,statement.operationId),
+    accountId:active.accountId,deviceId:active.deviceId,grantId:row.grantId,
+    photoId,assetId:thumbnail.assetId,generation:row.generation,
+    operationId:statement.operationId,expiresAt:header.expiresAt,
+    contract,signature,proof,state:'pending',attempts:0,retryAt:0,lastError:null,
+  }
+  // Only ciphertext-wrapped DEK + detached signed contract crosses durable storage.
+  // If network dies immediately, subsequent flush sends these exact same bytes.
+  await grantDb.thumbnailShares.add(queued)
   same(active.accountId,active.deviceId)
-  if(!uploaded.ok)throw Error('grant.thumbnail_http_'+uploaded.status)
-  const receipt=await uploaded.json() as {accepted:boolean;operationId:string}
-  if(!receipt.accepted||receipt.operationId!==statement.operationId)
-    throw Error('grant.invalid_receipt')
+  wake()
   return {assetId:thumbnail.assetId,operationId:statement.operationId}
 }
 
-export async function getLocalGrantSecret(row:ServerGrant):Promise<string>{
+export type ThumbnailShareStatus=Readonly<{
+  operationId:string;grantId:string;photoId:string;state:'pending'|'retry'|'conflict';
+  lastError:string|null
+}>
+export async function pendingThumbnailShares():Promise<ThumbnailShareRow[]>{
+  const {accountId,deviceId}=current()
+  const rows=await grantDb.thumbnailShares.where('[accountId+deviceId]')
+    .equals([accountId,deviceId]).toArray()
+  same(accountId,deviceId)
+  return rows.filter(x=>x.state==='pending'||x.state==='retry')
+    .sort((a,b)=>a.retryAt-b.retryAt)
+}
+export async function thumbnailShareStatuses():Promise<ThumbnailShareStatus[]>{
+  const {accountId,deviceId}=current()
+  const rows=await grantDb.thumbnailShares.where('[accountId+deviceId]')
+    .equals([accountId,deviceId]).toArray()
+  same(accountId,deviceId)
+  return rows.map(x=>({operationId:x.operationId,grantId:x.grantId,
+    photoId:x.photoId,state:x.state,lastError:x.lastError}))
+}
+export async function thumbnailShareResult(row:ThumbnailShareRow,
+  outcome:'ack'|'retry'|'conflict',reason=''):Promise<void>{
+  same(row.accountId,row.deviceId)
+  await grantDb.transaction('rw',grantDb.thumbnailShares,async()=>{
+    const saved=await grantDb.thumbnailShares.get(row.id)
+    if(!saved||saved.operationId!==row.operationId||
+      saved.contract!==row.contract||saved.signature!==row.signature)
+      throw Error('grant.share_changed')
+    if(outcome==='ack'){await grantDb.thumbnailShares.delete(row.id);return}
+    const attempts=Math.min(24,saved.attempts+1)
+    await grantDb.thumbnailShares.update(row.id,{
+      state:outcome,attempts,
+      retryAt:Date.now()+Math.min(300000,1000*2**Math.min(8,attempts)),
+      lastError:reason.slice(0,90),
+    })
+  })
+  same(row.accountId,row.deviceId)
+}
+
+export async function getLocalGrantIdentity(row:ServerGrant):Promise<{secret:string;ownerAccountSpki:string|null}>{
   const active=current()
   if(row.ownerId!==active.accountId&&row.recipientId!==active.accountId)
     throw Error('grant.denied')
@@ -234,7 +292,11 @@ export async function getLocalGrantSecret(row:ServerGrant):Promise<string>{
     vault.ownerAccountId!==row.ownerId||vault.recipientAccountId!==row.recipientId)
     throw Error('grant.secret_missing')
   const grant=acquireStorageKeys()
-  const secret=await openLocalGrantSecret(grant,context(row),vault.envelope)
+  const value=await openLocalGrantIdentity(grant,context(row),vault.envelope)
   same(active.accountId,active.deviceId)
-  return secret
+  return value
+}
+
+export async function getLocalGrantSecret(row:ServerGrant):Promise<string>{
+  return (await getLocalGrantIdentity(row)).secret
 }

@@ -1,5 +1,6 @@
 import {describe,it,expect} from 'vitest'
-import {freshPackage,wrapAssetDEK,unwrapAssetDEK,withTransientOwnerDEK} from './crypto'
+import {freshPackage,wrapAssetDEK,unwrapAssetDEK,withTransientOwnerDEK,newSigning,exportSpki,sign,importSigner} from './crypto'
+import {verifyPinnedOwnerDeviceProof} from './identity'
 
 describe('owner per-asset DEK transfer capability',()=>{
   it('uses existing AKEK-wrapped DEK and zeroes ephemeral plaintext after wrapping',async()=>{
@@ -35,5 +36,30 @@ describe('owner per-asset DEK transfer capability',()=>{
     })).rejects.toThrow('interrupted')
     expect(captured.value).toBeDefined()
     expect([...captured.value!].every(b=>b===0)).toBe(true)
+  })
+})
+
+describe('owner device endorsement against OOB-pinned root identity',()=>{
+  it('rejects server-substituted owner roots, device signers and altered statements',async()=>{
+    const {pkg}=await freshPackage(crypto.randomUUID())
+    const devicePair=await newSigning(true),deviceSpki=await exportSpki(devicePair.publicKey)
+    const statement='photobunker.photo-recipient.v1\n'+crypto.randomUUID().repeat(12)
+    const deviceId=crypto.randomUUID()
+    const deviceSignature=await sign(devicePair.privateKey,statement)
+    const raw=statement.slice('photobunker.photo-recipient.v1\n'.length)
+    const rootMessage='photobunker.photo-recipient-root.v1\n'+deviceId+
+      '\n'+deviceSpki+'\n'+raw
+    const rootSignature=await sign(await importSigner(pkg.accountPkcs8),rootMessage)
+    expect(await verifyPinnedOwnerDeviceProof(raw,deviceSignature,deviceSpki,
+      pkg.accountSpki,deviceId,rootSignature,pkg.accountSpki)).toBe(true)
+    const foreign=await freshPackage(crypto.randomUUID())
+    expect(await verifyPinnedOwnerDeviceProof(raw,deviceSignature,deviceSpki,
+      pkg.accountSpki,deviceId,rootSignature,foreign.pkg.accountSpki)).toBe(false)
+    expect(await verifyPinnedOwnerDeviceProof(raw,deviceSignature,deviceSpki,
+      pkg.accountSpki,crypto.randomUUID(),rootSignature,pkg.accountSpki)).toBe(false)
+    const otherDevice=await newSigning(true)
+    expect(await verifyPinnedOwnerDeviceProof(raw,deviceSignature,
+      await exportSpki(otherDevice.publicKey),pkg.accountSpki,deviceId,rootSignature,
+      pkg.accountSpki)).toBe(false)
   })
 })

@@ -1,10 +1,11 @@
-import {identity,photoRequest,verifyOwnerThumbnailStatement} from '../../identity'
+import {identity,photoRequest,verifyPinnedOwnerDeviceProof} from '../../identity'
 import {decryptRecipientThumbnail,type CloudAsset} from '../../local-storage'
-import {fetchAssignmentGrants,getLocalGrantSecret} from './grants'
+import {fetchAssignmentGrants,getLocalGrantIdentity} from './grants'
 import {openRecipientKey,type KeyContext,type RecipientKeyEnvelope} from '../infrastructure/key-envelope'
 
 type ResponseEnvelope={photoId:string;assetId:string;bytes:number;sha256:string;
-  manifest:CloudAsset['manifest'];contract:string;signature:string;signerSpki:string}
+  manifest:CloudAsset['manifest'];contract:string;signature:string;signerSpki:string;
+  ownerAccountSpki:string;ownerRootSignature:string;publisherDeviceId:string}
 
 function guard(account:string,device:string):void{
   if(identity.value?.accountId!==account||identity.value?.deviceId!==device||
@@ -55,14 +56,16 @@ export async function readRecipientThumbnail(grantId:string,photoId:string,asset
   const info=await result.json() as ResponseEnvelope
   guard(accountId,deviceId)
   if(info.photoId!==photoId||info.assetId!==assetId)error('wrong_asset')
-  if(!await verifyOwnerThumbnailStatement(info.contract,info.signature,info.signerSpki))
-    error('signature')
+  const local=await getLocalGrantIdentity(grant)
+  guard(accountId,deviceId)
+  if(!local.ownerAccountSpki)error('untrusted_legacy_invitation')
+  if(!await verifyPinnedOwnerDeviceProof(info.contract,info.signature,info.signerSpki,
+    info.ownerAccountSpki,info.publisherDeviceId,info.ownerRootSignature,
+    local.ownerAccountSpki))error('author_provenance')
   guard(accountId,deviceId)
   const {envelope,context}=checkedStatement(info,grantId,photoId,assetId,
     grant.ownerId,accountId,grant.generation,grant.assignmentId)
-  const secret=await getLocalGrantSecret(grant)
-  guard(accountId,deviceId)
-  const raw=await openRecipientKey(secret,envelope,context,Date.now())
+  const raw=await openRecipientKey(local.secret,envelope,context,Date.now())
   guard(accountId,deviceId)
   let key:CryptoKey
   try{key=await crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['decrypt'])}

@@ -373,6 +373,47 @@ export function acquireStorageKeys() {
 /** Verify the author's detached device signature over the exact received statement.
  * The server supplies the enrolled author device SPKI, not the recipient.
  */
+
+/** Public account identity pinned by the invitation secret, never by a photo manifest. */
+export function currentAccountSpki():string{
+  const active=state.value
+  if(!active)throw Error('identity.account_locked')
+  return active.pkg.accountSpki
+}
+/** The account signing key authenticates the exact device SPKI and signed
+ * photo statement. Recipients validate it against their OOB-pinned account SPKI.
+ */
+export async function signOwnerDeviceProof(contract:string):Promise<{
+  deviceId:string;deviceSpki:string;rootSignature:string
+}>{
+  const active=state.value,epoch=currentGeneration()
+  if(!active||active.offline)throw Error('identity.account_locked')
+  if(contract.length<200||contract.length>8000)throw Error('grant.contract_invalid')
+  const message='photobunker.photo-recipient-root.v1\n'+active.device.deviceId+
+    '\n'+active.device.deviceSpki+'\n'+contract
+  const rootSignature=await sign(await importSigner(active.pkg.accountPkcs8),message)
+  assertEpoch(epoch)
+  if(state.value!==active)throw Error('identity.account_changed')
+  return {deviceId:active.device.deviceId,deviceSpki:active.device.deviceSpki,rootSignature}
+}
+
+
+/** Client proves device signature and ACCOUNT signature against owner root
+ * that came only from a recipient's OOB invitation, not from server manifest.
+ */
+export async function verifyPinnedOwnerDeviceProof(contract:string,deviceSignature:string,
+  deviceSpki:string,accountSpki:string,deviceId:string,rootSignature:string,
+  expectedPinnedAccountSpki:string):Promise<boolean>{
+  if(!expectedPinnedAccountSpki||accountSpki!==expectedPinnedAccountSpki||
+    !/^[a-f0-9-]{36}$/.test(deviceId)||contract.length<200||contract.length>8000)return false
+  try{
+    const rootMsg='photobunker.photo-recipient-root.v1\n'+deviceId+
+      '\n'+deviceSpki+'\n'+contract
+    return await verify(await importSpki(expectedPinnedAccountSpki),rootMsg,rootSignature)&&
+      await verifyOwnerThumbnailStatement(contract,deviceSignature,deviceSpki)
+  }catch{return false}
+}
+
 export async function verifyOwnerThumbnailStatement(statement:string,signature:string,
   enrolledSignerSpki:string):Promise<boolean>{
   if(statement.length<200||statement.length>8000)return false

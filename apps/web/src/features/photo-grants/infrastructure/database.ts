@@ -9,14 +9,27 @@ export type OperationRow={
   id:string;accountId:string;deviceId:string;grantId:string;contract:GrantCommand;
   state:'pending'|'retry'|'conflict';attempts:number;retryAt:number;lastError:string|null
 }
+/** Durable ciphertext-only signed share submission; never stores raw DEK or grant code. */
+export type ThumbnailShareRow=Readonly<{
+  id:string;accountId:string;deviceId:string;grantId:string;photoId:string;
+  assetId:string;generation:number;operationId:string;expiresAt:number;
+  contract:string;signature:string;proof:{deviceId:string;deviceSpki:string;rootSignature:string};state:'pending'|'retry'|'conflict';
+  retryAt:number;attempts:number;lastError:string|null
+}>
 class GrantsDB extends Dexie{
   secrets!:Table<SecretRow,string>
   operations!:Table<OperationRow,string>
+  thumbnailShares!:Table<ThumbnailShareRow,string>
   constructor(){
     super('photobunker-assignment-grants-v1')
     this.version(1).stores({
       secrets:'&id,[accountId+deviceId],grantId',
       operations:'&id,[accountId+deviceId],grantId,state,retryAt',
+    })
+    this.version(2).stores({
+      secrets:'&id,[accountId+deviceId],grantId',
+      operations:'&id,[accountId+deviceId],grantId,state,retryAt',
+      thumbnailShares:'&id,[accountId+deviceId],grantId,state,retryAt,expiresAt,&[accountId+deviceId+grantId+photoId+generation]',
     })
   }
 }

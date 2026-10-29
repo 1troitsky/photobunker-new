@@ -18,7 +18,7 @@ final class PhotoRecipientController extends Controller {
     public function publish(Request $request,string $grantId,string $photoId,string $assetId){
         $this->sync->origin($request);[$account,$device]=$this->sync->actor($request);
         P::uuid($grantId);P::uuid($photoId);P::uuid($assetId);
-        $body=P::exact($request->json()->all(),['contract','signature']);
+        $body=P::exact($request->json()->all(),['contract','signature','deviceId','deviceSpki','rootSignature']);
         abort_unless(is_string($body['contract'])&&is_string($body['signature'])&&
             strlen($body['contract'])>=300&&strlen($body['contract'])<=8000,422);
         try{$c=json_decode($body['contract'],true,32,JSON_THROW_ON_ERROR);}
@@ -55,6 +55,17 @@ final class PhotoRecipientController extends Controller {
         abort_unless(json_encode($c,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR)===$body['contract'],422);
         abort_unless(P::verify($device->signing_spki,
             "photobunker.photo-recipient.v1\n".$body['contract'],$body['signature']),401);
+        abort_unless(is_string($body['deviceId'])&&is_string($body['deviceSpki'])&&
+            is_string($body['rootSignature']),422);
+        P::uuid($body['deviceId']);P::spki($body['deviceSpki']);
+        abort_unless($device->id===$body['deviceId']&&
+            hash_equals($device->signing_spki,$body['deviceSpki']),401);
+        $accountRoot=DB::table('identity_accounts')->where('id',$account->id)
+            ->where('status','ready')->value('account_spki');
+        abort_unless(is_string($accountRoot),401);
+        $proofMessage="photobunker.photo-recipient-root.v1\n".$device->id.
+            "\n".$device->signing_spki."\n".$body['contract'];
+        abort_unless(P::verify($accountRoot,$proofMessage,$body['rootSignature']),401);
         $hash=hash('sha256',$body['contract']);
         return DB::transaction(function()use($c,$account,$device,$hash,$body,$grantId,$photoId,$assetId){
             $grant=DB::table('assignment_grants_v1')->where('id',$grantId)->lockForUpdate()->first();
@@ -101,7 +112,9 @@ final class PhotoRecipientController extends Controller {
                 'recipient_account_id'=>$c['recipientAccountId'],
                 'operation_id'=>$c['operationId'],'contract_hash'=>$hash,
                 'contract_json'=>$body['contract'],'signature'=>$body['signature'],
-                'signer_spki'=>$device->signing_spki,'created_at'=>now(),
+                'signer_spki'=>$device->signing_spki,
+                'publisher_device_id'=>$device->id,
+                'owner_root_signature'=>$body['rootSignature'],'created_at'=>now(),
             ]);
             return $this->sync->json(['accepted'=>true,'operationId'=>$c['operationId']]);
         },3);
@@ -195,6 +208,10 @@ final class PhotoRecipientController extends Controller {
             'bytes'=>(int)$asset->bytes,'sha256'=>$asset->sha256,
             'manifest'=>$manifest,'contract'=>$key->contract_json,
             'signature'=>$key->signature,'signerSpki'=>$key->signer_spki,
+            'publisherDeviceId'=>$key->publisher_device_id,
+            'ownerRootSignature'=>$key->owner_root_signature,
+            'ownerAccountSpki'=>DB::table('identity_accounts')
+                ->where('id',$photo->account_id)->value('account_spki'),
         ]);
     }
     public function ciphertext(Request $r,string $grantId,string $photoId,string $assetId){

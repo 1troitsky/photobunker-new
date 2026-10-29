@@ -1,4 +1,4 @@
-export type SealedGrantSecret={v:1;iv:string;ciphertext:string}
+export type SealedGrantSecret={v:1|2;iv:string;ciphertext:string}
 export type GrantRole='curator'|'contributor'|'viewer'
 export type GrantState='pending'|'accepted'|'declined'|'revoked'
 export type GrantOperationKind='invite'|'accept'|'decline'|'revoke'|'leave'
@@ -32,9 +32,10 @@ export function validateServerGrant(x:ServerGrant):ServerGrant{
     if(x.sealedKey!==null)throw Error('grant.invalid_server_response')
   }else{
     if(typeof x.codeHash!=='string'||!/^[a-f0-9]{64}$/.test(x.codeHash)||
-      !x.sealedKey||x.sealedKey.v!==1||
+      !x.sealedKey||![1,2].includes(x.sealedKey.v)||
       !/^[A-Za-z0-9_-]{16}$/.test(x.sealedKey.iv)||
-      !/^[A-Za-z0-9_-]{64}$/.test(x.sealedKey.ciphertext))
+      !(x.sealedKey.v===1?/^[A-Za-z0-9_-]{64}$/.test(x.sealedKey.ciphertext):
+        /^[A-Za-z0-9_-]{100,700}$/.test(x.sealedKey.ciphertext)))
       throw Error('grant.invalid_server_response')
   }
   return x
