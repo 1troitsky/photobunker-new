@@ -113,12 +113,12 @@ final class PhotoSync
             'assets'=>$assets];
         return [...$payload,'receiptHash'=>hash('sha256',json_encode($payload,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR))];
     }
-    public function requirePhoto(string $id,string $actor,bool $activeOnly=false):object {
+    public function requirePhoto(string $id,string $actor,bool $activeOnly=false,bool $requireAssignmentAccess=true):object {
         P::uuid($id);
         $row=DB::table('photo_records')->where('id',$id)->where('account_id',$actor)->first();
         if(!$row){abort_if(DB::table('photo_tombstones')->where('photo_id',$id)->where('account_id',$actor)->exists(),410);abort(404);}
         abort_if($row->state==='deleting'||$row->expires_at<=self::nowMs(),410);
-        \App\Assignments\CaptureBinding::active($row,$actor);
+        if($requireAssignmentAccess)\App\Assignments\CaptureBinding::active($row,$actor);
         if($activeOnly)abort_unless($row->state==='active',409);
         return $row;
     }

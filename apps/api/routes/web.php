@@ -49,7 +49,8 @@ Route::prefix('photos/v1')->middleware('throttle:100,1,photos')->group(function 
     Route::get('/{photoId}/objects/{assetId}', [PhotoSyncController::class,'read']);
     Route::delete('/{photoId}',function(\Illuminate\Http\Request $r,string $photoId,Lifecycle $life,\App\Photo\PhotoSync $sync) {
         $sync->origin($r);[$a]=$sync->actor($r);
-        $p=$sync->requirePhoto($photoId,$a->id);
+        // An owner may still delete their photo after an assignment is retired.
+        $p=$sync->requirePhoto($photoId,$a->id,false,false);
         $life->mark($p->id,'revoked');
         \App\Jobs\PhotoCleanupJob::dispatch($p->id);
         return $sync->json(['state'=>'deleting'],202);
