@@ -1,5 +1,8 @@
 # PhotoBunker — новая версия
 
+> **Режим Assignment Release (решение владельца 2026-10-30).** Продолжение Issues R2-12+ остановлено; PR #36–40 сохранены без слияния. Единый [Draft PR #41](https://github.com/1troitsky/photobunker-new/pull/41) содержит compatibility-ядро старого PhotoBunker и код всех четырёх новых PR. PB2 остаётся главным репозиторием и архитектурной целью, старая Identity/E2EE временно работает изолированно через typed gateway; Matrix может требоваться для внутреннего bootstrap. **Тесты и релиз не выполнены.** [Передача Codex](docs/ASSIGNMENT-RELEASE-CONSOLIDATION-HANDOFF.md).
+
+
 **Процесс обновлён решением владельца 2026-10-29:** ChatGPT последовательно реализует все оставшиеся согласованные Issues без ожидания Codex и merge; финальную проверку и интеграцию накопленного стека выполняет Codex. **Состояние baseline на 28.10.2026:** архитектурные инварианты **APPROVED**, **R2-01 интегрирована**: создан Vue/TypeScript PWA workspace, локальный production build/test harness и GitHub Project. **R2-02 Ready** после read-only legacy-check UI/assets и передана ChatGPT. Garage и PostgreSQL не входят в R2-01/R2-02.
 
 PhotoBunker — защищённое фотоприложение: камера, локальная галерея, задания и команды, редактор, Photo Card, защищённый Photo Browser, три независимых PIN-сценария. Мобильное PWA и desktop. **Мессенджера/Matrix/чатов/звонков в этой версии нет.**

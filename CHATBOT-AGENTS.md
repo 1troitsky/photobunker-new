@@ -1,3 +1,5 @@
+> **Приоритет решения владельца от 2026-10-30:** дальнейшее выполнение R2 Issues приостановлено. Единственная текущая работа — [Draft PR #41](https://github.com/1troitsky/photobunker-new/pull/41) `chatbot/assignment-release-legacy-kernel` с сохранёнными PR #36–40 и изолированным старым photo kernel. Старые инструкции об автоматическом продолжении каждого Issue НЕ применяются до нового решения. В этом PR разрешён отдельный legacy compatibility-каталог, НЕ смешанный с PB2 Identity/DB; правила E2EE/безопасности и запрет изменения `main` действуют.
+
 # PhotoBunker New — ChatGPT: независимое выполнение Issues
 
 **Решение владельца 2026-10-29:** действуют [Independent Development Pipeline & Replaceable UI](docs/14-INDEPENDENT-DEVELOPMENT-PIPELINE.md) и [COLLABORATION](COLLABORATION.md). **ChatGPT выполняет оставшиеся согласованные Roadmap Issues по порядку без ожидания Codex-review, merge в main или назначения следующей задачи Codex.** Codex позднее проверяет **всю цепочку** и интегрирует её. Это не делает ChatGPT руководителем Codex и не разрешает выпускать непроверенный код.
