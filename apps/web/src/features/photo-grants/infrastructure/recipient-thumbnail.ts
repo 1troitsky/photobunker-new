@@ -70,6 +70,7 @@ export async function readRecipientThumbnail(grantId:string,photoId:string,asset
   let key:CryptoKey
   try{key=await crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['decrypt'])}
   finally{raw.fill(0)}
+  if(Date.now()>=context.expiresAt)error('expired')
   const response=await photoRequest(path+'/ciphertext')
   guard(accountId,deviceId)
   if(!response.ok)error('http_'+response.status)
@@ -80,6 +81,10 @@ export async function readRecipientThumbnail(grantId:string,photoId:string,asset
   const actual=[...hash].map(b=>b.toString(16).padStart(2,'0')).join('')
   guard(accountId,deviceId)
   if(actual!==info.sha256)error('digest')
-  return decryptRecipientThumbnail(grant.ownerId,info.manifest,ciphertext,key,
-    ()=>guard(accountId,deviceId))
+  if(Date.now()>=context.expiresAt)error('expired')
+  const plaintext=await decryptRecipientThumbnail(grant.ownerId,info.manifest,ciphertext,key,
+    ()=>{guard(accountId,deviceId);if(Date.now()>=context.expiresAt)error('expired')})
+  guard(accountId,deviceId)
+  if(Date.now()>=context.expiresAt)error('expired')
+  return plaintext
 }
