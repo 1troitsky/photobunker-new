@@ -92,7 +92,7 @@ async function show(item:RecipientThumbnailRef){
   }catch(e){
     if(valid(active.accountId,active.deviceId,token)){
       const denied=e instanceof Error&&(
-        e.message==='grant.read_no_grant'||
+        e.message==='grant.read_no_grant'||e.message==='grant.denied'||
         /grant\.read_http_(401|403|404|410)$/.test(e.message))
       if(denied){
         reset();error.value=labels.value.blocked
