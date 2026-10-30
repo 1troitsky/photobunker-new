@@ -77,6 +77,7 @@ Route::prefix('assignments/v1')->middleware('throttle:60,1,assignments')->group(
     Route::put('/grants/operations/{operationId}', [\App\Http\Controllers\AssignmentGrantController::class,'mutate']);
     Route::get('/list',[\App\Http\Controllers\AssignmentController::class,'index']);
     Route::get('/{assignmentId}/history',[\App\Http\Controllers\AssignmentController::class,'history']);
+    Route::get('/{assignmentId}/progress',[\App\Http\Controllers\AssignmentController::class,'progress']);
     Route::get('/{assignmentId}',[\App\Http\Controllers\AssignmentController::class,'show']);
     Route::put('/{assignmentId}',[\App\Http\Controllers\AssignmentController::class,'mutate']);
 });
