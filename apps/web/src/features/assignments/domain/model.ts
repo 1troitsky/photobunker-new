@@ -1,7 +1,8 @@
 export type AssignmentStatus='waiting'|'in_progress'|'submitted'|'needs_changes'|'completed'
 export type AssignmentMode=2|3
 export type AssignmentAction='create'|'edit'|'transition'|'delete'
-export type AssignmentFields={title:string;instructions:string;mode:AssignmentMode;retentionDays:number}
+export type AssignmentFields={title:string;instructions:string;mode:AssignmentMode;retentionDays:number;
+  startsAt?:string|null;finishesAt?:string|null;targetCount?:number|null}
 export type PolicySnapshot=Readonly<{assignmentId:string;assignmentRevision:number;
   policyRevision:number;mode:AssignmentMode;retentionDays:number}>
 export type AssignmentView=AssignmentFields&{id:string;status:AssignmentStatus;revision:number;
@@ -25,7 +26,19 @@ export function validateFields(fields:AssignmentFields):AssignmentFields{
   if(fields.mode!==2&&fields.mode!==3)throw Error('assignment.mode_unavailable')
   if(!Number.isInteger(fields.retentionDays)||fields.retentionDays<1||fields.retentionDays>45)
     throw Error('assignment.retention_invalid')
-  return{title,instructions:fields.instructions,mode:fields.mode,retentionDays:fields.retentionDays}
+  // Private planning fields stay inside the existing encrypted assignment envelope.
+  // Do not leak dates or targets into the signed public capture policy.
+  const startsAt=fields.startsAt||null,finishesAt=fields.finishesAt||null
+  const validDay=(date:string)=>/^\d{4}-\d{2}-\d{2}$/.test(date)&&
+    !Number.isNaN(Date.parse(date+'T00:00:00Z'))&&
+    new Date(date+'T00:00:00Z').toISOString().slice(0,10)===date
+  if(startsAt&&!validDay(startsAt)||finishesAt&&!validDay(finishesAt)||
+    startsAt&&finishesAt&&startsAt>finishesAt)throw Error('assignment.dates_invalid')
+  const targetCount=fields.targetCount??null
+  if(targetCount!==null&&(!Number.isInteger(targetCount)||targetCount<1||targetCount>9999))
+    throw Error('assignment.target_invalid')
+  return{title,instructions:fields.instructions,mode:fields.mode,retentionDays:fields.retentionDays,
+    startsAt,finishesAt,targetCount}
 }
 export function nextStatus(before:AssignmentStatus,after:AssignmentStatus):void{
   if(!steps[before].includes(after))throw Error('assignment.invalid_transition')
