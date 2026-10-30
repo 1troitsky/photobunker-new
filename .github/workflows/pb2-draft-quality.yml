@@ -95,6 +95,103 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  live-storage:
+    name: PostgreSQL + Garage S3 integration (isolated)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: pb2_ci_g1
+          POSTGRES_USER: pb2_ci
+          POSTGRES_PASSWORD: pb2_ci_disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pb2_ci -d pb2_ci_g1"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_URL: https://localhost
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: pb2_ci_g1
+      DB_USERNAME: pb2_ci
+      DB_PASSWORD: pb2_ci_disposable
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      PHOTO_S3_ENDPOINT: http://127.0.0.1:3900
+      PHOTO_S3_REGION: garage
+      PHOTO_S3_BUCKET: pb2-ci-g1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, fileinfo, curl, zip
+          coverage: none
+      - name: Start isolated Garage and assign single-node layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/garage/meta" "$RUNNER_TEMP/garage/data"
+          secret="$(openssl rand -hex 32)"
+          cat > "$RUNNER_TEMP/garage/garage.toml" <<EOF
+          metadata_dir = "/var/lib/garage/meta"
+          data_dir = "/var/lib/garage/data"
+          db_engine = "sqlite"
+          replication_factor = 1
+          rpc_bind_addr = "127.0.0.1:3901"
+          rpc_public_addr = "127.0.0.1:3901"
+          rpc_secret = "$secret"
+          [s3_api]
+          s3_region = "garage"
+          api_bind_addr = "127.0.0.1:3900"
+          EOF
+          docker run -d --name pb2-g1-garage --network host \
+            -v "$RUNNER_TEMP/garage/garage.toml:/etc/garage.toml:ro" \
+            -v "$RUNNER_TEMP/garage/meta:/var/lib/garage/meta" \
+            -v "$RUNNER_TEMP/garage/data:/var/lib/garage/data" \
+            dxflrs/garage:v2.5.0
+          for attempt in $(seq 1 30); do
+            if docker exec pb2-g1-garage /garage status >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          node="$(docker exec pb2-g1-garage /garage node id -q | tr -d '\r\n')"
+          test -n "$node"
+          docker exec pb2-g1-garage /garage layout assign -z ci -c 1G "$node"
+          docker exec pb2-g1-garage /garage layout apply --version 1
+          docker exec pb2-g1-garage /garage bucket create pb2-ci-g1
+          # Avoid writing S3 credentials to stdout or committed artifacts.
+          docker exec pb2-g1-garage /garage key create pb2-ci-key > "$RUNNER_TEMP/garage/key.txt"
+          key="$(sed -n 's/^[[:space:]]*Key ID:[[:space:]]*//p' "$RUNNER_TEMP/garage/key.txt" | head -1)"
+          password="$(sed -n 's/^[[:space:]]*Secret key:[[:space:]]*//p' "$RUNNER_TEMP/garage/key.txt" | head -1)"
+          test -n "$key" && test -n "$password"
+          echo "::add-mask::$key"
+          echo "::add-mask::$password"
+          docker exec pb2-g1-garage /garage bucket allow \
+            --read --write --owner pb2-ci-g1 --key pb2-ci-key
+          {
+            echo "PHOTO_S3_ACCESS_KEY=$key"
+            echo "PHOTO_S3_SECRET_KEY=$password"
+          } >> "$GITHUB_ENV"
+          rm -f "$RUNNER_TEMP/garage/key.txt"
+      - name: Install PHP dependencies and create disposable PostgreSQL schema
+        working-directory: apps/api
+        run: |
+          composer install --no-interaction --no-progress --prefer-dist
+          php artisan migrate --force
+      - name: Exercise real Garage object readback, orphan recovery, expiry and tombstones
+        working-directory: apps/api
+        run: php tests/integration/garage-postgres-smoke.php
+      - name: Stop isolated Garage
+        if: always()
+        run: docker rm -f pb2-g1-garage >/dev/null 2>&1 || true
+
   browser:
     name: Chromium production bundle smoke (no backend)
     needs: web
