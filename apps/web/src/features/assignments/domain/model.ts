@@ -1,6 +1,6 @@
 export type AssignmentStatus='waiting'|'in_progress'|'submitted'|'needs_changes'|'completed'
 export type AssignmentMode=2|3
-export type AssignmentAction='create'|'edit'|'transition'|'delete'
+export type AssignmentAction='create'|'edit'|'transition'|'archive'|'delete'
 export type AssignmentFields={title:string;instructions:string;mode:AssignmentMode;retentionDays:number;
   startsAt?:string|null;finishesAt?:string|null;targetCount?:number|null;archived?:boolean;
   cameraInstructions?:string;requiredGps?:boolean;requireDescription?:boolean;
