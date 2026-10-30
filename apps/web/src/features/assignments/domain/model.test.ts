@@ -17,6 +17,10 @@ describe('R2-08: Assignment domain rules',()=>{
     expect(validateFields({...base,startsAt:'2026-10-31',finishesAt:'2026-11-02',targetCount:5}))
       .toMatchObject({startsAt:'2026-10-31',finishesAt:'2026-11-02',targetCount:5})
     expect(validateFields(base)).toMatchObject({startsAt:null,finishesAt:null,targetCount:null})
+    expect(validateFields({...base,archived:true}).archived).toBe(true)
+    expect(validateFields(base).archived).toBe(false)
+    expect(()=>validateFields({...base,archived:'yes' as unknown as boolean}))
+      .toThrow('assignment.archived_invalid')
     for(const targetCount of [0,-1,10000,2.5])
       expect(()=>validateFields({...base,targetCount})).toThrow('assignment.target_invalid')
     for(const dates of [
