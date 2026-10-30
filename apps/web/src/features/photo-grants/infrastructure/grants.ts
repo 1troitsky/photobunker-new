@@ -241,7 +241,22 @@ export async function publishRecipientThumbnail(grantId:string,photoId:string):
   }
   // Only ciphertext-wrapped DEK + detached signed contract crosses durable storage.
   // If network dies immediately, subsequent flush sends these exact same bytes.
-  await grantDb.thumbnailShares.add(queued)
+  try{
+    await grantDb.thumbnailShares.add(queued)
+  }catch(e){
+    // Another tab may have committed the same share while this tab was
+    // signing it. The unique compound index is authoritative; return the
+    // already durable operation instead of asking the user to retry with a
+    // second envelope. Never mask unrelated IndexedDB/storage failures.
+    const existing=await grantDb.thumbnailShares
+      .where('[accountId+deviceId]').equals([active.accountId,active.deviceId])
+      .filter(x=>x.grantId===grantId&&x.photoId===photoId&&
+        x.generation===row.generation).first()
+    same(active.accountId,active.deviceId)
+    if(!existing)throw e
+    if(existing.state==='conflict')throw Error('grant.thumbnail_conflict')
+    return {assetId:existing.assetId,operationId:existing.operationId}
+  }
   same(active.accountId,active.deviceId)
   wake()
   return {assetId:thumbnail.assetId,operationId:statement.operationId}
