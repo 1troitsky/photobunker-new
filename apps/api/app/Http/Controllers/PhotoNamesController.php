@@ -9,9 +9,14 @@ final class PhotoNamesController extends Controller {
   public function __construct(private readonly PhotoSync $sync,private readonly PhotoNames $names){}
   public function reserve(Request $r){
     $this->sync->origin($r);[$a,$d]=$this->sync->actor($r);
-    $x=P::exact($r->json()->all(),['requestId','count']);
+    $input=$r->json()->all();
+    $hasScope=array_key_exists('assignmentId',$input);
+    $x=P::exact($input,$hasScope?['requestId','count','assignmentId']:['requestId','count']);
     P::uuid($x['requestId']);abort_unless(is_int($x['count'])&&$x['count']>=1&&$x['count']<=64,422);
-    return $this->sync->json($this->names->reserve($a->id,$d->id,$x['requestId'],$x['count']));
+    $assignmentId=$hasScope?$x['assignmentId']:null;
+    abort_unless($assignmentId===null||is_string($assignmentId),422);
+    if($assignmentId!==null)P::uuid($assignmentId);
+    return $this->sync->json($this->names->reserve($a->id,$d->id,$x['requestId'],$x['count'],$assignmentId));
   }
   public function claim(Request $r){
     $this->sync->origin($r);[$a,$d]=$this->sync->actor($r);
