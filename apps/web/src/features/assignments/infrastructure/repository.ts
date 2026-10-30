@@ -67,7 +67,7 @@ export class AssignmentRepository{
     const source=await this.get(id)
     return this.create({title:source.title,instructions:source.instructions,
       mode:source.mode,retentionDays:source.retentionDays,startsAt:source.startsAt,
-      finishesAt:source.finishesAt,targetCount:source.targetCount})
+      finishesAt:source.finishesAt,targetCount:source.targetCount,archived:false})
   }
   private operation(contract:AssignmentContract):Operation{
     return{key:operationKey(this.account,contract.operationId),accountId:this.account,
@@ -81,10 +81,18 @@ export class AssignmentRepository{
     const before=await this.project(previous)
     const fields=action==='edit'?validateFields(nextFields!):
       {title:before.title,instructions:before.instructions,mode:before.mode,retentionDays:before.retentionDays,
-        startsAt:before.startsAt,finishesAt:before.finishesAt,targetCount:before.targetCount}
+        startsAt:before.startsAt,finishesAt:before.finishesAt,targetCount:before.targetCount,
+        archived:before.archived}
     const status=action==='transition'?nextState!:before.status
     if(action==='transition')nextStatus(before.status,status)
-    if(action==='edit'&&before.status==='completed')throw Error('assignment.completed')
+    if(action==='edit'&&before.status==='completed'){
+      const onlyArchive=fields.archived!==before.archived&&
+        fields.title===before.title&&fields.instructions===before.instructions&&
+        fields.mode===before.mode&&fields.retentionDays===before.retentionDays&&
+        fields.startsAt===before.startsAt&&fields.finishesAt===before.finishesAt&&
+        fields.targetCount===before.targetCount
+      if(!onlyArchive)throw Error('assignment.completed')
+    }
     const revision=previous.revision+1
     const policyRevision=previous.policyRevision+(action==='edit'&&
       (fields.mode!==previous.mode||fields.retentionDays!==previous.retentionDays)?1:0)
@@ -110,6 +118,14 @@ export class AssignmentRepository{
   }
   async edit(id:string,fields:AssignmentFields):Promise<AssignmentView>{
     return (await this.apply(id,'edit',fields))!
+  }
+  async setArchived(id:string,archived:boolean):Promise<AssignmentView>{
+    const before=await this.get(id)
+    if(before.archived===archived)return before
+    return this.edit(id,{title:before.title,instructions:before.instructions,
+      mode:before.mode,retentionDays:before.retentionDays,
+      startsAt:before.startsAt,finishesAt:before.finishesAt,
+      targetCount:before.targetCount,archived})
   }
   async transition(id:string,status:AssignmentStatus):Promise<AssignmentView>{
     return (await this.apply(id,'transition',undefined,status))!
@@ -217,7 +233,8 @@ export class AssignmentRepository{
     if(retry){
       await this.edit(id,{title:previous.title,instructions:previous.instructions,
         mode:local.mode,retentionDays:local.retentionDays,
-        startsAt:previous.startsAt,finishesAt:previous.finishesAt,targetCount:previous.targetCount})
+        startsAt:previous.startsAt,finishesAt:previous.finishesAt,targetCount:previous.targetCount,
+        archived:previous.archived})
     }
   }
   async resetToServer(id:string,remote:ServerAssignment):Promise<void>{
