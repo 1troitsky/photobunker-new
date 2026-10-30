@@ -6,6 +6,7 @@ import {GalleryThumbnail} from '../../gallery'
 import {onPhotoSync} from '../../photo-sync'
 import {language,AppIcon} from '../../ui-preview'
 import {loadLocalBrowser} from '../application/browse'
+import {exportOwnerBrowserZip} from '../application/export-owner'
 import {browserFolders,visibleBrowserPhotos,type BrowserPhoto,type BrowserAssignment,
   type BrowserDisplay,type BrowserSort} from '../domain/model'
 
@@ -14,12 +15,14 @@ const photos=ref<BrowserPhoto[]>([]),assignments=ref<BrowserAssignment[]>([])
 const activeFolder=ref('all'),search=ref(''),display=ref<BrowserDisplay>('grid')
 const sort=ref<BrowserSort>('newest'),loading=ref(false),error=ref('')
 const now=ref(Date.now())
+const exporting=ref(false),exportDone=ref(0),exportError=ref(''),exportNotice=ref('')
+let exportController:AbortController|null=null
 let generation=0,stopped=false,stopSync:()=>void=()=>{},clock:number|undefined
 
 const ru=computed(()=>language.value==='ru')
 const txt=computed(()=>ru.value?{
   title:'Фото-браузер',subtitle:'Приватные фотографии этого устройства',
-  note:'Локальный просмотр. Общие коллекции, доступ участников и экспорт пока не подключены.',
+  note:'Локальный просмотр и экспорт своих текущих версий. Общие коллекции и доступ участников пока не подключены.',
   all:'Все фото',personal:'Личные',missing:'Недоступное задание',
   assignments:'Задания',search:'Название или NAME-ID',newest:'Новые',oldest:'Старые',name:'По имени',
   grid:'Сетка',list:'Список',refresh:'Обновить',loading:'Открываем защищённые данные…',
@@ -28,9 +31,12 @@ const txt=computed(()=>ru.value?{
   failure:'Не удалось открыть защищённый фото-браузер.',open:'Открыть фотографию',
   create:'Создать аккаунт',restore:'Восстановить',file:'Фотография',
   local:'На устройстве',synced:'Синхронизировано',retry:'Ожидает повтор',syncing:'Синхронизация',
+  exportZip:'Сохранить ZIP',exportWarning:'ZIP с текущими изображениями будет сохранён в загрузки устройства. Приватные метаданные и EXIF не включаются.',
+  exportLimit:'ZIP — не более 10 локальных фото за раз (до 16 МБ).',
+  exportWorking:'Подготавливаем защищённый экспорт…',exportSent:'Запрошено скачивание ZIP.',exportFailed:'Экспорт прерван или недоступен.',
 }:{
   title:'Photo Browser',subtitle:'Private photos on this device',
-  note:'Local browsing only. Shared collections, recipient access and export are not enabled yet.',
+  note:'Local browsing and export of current owner renditions. Shared collections and recipient access are not yet enabled.',
   all:'All photos',personal:'Personal',missing:'Unavailable assignment',
   assignments:'Assignments',search:'Title or NAME-ID',newest:'Newest',oldest:'Oldest',name:'Name',
   grid:'Grid',list:'List',refresh:'Refresh',loading:'Opening encrypted data…',
@@ -39,6 +45,9 @@ const txt=computed(()=>ru.value?{
   failure:'Could not open the protected photo browser.',open:'Open photo',
   create:'Create account',restore:'Restore access',file:'Photograph',
   local:'On device',synced:'Synced',retry:'Retry pending',syncing:'Syncing',
+  exportZip:'Save ZIP',exportWarning:'The current images will be downloaded to this device. Private metadata and EXIF are excluded.',
+  exportLimit:'Up to 10 local photos per ZIP (16 MB maximum).',
+  exportWorking:'Preparing private export…',exportSent:'ZIP download requested.',exportFailed:'Export cancelled or unavailable.',
 })
 const validPhotos=computed(()=>photos.value.filter(p=>p.expiresAt>now.value))
 const folders=computed(()=>browserFolders(assignments.value,validPhotos.value))
@@ -61,6 +70,8 @@ function stateLabel(state:BrowserPhoto['sync']){
     state==='retry'?txt.value.retry:txt.value.local
 }
 function clear(){
+  exportController?.abort();exportController=null
+  exporting.value=false;exportError.value='';exportNotice.value='';exportDone.value=0
   generation++
   photos.value=[];assignments.value=[];loading.value=false;error.value=''
   activeFolder.value='all'
@@ -87,6 +98,29 @@ async function openPhoto(id:string){
   if(!identity.value)return
   await router.push('/photos/'+encodeURIComponent(id))
 }
+
+async function downloadZip(){
+  if(exporting.value||visible.value.length<1||visible.value.length>10||!identity.value)return
+  exportController?.abort()
+  const controller=new AbortController(),active=identity.value
+  exportController=controller
+  exporting.value=true;exportError.value='';exportNotice.value='';exportDone.value=0
+  try{
+    // Explicit owner-only export, from the current encrypted PB2 vault.
+    await exportOwnerBrowserZip([...visible.value],controller.signal,(done)=>{
+      if(exportController===controller)exportDone.value=done
+    })
+    if(exportController===controller&&identity.value?.accountId===active.accountId&&
+      identity.value?.deviceId===active.deviceId)
+      exportNotice.value=txt.value.exportSent
+  }catch(e){
+    if(exportController===controller)
+      exportError.value=e instanceof Error?e.message:txt.value.exportFailed
+  }finally{
+    if(exportController===controller){exportController=null;exporting.value=false}
+  }
+}
+
 function wake(){if(!document.hidden)void refresh()}
 onMounted(()=>{
   stopped=false
@@ -147,6 +181,14 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
             <button type="button" :class="{selected:display==='list'}" :aria-pressed="display==='list'"
               @click="display='list'">{{ txt.list }}</button>
           </div>
+        </div>
+        <div class="pb-browser-export">
+          <button type="button" :disabled="exporting||loading||visible.length<1||visible.length>10"
+            @click="downloadZip">{{ exporting?txt.exportWorking:txt.exportZip }}</button>
+          <small>{{ txt.exportWarning }} {{ txt.exportLimit }}</small>
+          <span v-if="exporting" role="status">{{ exportDone }} / {{ visible.length }}</span>
+          <p v-if="exportError" role="alert">{{ exportError }}</p>
+          <p v-if="exportNotice" role="status">{{ exportNotice }}</p>
         </div>
         <p v-if="error" role="alert">{{ error }}</p>
         <p v-else-if="loading" role="status">{{ txt.loading }}</p>
@@ -215,4 +257,12 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
   .pb-browser-folders span{flex:0 1 auto}
   .pb-browser-photos.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 }
+</style>
+ 
+<style scoped>
+.pb-browser-export{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.pb-browser-export button{min-height:44px;padding:9px 15px;border:1px solid var(--border);
+  border-radius:10px;color:var(--text);background:var(--surface)}
+.pb-browser-export small{flex:1 1 250px;font-size:12px;color:var(--secondary)}
+.pb-browser-export p{width:100%;margin:0;font-size:12px}
 </style>

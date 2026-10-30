@@ -32,3 +32,12 @@ The compat/assignment-release tree remains in the historical Draft as read-only 
 ## Mandatory independent verification
 
 Run locked pnpm install, lint, typecheck, Vitest, architecture, build and Playwright; PHP 8.4 Composer, PHPUnit, migrations. Confirm exactly one origin on every native route even if VITE_ASSIGNMENT_RELEASE_ORIGIN is set. On two genuine PB2 accounts test create/restore and device revoke, full offline capture/edit/reload, original-before-edit upload and CAS, expired/photo quota/concurrency handling, E2EE permission/grant/revoke and Safari/Android mobile. Do not merge before PASS. No full build or E2E was performed by this GitHub-only session.
+
+
+## Further port: owner-only ZIP export from legacy Photo Browser
+
+- REUSE/ADAPT exact independent legacy ZIP32 stream writer and safe path sanitizer from compatibility photo-browser/zip.ts, now native photo-browser/infrastructure/zip.ts; no legacy login, Matrix, workspace API, or grants.
+- PB2 application/export-owner.ts reads only active current owner rendition IDs through PB2 local vault and trusted-time checks; no immutable original, raw metadata, foreign-grant image or cloud bypass. Decodes and re-encodes each JPEG in memory to strip EXIF and preserve the already flattened current pixel presentation.
+- Explicit download button only; maximum 10 filtered local images and 16 MB generated ZIP, no automatic system-gallery writes. Abort on route unmount, account/device change, hidden tab, invalid source/expiry, file-size quota or modified image revision. Object URLs are revoked. ZIP has no capture timestamps.
+- Ported ZIP unit tests cover archive structures, sanitized path collision and cancellation. UI states user-initiated browser download, never claims an OS write was verified.
+- This is NOT a recipient export endpoint and does not turn on cross-account reading; requires actual browser/device download and privacy test before release.
