@@ -44,7 +44,7 @@ final class AssignmentContract {
         P::uuid($c['assignmentId']);P::uuid($c['operationId']);
         abort_unless(is_int($c['expectedRevision'])&&$c['expectedRevision']>=0&&
             $c['expectedRevision']<100000000&&$c['revision']===$c['expectedRevision']+1,422);
-        abort_unless(in_array($c['action'],['create','edit','transition','delete'],true)&&
+        abort_unless(in_array($c['action'],['create','edit','transition','archive','delete'],true)&&
             in_array($c['status'],self::STATUS,true)&&is_int($c['policyRevision'])&&
             $c['policyRevision']>=1&&$c['policyRevision']<=100000000,422);
         abort_unless(is_int($c['mode'])&&in_array($c['mode'],[2,3],true)
