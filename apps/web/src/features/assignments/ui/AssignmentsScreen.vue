@@ -3,13 +3,14 @@ import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
 import {useRoute,useRouter} from 'vue-router'
 import {identity,onIdentityCleanup} from '../../identity'
 import {language} from '../../ui-preview'
-import {openAssignments,flushAssignments,onAssignmentChange,fetchServerAssignment,steps} from '../index'
+import {openAssignments,flushAssignments,onAssignmentChange,fetchServerAssignment,fetchAssignmentProgress,steps} from '../index'
 import {listAssignmentPhotos} from '../../photo-review'
 import type {AssignmentView,AssignmentStatus,AssignmentFields} from '../domain/model'
 
 const route=useRoute(),router=useRouter(),ru=computed(()=>language.value==='ru')
 const rows=ref<AssignmentView[]>([]),selected=ref<AssignmentView|null>(null)
 const assignmentPhotos=ref<{photoId:string;capturedAt:number}[]>([])
+const confirmedCount=ref<number|null>(null)
 const loading=ref(false),saving=ref(false),error=ref(''),filter=ref(''),statusFilter=ref('all')
 type VisibilityFilter='active'|'archive'|'all'
 type AssignmentSort='updated'|'created'|'latest_photo'
@@ -34,7 +35,7 @@ const copy=computed(()=>ru.value?{
   empty:'Заданий пока нет',emptyFiltered:'Задания не найдены',emptyHelp:'Создайте первое приватное задание.',
   instructions:'Инструкции',required:'Название',mode:'Режим сохранения',retention:'Срок хранения (дни)',
   startsAt:'Дата начала',finishesAt:'Дата окончания',targetCount:'Нужно фотографий (1–9999)',
-  progress:'Снимков на устройстве',archive:'В архив',restoreArchive:'Вернуть из архива',
+  progress:'Снимков на устройстве',confirmed:'Подтверждено сервером',archive:'В архив',restoreArchive:'Вернуть из архива',
   active:'Активные',archived:'Архив',allAssignments:'Все задания',sort:'Сортировка',
   sortUpdated:'Последнее изменение',sortCreated:'Дата создания',sortPhoto:'Последняя фотография',
   cameraInstructions:'Инструкция для камеры',requiredGps:'Обязательная геолокация',
@@ -65,7 +66,7 @@ const copy=computed(()=>ru.value?{
   empty:'No assignments yet',emptyFiltered:'Nothing matches',emptyHelp:'Create your first private assignment.',
   instructions:'Instructions',required:'Title',mode:'Storage mode',retention:'Retention (days)',
   startsAt:'Start date',finishesAt:'End date',targetCount:'Required photos (1–9999)',
-  progress:'Photos on this device',archive:'Archive',restoreArchive:'Restore from archive',
+  progress:'Photos on this device',confirmed:'Server confirmed',archive:'Archive',restoreArchive:'Restore from archive',
   active:'Active',archived:'Archive',allAssignments:'All assignments',sort:'Sort by',
   sortUpdated:'Last edited',sortCreated:'Created',sortPhoto:'Latest photo',
   cameraInstructions:'Camera instructions',requiredGps:'Require GPS',
@@ -107,11 +108,11 @@ const syncLabel=(value:AssignmentView)=>value.sync==='conflict'?copy.value.confl
   value.sync==='synced'?copy.value.synced:value.sync==='retry'?copy.value.retry:copy.value.offline
 let epoch=0,ended=false,unlisten:()=>void=()=>{}
 const cleanup=onIdentityCleanup(()=>{epoch++;rows.value=[];selected.value=null;serverVersion.value=null;
-  photoDates.value={};error.value=''})
+  photoDates.value={};confirmedCount.value=null;error.value=''})
 function hasIdentity(){return Boolean(identity.value)}
 async function reload(){
   const token=++epoch,who=identity.value
-  if(!who){rows.value=[];selected.value=null;assignmentPhotos.value=[];return}
+  if(!who){rows.value=[];selected.value=null;assignmentPhotos.value=[];confirmedCount.value=null;return}
   loading.value=true
   try{
     const vault=openAssignments()
@@ -123,6 +124,11 @@ async function reload(){
     selected.value=details.value?current.find(x=>x.id===details.value)??null:null
     const photos=details.value?await listAssignmentPhotos(details.value):[]
     if(ended||token!==epoch||identity.value?.accountId!==who.accountId)return
+    confirmedCount.value=null
+    if(details.value&&selected.value?.sync==='synced'&&!who.offline&&navigator.onLine){
+      try{confirmedCount.value=await fetchAssignmentProgress(details.value)}catch{/* no stale positive count */}
+      if(ended||token!==epoch||identity.value?.accountId!==who.accountId)return
+    }
     assignmentPhotos.value=photos.map(x=>({
       photoId:x.photoId,capturedAt:x.capture?.capturedAt??0,
     })).sort((a,b)=>b.capturedAt-a.capturedAt)
@@ -338,10 +344,11 @@ onUnmounted(()=>{ended=true;epoch++;cleanup();unlisten()})
           <section class="assignment-local-photos">
             <h3>{{ copy.photos }}</h3>
             <p v-if="selected.targetCount" class="assignment-hint">
-              {{ copy.progress }}: {{ assignmentPhotos.length }} / {{ selected.targetCount }}
+              {{ copy.confirmed }}: {{ confirmedCount??'—' }} / {{ selected.targetCount }}
+              · {{ copy.progress }}: {{ assignmentPhotos.length }}
             </p>
             <progress v-if="selected.targetCount" class="assignment-progress"
-              :value="Math.min(assignmentPhotos.length,selected.targetCount)" :max="selected.targetCount"></progress>
+              :value="Math.min(confirmedCount??0,selected.targetCount)" :max="selected.targetCount"></progress>
             <p v-if="!assignmentPhotos.length" class="assignment-hint">{{ copy.noPhotos }}</p>
             <ul v-else class="assignment-list">
               <li v-for="photo in assignmentPhotos" :key="photo.photoId">
