@@ -10,12 +10,14 @@ export const DEFAULT_TTL_DAYS=45
 export type PersonalPolicy=Readonly<{policyVersion:1;source:'personal';assignmentId:null;mode:2|3;ttlDays:number}>
 export type AssignmentPolicy=Readonly<{policyVersion:1;source:'assignment';assignmentId:string;
   assignmentRevision:number;policyRevision:number;mode:2|3;ttlDays:number;
-  requiredGps?:boolean;enableNameId?:boolean;startsAt?:string|null;finishesAt?:string|null}>
+  requiredGps?:boolean;enableNameId?:boolean;startsAt?:string|null;finishesAt?:string|null;
+  requireDescription?:boolean;descriptionMinLength?:number;requireTags?:boolean;allowedTags?:string[]}>
 export type CapturePolicy=PersonalPolicy|AssignmentPolicy
 export type FrozenAssignment=Readonly<{assignmentId:string;assignmentRevision:number;
   policyRevision:number;mode:2|3;retentionDays:number;capturedAt:number}>
 export function assignmentPolicy(s:{assignmentId:string;assignmentRevision:number;policyRevision:number;mode:2|3;retentionDays:number;
-  requiredGps?:boolean;enableNameId?:boolean;startsAt?:string|null;finishesAt?:string|null}):AssignmentPolicy{
+  requiredGps?:boolean;enableNameId?:boolean;startsAt?:string|null;finishesAt?:string|null;
+  requireDescription?:boolean;descriptionMinLength?:number;requireTags?:boolean;allowedTags?:string[]}):AssignmentPolicy{
   if(!/^[a-f0-9-]{36}$/.test(s.assignmentId)||!Number.isInteger(s.assignmentRevision)||s.assignmentRevision<1||
     !Number.isInteger(s.policyRevision)||s.policyRevision<1||![2,3].includes(s.mode)||
     !Number.isInteger(s.retentionDays)||s.retentionDays<1||s.retentionDays>45)
@@ -24,7 +26,9 @@ export function assignmentPolicy(s:{assignmentId:string;assignmentRevision:numbe
     assignmentRevision:s.assignmentRevision,policyRevision:s.policyRevision,mode:s.mode,
     ttlDays:s.retentionDays,
     requiredGps:s.requiredGps??false,enableNameId:s.enableNameId??true,
-    startsAt:s.startsAt??null,finishesAt:s.finishesAt??null})
+    startsAt:s.startsAt??null,finishesAt:s.finishesAt??null,
+    requireDescription:s.requireDescription??false,descriptionMinLength:s.descriptionMinLength??0,
+    requireTags:s.requireTags??false,allowedTags:[...(s.allowedTags??[])]})
 }
 export type CaptureMetadata=Readonly<{
   policyVersion:1;policy:CapturePolicy;mode:2|3;captureMethod:Method
