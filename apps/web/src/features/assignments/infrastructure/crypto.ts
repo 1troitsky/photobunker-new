@@ -17,7 +17,7 @@ function decode(s:string):Uint8Array<ArrayBuffer>{
   return new Uint8Array(Uint8Array.from(raw,c=>c.charCodeAt(0)))
 }
 function aad(account:string,assignment:string,operation:string,revision:number):Uint8Array<ArrayBuffer>{
-  return new Uint8Array(utf8.encode('photobunker.assignment.v1|+account+'|'+assignment+'|'+operation+'|'+revision))
+  return new Uint8Array(utf8.encode('photobunker.assignment.v1|'+account+'|'+assignment+'|'+operation+'|'+revision))
 }
 export async function seal(grant:Grant,assignmentId:string,operationId:string,revision:number,
   fields:AssignmentFields):Promise<AssignmentEnvelope>{
