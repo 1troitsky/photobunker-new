@@ -77,9 +77,16 @@ export class AssignmentRepository{
     nextFields?:AssignmentFields,nextState?:AssignmentStatus):Promise<AssignmentView|null>{
     const previous=await this.record(id)
     const before=await this.project(previous)
-    const fields=action==='edit'?validateFields(nextFields!):validateFields({...before})
+    const fields=(action==='edit'||action==='archive')?validateFields(nextFields!):validateFields({...before})
     const status=action==='transition'?nextState!:before.status
     if(action==='transition')nextStatus(before.status,status)
+    if(action==='archive'){
+      if(fields.archived===before.archived)throw Error('assignment.archive_unchanged')
+      const onlyArchive=Object.keys(fields).every(key=>key==='archived'||
+        JSON.stringify(fields[key as keyof AssignmentFields])===
+          JSON.stringify(before[key as keyof AssignmentFields]))
+      if(!onlyArchive)throw Error('assignment.archive_fields_changed')
+    }
     if(action==='edit'&&before.status==='completed'){
       const onlyArchive=fields.archived!==before.archived&&
         fields.title===before.title&&fields.instructions===before.instructions&&
@@ -129,7 +136,7 @@ export class AssignmentRepository{
   async setArchived(id:string,archived:boolean):Promise<AssignmentView>{
     const before=await this.get(id)
     if(before.archived===archived)return before
-    return this.edit(id,{...before,archived})
+    return (await this.apply(id,'archive',{...before,archived}))!
   }
   async transition(id:string,status:AssignmentStatus):Promise<AssignmentView>{
     return (await this.apply(id,'transition',undefined,status))!
