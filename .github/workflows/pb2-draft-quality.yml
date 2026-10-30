@@ -189,6 +189,24 @@ jobs:
       - name: Exercise real Garage object readback, orphan recovery, expiry and tombstones
         working-directory: apps/api
         run: php tests/integration/garage-postgres-smoke.php
+      - name: Exercise real HTTP Identity, upload, readback and TTL against Garage
+        shell: bash
+        working-directory: apps/api
+        env:
+          APP_URL: http://127.0.0.1:8099
+          SESSION_DRIVER: file
+          SESSION_SECURE_COOKIE: 'false'
+        run: |
+          set -euo pipefail
+          php artisan serve --host=127.0.0.1 --port=8099 > "$RUNNER_TEMP/pb2-http-server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:8099/identity/v2/csrf >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --silent --fail http://127.0.0.1:8099/identity/v2/csrf >/dev/null
+          php tests/integration/http-laravel-garage-smoke.php
       - name: Stop isolated Garage
         if: always()
         run: docker rm -f pb2-g1-garage >/dev/null 2>&1 || true
