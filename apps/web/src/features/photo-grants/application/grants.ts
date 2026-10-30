@@ -115,7 +115,7 @@ export async function changeAssignmentGrant(row:ServerGrant,
   wake()
 }
 export type GrantOutboxState=Readonly<{
-  opId:string;grantId:string;kind:GrantOperationKind;state:'pending'|'retry'|'conflict';
+  opId:string;grantId:string;kind:GrantOperationKind;state:'pending'|'retry'|'conflict'|'acknowledged';
   error:string|null
 }>
 /** Technical status only; never return an invitation code or secret to UI. */

@@ -28,7 +28,7 @@ final class PhotoRecipientController extends Controller {
             'ownerAccountId','recipientAccountId','photoId','assetId','kind',
             'assetRevision','expiresAt','cipherDigest','envelope']);
         abort_unless($c['v']===1&&$c['grantId']===$grantId&&$c['photoId']===$photoId&&
-            $c['assetId']===$assetId&&$c['ownerAccountId']===$account->id&&
+            $c['assetId']===$assetId&&
             $c['kind']==='thumbnail'&&is_int($c['generation'])&&$c['generation']>=2&&
             is_int($c['assetRevision'])&&$c['assetRevision']>=1&&
             is_int($c['expiresAt'])&&$c['expiresAt']>PhotoSync::nowMs()&&
@@ -37,6 +37,9 @@ final class PhotoRecipientController extends Controller {
             abort_unless(is_string($c[$key]),422);P::uuid($c[$key]);
         }
         P::uuid($c['operationId']);
+        // Foreign-owner publishing is unauthorized, even with a well-formed statement.
+        abort_unless(is_string($c['ownerAccountId']),422);
+        abort_unless($c['ownerAccountId']===$account->id,401);
         $e=$c['envelope'];
         abort_unless(is_array($e)&&!array_is_list($e),422);
         P::exact($e,['v','context','iv','ciphertext']);

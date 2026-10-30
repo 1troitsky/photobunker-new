@@ -29,7 +29,9 @@ function guard32(value: number) {
 export class ZipWriter {
   private offset = 0
   private readonly entries: Entry[] = []
-  constructor(private readonly sink: ZipSink, private readonly signal: AbortSignal) {}
+  private readonly sink: ZipSink
+  private readonly signal: AbortSignal
+  constructor(sink: ZipSink, signal: AbortSignal){this.sink=sink;this.signal=signal}
   private check() {
     if (this.signal.aborted) throw new DOMException('Cancelled', 'AbortError')
   }
@@ -110,7 +112,8 @@ export class ZipWriter {
 /** Reject traversal, absolute paths, Windows device names and control/bidi characters. */
 export function safePart(value: string, fallback: string): string {
   const normalized = value.normalize('NFKC')
-    .replace(/[\\/\\:*?"<>|\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/g, '_')
+    .replace(/[\\/\\:*?"<>|\u007f\u202a-\u202e\u2066-\u2069]/g, '_')
+    .replace(/\p{Cc}/gu, '_')
     .replace(/[. ]+$/g, '').replace(/^\.+/g, '').trim()
     .replace(/\s+/g, ' ').slice(0, 70)
   const base = normalized || fallback

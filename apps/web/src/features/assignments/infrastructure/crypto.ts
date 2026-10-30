@@ -11,13 +11,13 @@ function encode(b:Uint8Array):string{
   let raw='';for(let i=0;i<b.length;i++)raw+=String.fromCharCode(b[i]!)
   return btoa(raw).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')
 }
-function decode(s:string):Uint8Array{
+function decode(s:string):Uint8Array<ArrayBuffer>{
   if(!/^[A-Za-z0-9_-]+$/.test(s))throw Error('assignment.cipher_invalid')
   const raw=atob(s.replace(/-/g,'+').replace(/_/g,'/'))
-  return Uint8Array.from(raw,c=>c.charCodeAt(0))
+  return new Uint8Array(Uint8Array.from(raw,c=>c.charCodeAt(0)))
 }
-function aad(account:string,assignment:string,operation:string,revision:number):Uint8Array{
-  return utf8.encode('photobunker.assignment.v1|'+account+'|'+assignment+'|'+operation+'|'+revision)
+function aad(account:string,assignment:string,operation:string,revision:number):Uint8Array<ArrayBuffer>{
+  return new Uint8Array(utf8.encode('photobunker.assignment.v1|+account+'|'+assignment+'|'+operation+'|'+revision))
 }
 export async function seal(grant:Grant,assignmentId:string,operationId:string,revision:number,
   fields:AssignmentFields):Promise<AssignmentEnvelope>{

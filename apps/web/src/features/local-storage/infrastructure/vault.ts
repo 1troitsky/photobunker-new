@@ -342,7 +342,7 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
       })
       committed=true
       await db.journal.delete(journalKey)
-      window.dispatchEvent(new Event('photobunker-outbox'))
+      if(typeof window!=='undefined')window.dispatchEvent(new Event('photobunker-outbox'))
       return operationId
     }catch(error){
       if(!committed){await deleteCiphertext(backend,path).catch(()=>{});await db.journal.delete(journalKey).catch(()=>{})}
@@ -594,7 +594,7 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
         photoId,operationId,intent:'review',reviewContract:contract,
         state:'pending',attempts:0,nextAttemptAt:0,expiresAt:row.expiresAt})
     })
-    window.dispatchEvent(new Event('photobunker-outbox'))
+    if(typeof window!=='undefined')window.dispatchEvent(new Event('photobunker-outbox'))
     return operationId
   }
   async reviewDelivery(operationId:string):Promise<ReviewContract>{

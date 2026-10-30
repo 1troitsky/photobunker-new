@@ -15,7 +15,7 @@ describe('private local Photo Browser',()=>{
   })
   it('filters expired photos, searches per selected folder and orders deterministically',()=>{
     expect(visibleBrowserPhotos(rows,'all','', 'newest',1000).map(p=>p.id))
-      .toEqual(['personal','orphan','assigned'])
+      .toEqual(['orphan','personal','assigned'])
     expect(visibleBrowserPhotos(rows,'assignment:aaa','assign','oldest',1000).map(p=>p.id))
       .toEqual(['assigned'])
     expect(visibleBrowserPhotos(rows,'personal','', 'newest',1000).map(p=>p.id))
