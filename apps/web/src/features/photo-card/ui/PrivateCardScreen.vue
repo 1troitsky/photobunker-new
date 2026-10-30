@@ -15,7 +15,7 @@ const reveal=ref(false),notice=ref(''),now=ref(Date.now())
 let generation=0,clock:number|undefined
 const txt=computed(()=>ru.value?{
   title:'Карточка фотографии',private:'Только для владельца · локально',
-  note:'Это приватная карточка. Общий доступ и внешние ссылки пока недоступны.',
+  note:'Приватная карточка. Можно подготовить передачу зашифрованной миниатюры приглашённому участнику; просмотр получателем пока закрыт.',
   back:'К фотографии',gallery:'Галерея',loading:'Чтение зашифрованных метаданных…',
   locked:'Аккаунт заблокирован или снимок недоступен.',
   expired:'Срок хранения снимка истёк.',noName:'Имя ожидается',captured:'Снято',
@@ -28,7 +28,7 @@ const txt=computed(()=>ru.value?{
   shareThumbnail:'Передать миниатюру участнику',
 }:{
   title:'Photo Card',private:'Owner only · local',
-  note:'This card is private. External links and shared access are not available yet.',
+  note:'Private card. You can prepare an encrypted thumbnail for an invited participant; recipient reads remain disabled.',
   back:'Back to photo',gallery:'Gallery',loading:'Reading encrypted metadata…',
   locked:'Account locked or photograph unavailable.',
   expired:'This photo has expired.',noName:'Name pending',captured:'Captured',
