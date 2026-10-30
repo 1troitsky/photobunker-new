@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
+import {useRoute} from 'vue-router'
 import {identity,onIdentityCleanup} from '../../identity'
 import {language} from '../../ui-preview'
 import {openAssignments} from '../../assignments'
@@ -8,7 +9,7 @@ import {inviteToAssignment,acceptAssignmentGrant,changeAssignmentGrant,
   fetchAssignmentGrants,flushGrantOperations,grantOutboxStatus,publishRecipientThumbnail,thumbnailShareStatuses,
   type ServerGrant,type GrantRole,type GrantOutboxState,type ThumbnailShareStatus} from '../index'
 
-const ru=computed(()=>language.value==='ru')
+const ru=computed(()=>language.value==='ru'),route=useRoute()
 const copy=computed(()=>ru.value?{
  title:'Участники заданий',viewPhotos:'Полученные миниатюры',choosePhoto:'Выберите снимок',publish:'Подготовить миниатюру для участника',published:'Зашифрованная миниатюра подготовлена.',shareQueued:'Зашифрованная миниатюра поставлена в очередь отправки (не подтверждена сервером).',pendingOp:'В очереди',retryOp:'Повтор после ошибки',delivered:'Подтверждено сервером',conflictOp:'Сервер отклонил операцию — требуется проверка',state:'Состояние операций',note:'Приглашение не открывает фотографии. Общий доступ будет включён только после проверки E2EE и серверных прав.',
  back:'К заданиям',loading:'Загружаем приглашения…',
@@ -71,7 +72,9 @@ async function reload(){
     if(token!==epoch||stopped)return
     assignments.value=assignmentsNow.filter(a=>a.sync==='synced'&&a.status!=='completed')
       .map(a=>({id:a.id,title:a.title}))
-    if(!assignments.value.some(x=>x.id===selected.value))selected.value=assignments.value[0]?.id??''
+    const requested=typeof route.query.assignment==='string'?route.query.assignment:''
+    if(!assignments.value.some(x=>x.id===selected.value))
+      selected.value=assignments.value.find(x=>x.id===requested)?.id??assignments.value[0]?.id??''
     if(active.offline||!navigator.onLine){notice.value=copy.value.offline;return}
     grants.value=await fetchAssignmentGrants()
     if(token!==epoch||stopped)return
