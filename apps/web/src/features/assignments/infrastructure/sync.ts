@@ -1,6 +1,6 @@
 import {identity,assignmentRequest,signMetadataContract,onIdentityCleanup} from '../../identity'
 import {openAssignments,type ServerAssignment} from './repository'
-import type {Operation} from '../infrastructure/database'
+import type {Operation} from './database'
 import {watch} from 'vue'
 let active:Promise<void>|null=null
 let disposed=false,unbind:(()=>void)|null=null

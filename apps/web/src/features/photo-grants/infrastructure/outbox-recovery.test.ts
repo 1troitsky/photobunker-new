@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
-import {grantDb,scopedId,type OperationRow,type SecretRow,type ThumbnailShareRow} from '../infrastructure/database'
+import {grantDb,scopedId,type OperationRow,type SecretRow,type ThumbnailShareRow} from './database'
 import type {GrantCommand} from '../domain/grants'
 
 const actor=vi.hoisted(()=>({value:{accountId:'',deviceId:'',offline:false}}))

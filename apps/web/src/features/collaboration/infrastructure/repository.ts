@@ -2,9 +2,9 @@ import {acquireStorageKeys,identity} from '../../identity'
 import {validateProfile,emptyContract,mayInvite,mayManage,mayManageMember,
   type TeamProfile,type TeamView,type TeamRole,type InviteRole,type Contact,type Invite,
   type CollaborationContract,type OutgoingInvite} from '../domain/model'
-import {collaborationDb,k,type CachedTeam,type PendingOperation} from '../infrastructure/database'
+import {collaborationDb,k,type CachedTeam,type PendingOperation} from './database'
 import {profileOpen,profileSeal,wrapTeamKey,unwrapTeamKey,encryptSnapshot,decryptSnapshot,
-  inviteSeal,inviteOpen} from '../infrastructure/crypto'
+  inviteSeal,inviteOpen} from './crypto'
 type Grant=ReturnType<typeof acquireStorageKeys>
 export type ServerTeam={id:string;ownerId:string;role:TeamRole;revision:number;
   profile:CachedTeam['profile'];members:CachedTeam['members'];linkedAssignments:string[];updatedAt:string}

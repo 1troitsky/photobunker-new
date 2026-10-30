@@ -1,6 +1,6 @@
 import {acquireStorageKeys} from '../../identity'
-import {assignmentDb,assignmentKey,operationKey,type Row,type Operation} from '../infrastructure/database'
-import {seal,unseal,type AssignmentContract} from '../infrastructure/crypto'
+import {assignmentDb,assignmentKey,operationKey,type Row,type Operation} from './database'
+import {seal,unseal,type AssignmentContract} from './crypto'
 import {nextStatus,validateFields,policySnapshot,type AssignmentView,
   type AssignmentFields,type AssignmentStatus,type AssignmentAction} from '../domain/model'
 type Grant=ReturnType<typeof acquireStorageKeys>

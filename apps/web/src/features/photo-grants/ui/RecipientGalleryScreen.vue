@@ -3,8 +3,8 @@ import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
 import {useRoute} from 'vue-router'
 import {identity,onIdentityCleanup,registerDecryptedObjectUrl,revokeDecryptedObjectUrl} from '../../identity'
 import {language} from '../../ui-preview'
-import {listRecipientThumbnails,type RecipientThumbnailRef} from '../application/recipient-list'
-import {readRecipientThumbnail} from '../application/recipient-thumbnail'
+import {listRecipientThumbnails,type RecipientThumbnailRef} from '../index'
+import {readRecipientThumbnail} from '../index'
 
 const route=useRoute()
 const grantId=computed(()=>String(route.params.grantId??''))

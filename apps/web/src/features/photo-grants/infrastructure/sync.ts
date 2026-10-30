@@ -1,7 +1,7 @@
 import {watch} from 'vue'
 import {identity,assignmentRequest,photoRequest,signMetadataContract} from '../../identity'
 import {pendingGrantOperations,grantOperationResult,pendingThumbnailShares,thumbnailShareResult} from './grants'
-import {thumbnailShareOutcome} from './thumbnail-delivery'
+import {thumbnailShareOutcome} from '../application/thumbnail-delivery'
 let running:Promise<void>|null=null
 let cleanup:(()=>void)|null=null
 function check(account:string,device:string){

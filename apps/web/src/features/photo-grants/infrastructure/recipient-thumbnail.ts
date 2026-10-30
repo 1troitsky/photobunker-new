@@ -1,7 +1,7 @@
 import {identity,photoRequest,verifyPinnedOwnerDeviceProof} from '../../identity'
 import {decryptRecipientThumbnail,type CloudAsset} from '../../local-storage'
 import {fetchAssignmentGrants,getLocalGrantIdentity} from './grants'
-import {openRecipientKey,type KeyContext,type RecipientKeyEnvelope} from '../infrastructure/key-envelope'
+import {openRecipientKey,type KeyContext,type RecipientKeyEnvelope} from './key-envelope'
 
 type ResponseEnvelope={photoId:string;assetId:string;bytes:number;sha256:string;
   manifest:CloudAsset['manifest'];contract:string;signature:string;signerSpki:string;

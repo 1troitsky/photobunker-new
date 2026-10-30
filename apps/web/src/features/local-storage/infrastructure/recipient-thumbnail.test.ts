@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest'
-import {encryptAsset} from '../infrastructure/cipher'
+import {encryptAsset} from './cipher'
 import {decryptRecipientThumbnail} from './recipient-thumbnail'
 import type {Scope} from '../domain/contracts'
 const id=()=>crypto.randomUUID()

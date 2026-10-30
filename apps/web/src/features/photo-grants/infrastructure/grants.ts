@@ -1,11 +1,11 @@
 import {identity,assignmentRequest,photoRequest,signMetadataContract,withCurrentOwnerAssetDEK,currentAccountSpki,signOwnerDeviceProof} from '../../identity'
 import {openAssignments} from '../../assignments'
 import {openLocalPhotoVault,type CloudAsset} from '../../local-storage'
-import {grantDb,scopedId,type OperationRow,type SecretRow,type ThumbnailShareRow} from '../infrastructure/database'
-import {sealLocalGrantSecret,openLocalGrantIdentity} from '../infrastructure/secret'
+import {grantDb,scopedId,type OperationRow,type SecretRow,type ThumbnailShareRow} from './database'
+import {sealLocalGrantSecret,openLocalGrantIdentity} from './secret'
 import {createPhotoGrantCode,photoGrantCodeHash,sealGrantSecretPinned,openGrantSecretPinned,sealRecipientKey,
   type KeyContext,
-  type GrantInvitationContext} from '../infrastructure/key-envelope'
+  type GrantInvitationContext} from './key-envelope'
 import {acquireStorageKeys} from '../../identity'
 import {command,validateServerGrant,type GrantCommand,type GrantRole,type ServerGrant,type GrantOperationKind} from '../domain/grants'
 

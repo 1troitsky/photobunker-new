@@ -1,4 +1,4 @@
-import {decryptAsset,manifestValid} from '../infrastructure/cipher'
+import {decryptAsset,manifestValid} from './cipher'
 import type {CipherManifest,Scope} from '../domain/contracts'
 
 /**
