@@ -65,9 +65,7 @@ export class AssignmentRepository{
   }
   async duplicate(id:string):Promise<AssignmentView>{
     const source=await this.get(id)
-    return this.create({title:source.title,instructions:source.instructions,
-      mode:source.mode,retentionDays:source.retentionDays,startsAt:source.startsAt,
-      finishesAt:source.finishesAt,targetCount:source.targetCount,archived:false})
+    return this.create({...source,archived:false})
   }
   private operation(contract:AssignmentContract):Operation{
     return{key:operationKey(this.account,contract.operationId),accountId:this.account,
@@ -79,10 +77,7 @@ export class AssignmentRepository{
     nextFields?:AssignmentFields,nextState?:AssignmentStatus):Promise<AssignmentView|null>{
     const previous=await this.record(id)
     const before=await this.project(previous)
-    const fields=action==='edit'?validateFields(nextFields!):
-      {title:before.title,instructions:before.instructions,mode:before.mode,retentionDays:before.retentionDays,
-        startsAt:before.startsAt,finishesAt:before.finishesAt,targetCount:before.targetCount,
-        archived:before.archived}
+    const fields=action==='edit'?validateFields(nextFields!):validateFields({...before})
     const status=action==='transition'?nextState!:before.status
     if(action==='transition')nextStatus(before.status,status)
     if(action==='edit'&&before.status==='completed'){
@@ -90,12 +85,24 @@ export class AssignmentRepository{
         fields.title===before.title&&fields.instructions===before.instructions&&
         fields.mode===before.mode&&fields.retentionDays===before.retentionDays&&
         fields.startsAt===before.startsAt&&fields.finishesAt===before.finishesAt&&
-        fields.targetCount===before.targetCount
+        fields.targetCount===before.targetCount&&
+        fields.cameraInstructions===before.cameraInstructions&&
+        fields.requiredGps===before.requiredGps&&fields.requireDescription===before.requireDescription&&
+        fields.descriptionMinLength===before.descriptionMinLength&&
+        fields.requireTags===before.requireTags&&
+        JSON.stringify(fields.allowedTags)===JSON.stringify(before.allowedTags)&&
+        fields.enableNameId===before.enableNameId&&fields.allowEditing===before.allowEditing&&
+        fields.keepOriginal===before.keepOriginal&&fields.allowDeletion===before.allowDeletion&&
+        fields.allowBrowsing===before.allowBrowsing&&fields.capturePreset===before.capturePreset
       if(!onlyArchive)throw Error('assignment.completed')
     }
     const revision=previous.revision+1
+    const captureKeys=['mode','retentionDays','cameraInstructions','requiredGps',
+      'requireDescription','descriptionMinLength','requireTags','allowedTags',
+      'enableNameId','allowEditing','keepOriginal','allowDeletion','allowBrowsing',
+      'capturePreset'] as const
     const policyRevision=previous.policyRevision+(action==='edit'&&
-      (fields.mode!==previous.mode||fields.retentionDays!==previous.retentionDays)?1:0)
+      captureKeys.some(key=>JSON.stringify(fields[key])!==JSON.stringify(before[key]))?1:0)
     const operationId=crypto.randomUUID()
     const envelope=action==='delete'?null:await seal(this.grant,id,operationId,revision,fields)
     const contract:AssignmentContract={version:1,assignmentId:id,operationId,expectedRevision:previous.revision,
@@ -122,10 +129,7 @@ export class AssignmentRepository{
   async setArchived(id:string,archived:boolean):Promise<AssignmentView>{
     const before=await this.get(id)
     if(before.archived===archived)return before
-    return this.edit(id,{title:before.title,instructions:before.instructions,
-      mode:before.mode,retentionDays:before.retentionDays,
-      startsAt:before.startsAt,finishesAt:before.finishesAt,
-      targetCount:before.targetCount,archived})
+    return this.edit(id,{...before,archived})
   }
   async transition(id:string,status:AssignmentStatus):Promise<AssignmentView>{
     return (await this.apply(id,'transition',undefined,status))!
@@ -231,10 +235,7 @@ export class AssignmentRepository{
     })
     void clear // validated before persistence
     if(retry){
-      await this.edit(id,{title:previous.title,instructions:previous.instructions,
-        mode:local.mode,retentionDays:local.retentionDays,
-        startsAt:previous.startsAt,finishesAt:previous.finishesAt,targetCount:previous.targetCount,
-        archived:previous.archived})
+      await this.edit(id,{...previous,mode:local.mode,retentionDays:local.retentionDays})
     }
   }
   async resetToServer(id:string,remote:ServerAssignment):Promise<void>{
