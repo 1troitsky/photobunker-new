@@ -53,6 +53,34 @@ describe('R2-08 local encrypted aggregate / durable assignment outbox',()=>{
     expect(JSON.stringify(operations)).not.toContain('Updated secret')
     expect(JSON.stringify(operations)).not.toContain('Sensitive note')
   })
+  it('encrypts capture requirements, restores them after archive and preserves policy revisions',async()=>{
+    const repo=openAssignments()
+    const created=await repo.create({
+      title:'Hidden',instructions:'Private',mode:3,retentionDays:7,
+      cameraInstructions:'Do not expose locations',
+      requiredGps:true,requireDescription:true,descriptionMinLength:30,
+      requireTags:true,allowedTags:['evidence','source'],enableNameId:false,
+      allowEditing:false,keepOriginal:true,allowDeletion:false,
+      allowBrowsing:false,capturePreset:'Discrete',archived:false,
+    })
+    const record=await assignmentDb.assignments.get(mock.account.value+'/'+created.id)
+    expect(JSON.stringify(record)).not.toContain('Do not expose locations')
+    expect(JSON.stringify(record)).not.toContain('evidence')
+    const read=await openAssignments().get(created.id)
+    expect(read.requiredGps).toBe(true)
+    expect(read.allowedTags).toEqual(['evidence','source'])
+    expect(read.enableNameId).toBe(false)
+    const changed=await repo.edit(created.id,{...read,requiredGps:false})
+    expect(changed.policyRevision).toBe(2)
+    const archived=await repo.setArchived(created.id,true)
+    expect(archived.archived).toBe(true)
+    expect(archived.policyRevision).toBe(2)
+    expect((await repo.pending()).map(o=>o.contract.action)).toEqual(['create','edit','archive'])
+    const clone=await repo.duplicate(created.id)
+    expect(clone.requiredGps).toBe(false)
+    expect(clone.archived).toBe(false)
+    expect(clone.allowedTags).toEqual(['evidence','source'])
+  })
   it('enforces valid transitions; offline delete prevents resurrection and hides on reload',async()=>{
     const repository=openAssignments()
     const created=await repository.create({title:'Private',instructions:'',mode:3,retentionDays:45})
