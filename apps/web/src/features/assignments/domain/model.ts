@@ -2,7 +2,7 @@ export type AssignmentStatus='waiting'|'in_progress'|'submitted'|'needs_changes'
 export type AssignmentMode=2|3
 export type AssignmentAction='create'|'edit'|'transition'|'delete'
 export type AssignmentFields={title:string;instructions:string;mode:AssignmentMode;retentionDays:number;
-  startsAt?:string|null;finishesAt?:string|null;targetCount?:number|null}
+  startsAt?:string|null;finishesAt?:string|null;targetCount?:number|null;archived?:boolean}
 export type PolicySnapshot=Readonly<{assignmentId:string;assignmentRevision:number;
   policyRevision:number;mode:AssignmentMode;retentionDays:number}>
 export type AssignmentView=AssignmentFields&{id:string;status:AssignmentStatus;revision:number;
@@ -34,11 +34,13 @@ export function validateFields(fields:AssignmentFields):AssignmentFields{
     new Date(date+'T00:00:00Z').toISOString().slice(0,10)===date
   if(startsAt&&!validDay(startsAt)||finishesAt&&!validDay(finishesAt)||
     startsAt&&finishesAt&&startsAt>finishesAt)throw Error('assignment.dates_invalid')
+  if(fields.archived!==undefined&&typeof fields.archived!=='boolean')
+    throw Error('assignment.archived_invalid')
   const targetCount=fields.targetCount??null
   if(targetCount!==null&&(!Number.isInteger(targetCount)||targetCount<1||targetCount>9999))
     throw Error('assignment.target_invalid')
   return{title,instructions:fields.instructions,mode:fields.mode,retentionDays:fields.retentionDays,
-    startsAt,finishesAt,targetCount}
+    startsAt,finishesAt,targetCount,archived:fields.archived??false}
 }
 export function nextStatus(before:AssignmentStatus,after:AssignmentStatus):void{
   if(!steps[before].includes(after))throw Error('assignment.invalid_transition')
