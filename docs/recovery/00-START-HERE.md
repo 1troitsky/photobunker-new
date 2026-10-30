@@ -2,6 +2,16 @@
 
 **Статус:** Documentation-only Draft / NOT VERIFIED / NOT INTEGRATED, 2026-10-30. Без изменений main, PB1 и PR #40–42. Эта ветка основана на PB2 PR #42, но не включает новых runtime-функций.
 
+## Обновление G0 после аудита — реальный зелёный CI
+
+**Факт:** [GitHub Actions #41119814724](https://github.com/1troitsky/photobunker-new/actions/runs/41119814724) завершился **SUCCESS** для PB2 PR #42 (commit `1e0dc0694cb17f0d20c1c5831637feed99b67f20`).
+- Получены настоящие GitHub runners: issue pre-run больше не блокирует тесты. Причина пяти исходных transient failures так и не установлена.
+- `pnpm test:architecture` (включая negative fixtures), `pnpm lint` (0 errors, 1161 warnings), `pnpm typecheck`, `pnpm test:unit` (101/101), `pnpm build` — **PASS**.
+- PHP syntax, PHPUnit (35/35) — **PASS**.
+- Исправлены конфликт private `TestCase::be`, 401-vs-422 contract test, типы AES/receipt, вызовы `window` в тестовом Node и правила границ модулей. **Проверено по CI**, а не только из исходников.
+- Поверх этого G0 добавлена отдельная ступень `browser` на Playwright Chromium. Первый [run #41120153684](https://github.com/1troitsky/photobunker-new/actions/runs/41120153684) выявил несовместимость locked Playwright 1.56.1 и выбранной GitHub Ubuntu 26.04; job закреплён на `ubuntu-24.04` в commit `e280d399`. Реальная browser E2E проверка **не стала автоматически VERIFIED**.
+- **P0 STOP:** `recipient_thumbnail_reads_enabled=false`; полная фото-миграция PB1→PB2 и живые двухаккаунтные E2E не завершены. Build success означает только исходный G0, не готовность продукта.
+
 ## Точка истины
 
 - [Точный файл владельца visual-ux.md (390 строк)](visual-ux-owner-2026-10-30.md) — зафиксирован напрямую из вложения; не подменять одноимённым PB1 файлом (277 строк, другая редакция).
@@ -34,5 +44,5 @@
 ## Доказательства из этой сессии
 
 - Repo trees/конкретные файлы PB1 и PB2 просмотрены через GitHub. Точность ссылок на файлы проверена автоматически.
-- **Не запускались** pnpm/Vitest/vue-tsc/build/Playwright, PHP/Composer/PHPUnit, браузер/устройства, реальный Garage/S3. Никаких PASS не заявлено.
+- **Изначально не запускались** ни кодовые, ни браузерные тесты; после завершения аудита воспроизводимый G0 CI прошёл. Реальные устройства, HTTPS backend, Garage/S3 и двухаккаунтное E2EE по-прежнему **NOT RUN**.
 - CI run #40979416867: оба jobs FAILURE, но не выделен runner и нет шагов. См. 05. Исходные причины не определены.

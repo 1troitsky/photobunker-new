@@ -1,6 +1,19 @@
-# GitHub Actions: расследование G0 (runner не выделяется)
+# GitHub Actions: историческая ошибка runner и подтверждённый G0
 
-**Факты на 2026-10-30; причина ещё не установлена.** Это **не** падение PHPUnit/Vitest/typecheck — они **вообще не запустились**.
+**Обновление, 2026-10-30:** причина первых 5 pre-run отказов не установлена, но ручной rerun получил runner и реальные логи. Ниже — зафиксированная историческая неисправность; далее смотрите подтверждённые G0 результаты.
+
+## Обновление G0 после аудита — реальный зелёный CI
+
+**Факт:** [GitHub Actions #41119814724](https://github.com/1troitsky/photobunker-new/actions/runs/41119814724) завершился **SUCCESS** для PB2 PR #42 (commit `1e0dc0694cb17f0d20c1c5831637feed99b67f20`).
+- Получены настоящие GitHub runners: issue pre-run больше не блокирует тесты. Причина пяти исходных transient failures так и не установлена.
+- `pnpm test:architecture` (включая negative fixtures), `pnpm lint` (0 errors, 1161 warnings), `pnpm typecheck`, `pnpm test:unit` (101/101), `pnpm build` — **PASS**.
+- PHP syntax, PHPUnit (35/35) — **PASS**.
+- Исправлены конфликт private `TestCase::be`, 401-vs-422 contract test, типы AES/receipt, вызовы `window` в тестовом Node и правила границ модулей. **Проверено по CI**, а не только из исходников.
+- Поверх этого G0 добавлена отдельная ступень `browser` на Playwright Chromium. Первый [run #41120153684](https://github.com/1troitsky/photobunker-new/actions/runs/41120153684) выявил несовместимость locked Playwright 1.56.1 и выбранной GitHub Ubuntu 26.04; job закреплён на `ubuntu-24.04` в commit `e280d399`. Реальная browser E2E проверка **не стала автоматически VERIFIED**.
+- **P0 STOP:** `recipient_thumbnail_reads_enabled=false`; полная фото-миграция PB1→PB2 и живые двухаккаунтные E2E не завершены. Build success означает только исходный G0, не готовность продукта.
+
+
+**Исторические факты до удачного rerun.** В первых пяти попытках PHP/Vitest/typecheck действительно **не запускались**.
 
 ## Проверенные GitHub API evidence
 
@@ -51,7 +64,7 @@ php vendor/bin/phpunit
 
 Реальный запуск тестов **NOT RUN** в данной сессии. Проверено только присутствие `pnpm-lock.yaml`, `apps/api/composer.lock`, `apps/api/phpunit.xml`, `tools/architecture/check.mjs` и workflow.
 
-**Следующий шаг только после реального runner:** собирать stdout/stderr по отдельным командам с exit code, закрывать ошибки в PR #42 (а не в документационном PR) и добавлять точные regression tests. В workflow уже предусмотрены short-retention log artifacts при завершении шагов; сейчас artifacts отсутствуют, потому что ни один шаг не начался.
+**Следующий шаг после прохождения G0:** собирать stdout/stderr по отдельным командам с exit code, закрывать ошибки в PR #42 (а не в документационном PR) и добавлять точные regression tests. В workflow уже предусмотрены short-retention log artifacts при завершении шагов; сейчас artifacts отсутствуют, потому что ни один шаг не начался.
 
 ## Проверка после возобновления Actions
 
