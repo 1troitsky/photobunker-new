@@ -25,11 +25,15 @@ const assignmentCopy=computed(()=>ru.value?{
   locked:'Съёмка по заданию доступна после серверного подтверждения статуса «В работе».',
   capture:'Съёмка по заданию',frozen:'Режим, TTL и ревизия задания фиксируются при съёмке.',
   invalid:'Нет разрешения или актуальной подтверждённой политики. Выберите задание снова.',
+  gps:'Геолокация обязательна для этого задания.',date:'Период съёмки',
+  preset:'Пресет камеры',cameraInstructions:'Инструкция для съёмки',
 }:{
   choose:'Assignment',personal:'Personal capture',refresh:'Refresh assignments',
   locked:'Assignment capture requires a server-acknowledged In progress status.',
   capture:'Assignment capture',frozen:'Mode, TTL and assignment revisions freeze at capture.',
   invalid:'Assignment permission or current confirmed policy is missing. Choose again.',
+  gps:'GPS is required for this assignment.',date:'Capture period',
+  preset:'Camera preset',cameraInstructions:'Capture instructions',
 })
 async function refreshAssignments(){
   if(!identity.value){availableAssignments.value=[];assignmentId.value='';return}
@@ -86,6 +90,8 @@ const errorText=computed(()=>{
     'camera.jpeg_encode_failed':['Ошибка JPEG-кодирования. Снимок не сохранён.','JPEG compression failed. Photo not saved.'],
     'camera.account_changed':['Аккаунт или устройство изменено. Действие отменено.','Account or device changed. Operation cancelled.'],
     'camera.canvas_unavailable':['Обработка изображения не поддерживается браузером.','Image processing is unavailable in this browser.'],
+    'camera.gps_required':['Нужна точная геолокация. Разрешите GPS и повторите съёмку.','GPS location required. Allow GPS and retry.'],
+    'camera.assignment_outside_dates':['Съёмка вне установленного периода задания.','Capture is outside the assignment date range.'],
   }
   return dictionary[key]?.[ru.value?0:1]??(key?copy.value.error+' '+key:'')
 })
@@ -240,6 +246,18 @@ const viewSaved=()=>savedId.value?router.push('/photos/'+savedId.value):undefine
             </option>
           </select>
         </label>
+        <div v-if="chosenAssignment" class="assignment-capture-instructions">
+          <p v-if="chosenAssignment.cameraInstructions" class="camera-hint">
+            <strong>{{ assignmentCopy.cameraInstructions }}:</strong> {{ chosenAssignment.cameraInstructions }}
+          </p>
+          <p v-if="chosenAssignment.capturePreset" class="camera-hint">
+            {{ assignmentCopy.preset }}: {{ chosenAssignment.capturePreset }}
+          </p>
+          <p v-if="chosenAssignment.requiredGps" class="camera-hint">{{ assignmentCopy.gps }}</p>
+          <p v-if="chosenAssignment.startsAt||chosenAssignment.finishesAt" class="camera-hint">
+            {{ assignmentCopy.date }}: {{ chosenAssignment.startsAt||'…' }} — {{ chosenAssignment.finishesAt||'…' }}
+          </p>
+        </div>
         <p v-if="assignmentId" class="camera-hint">{{ chosenAssignment?
           assignmentCopy.frozen:assignmentCopy.locked }}</p>
         <p v-if="assignmentError" class="camera-feedback error" role="alert">{{ assignmentError }}</p>
@@ -434,6 +452,7 @@ const viewSaved=()=>savedId.value?router.push('/photos/'+savedId.value):undefine
 .capture-gate h2{width:100%;font-size:18px}
 .capture-policy{padding:13px 16px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
 .capture-policy h2{font-size:14px;margin:0 0 7px}
+.assignment-capture-instructions{padding:6px 0;white-space:pre-wrap;overflow-wrap:anywhere}
 .capture-policy fieldset{border:0;padding:0;margin:0;display:grid;gap:3px}
 .capture-mode{display:flex;align-items:center;gap:8px;padding:7px 0;min-height:44px;font-size:13px}
 .capture-mode input{width:18px;height:18px;accent-color:var(--accent)}
