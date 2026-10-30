@@ -68,7 +68,17 @@ final class AssignmentController extends Controller {
                     abort_unless($c['status']===$row->status&&$row->status!=='completed',422);
                     $changed=$c['mode']!==(int)$row->mode ||
                         $c['retentionDays']!==(int)$row->retention_days;
-                    abort_unless($c['policyRevision']===(int)$row->policy_revision+($changed?1:0),422);
+                    // Additional private E2EE camera requirements cannot be inspected
+                    // server-side; an authenticated device may advance their policy revision.
+                    $delta=$c['policyRevision']-(int)$row->policy_revision;
+                    abort_unless($changed?$delta===1:in_array($delta,[0,1],true),422);
+                }elseif($c['action']==='archive'){
+                    // Archive is a separate signed lifecycle action, including completed
+                    // tasks. Status and public capture contract remain unmodified.
+                    abort_unless($c['status']===$row->status &&
+                        $c['mode']===(int)$row->mode &&
+                        $c['retentionDays']===(int)$row->retention_days &&
+                        $c['policyRevision']===(int)$row->policy_revision,422);
                 }else{
                     abort_unless($c['action']==='delete'&&$c['status']===$row->status&&
                       $c['policyRevision']===(int)$row->policy_revision&&
