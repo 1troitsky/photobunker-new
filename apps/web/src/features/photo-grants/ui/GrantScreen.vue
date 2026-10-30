@@ -85,6 +85,16 @@ async function reload(){
         p.header.capture?.assignmentId&&p.header.thumbnailAssetId&&
         p.header.expiresAt>Date.now()).map(p=>({id:p.header.photoId,
           assignmentId:p.header.capture!.assignmentId,title:p.title||p.nameId||p.header.photoId}))
+      const requestedPhoto=typeof route.query.photo==='string'?route.query.photo:''
+      const requestedAssignment=typeof route.query.assignment==='string'?route.query.assignment:''
+      if(requestedPhoto&&requestedAssignment&&
+        photoOptions.value.some(p=>p.id===requestedPhoto&&p.assignmentId===requestedAssignment)){
+        for(const grant of grants.value){
+          if(grant.ownerId===active.accountId&&grant.state==='accepted'&&
+            grant.assignmentId===requestedAssignment&&!selectedPhoto.value[grant.grantId])
+            selectedPhoto.value[grant.grantId]=requestedPhoto
+        }
+      }
     }catch{photoOptions.value=[]}
   }catch(e){if(token===epoch)error.value=e instanceof Error?e.message:copy.value.error}
   finally{if(token===epoch)loading.value=false}
@@ -254,6 +264,8 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
                 {{ photo.title }}
               </option>
             </select>
+            <small v-if="selectedPhoto[item.grantId]&&route.query.photo===selectedPhoto[item.grantId]"
+              class="share-selection-hint">{{ copy.selectionHint }}</small>
             <button type="button" class="subtle-button"
               :disabled="busy||identity.offline||!selectedPhoto[item.grantId]"
               @click="publish(item)">{{ copy.publish }}</button>
