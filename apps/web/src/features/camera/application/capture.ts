@@ -11,6 +11,7 @@ export type PendingCapture=Readonly<{
   outputWidth:number;outputHeight:number;capturedAt:number;expiresAt:number
   thumbnail?:Blob;thumbnailAssetId?:string;gps?:ReturnType<typeof captureGps>
   nameId?:string;leaseId?:string;nameNumber?:number
+  description?:string;tags?:string[]
 }>
 export type CaptureProgress='idle'|'compressing'|'encrypting'|'saved'|'failed'
 type Compressed=Readonly<{blob:Blob;sourceWidth:number;sourceHeight:number;outputWidth:number;outputHeight:number}>
@@ -41,7 +42,8 @@ export class CaptureSession{
       if(!this.time.status().trusted&&identity.value&&!identity.value.offline)await this.time.refreshFromServer()
     }catch{/* camera remains usable; capture cannot report saved without trusted UTC */}
   }
-  async prepare(source:Blob,method:Method,mode:CaptureMode,ttlDays:number,onProgress?:(s:CaptureProgress)=>void,assignment?:Omit<FrozenAssignment,'capturedAt'>):Promise<PhotoHeader>{
+  async prepare(source:Blob,method:Method,mode:CaptureMode,ttlDays:number,onProgress?:(s:CaptureProgress)=>void,
+    assignment?:Omit<FrozenAssignment,'capturedAt'>,annotation?:{description:string;tags:string[]}):Promise<PhotoHeader>{
     if(this.pending)throw new Error('camera.pending_retry_first')
     const ticket=this.generation
     this.check(ticket)
@@ -66,6 +68,19 @@ export class CaptureSession{
     const metadata=snapshot(policy,capturedAt,
       {width:converted.sourceWidth,height:converted.sourceHeight},
       {width:converted.outputWidth,height:converted.outputHeight},method)
+    const description=annotation?.description?.trim()??''
+    const tags=[...new Set(annotation?.tags?.map(tag=>tag.trim()).filter(Boolean)??[])]
+    if(description.length>2000||tags.length>30||
+      tags.some(tag=>tag.length>40))throw Error('camera.annotation_invalid')
+    if(policy.source==='assignment'){
+      if((policy.requireDescription||((policy.descriptionMinLength??0)>0))&&
+        description.length<Math.max(policy.descriptionMinLength??0,1))
+        throw Error('camera.description_required')
+      if(policy.requireTags&&tags.length===0)throw Error('camera.tags_required')
+      if((policy.allowedTags?.length??0)>0&&
+        tags.some(tag=>!policy.allowedTags!.includes(tag)))
+        throw Error('camera.tags_not_allowed')
+    }
     const thumbnail=await thumbnailWebp(converted.blob).catch(()=>null)
     this.check(ticket)
     const gps=captureGps(metadata.capturedAt)
@@ -82,6 +97,7 @@ export class CaptureSession{
     this.pending={...ids,jpeg:converted.blob,policy,assignment:frozen,method,
       ...(thumbnail?{thumbnail,thumbnailAssetId:crypto.randomUUID()}: {}),gps,
       ...(reserved?{nameId:reserved.nameId,leaseId:reserved.leaseId,nameNumber:reserved.number}:{}),
+      description,tags,
       sourceWidth:converted.sourceWidth,sourceHeight:converted.sourceHeight,
       outputWidth:converted.outputWidth,outputHeight:converted.outputHeight,
       capturedAt:metadata.capturedAt,expiresAt:metadata.expiresAt}
@@ -105,7 +121,7 @@ export class CaptureSession{
       pixels:pending.jpeg,thumbnail:pending.thumbnail,thumbnailAssetId:pending.thumbnailAssetId,
       nameId:pending.nameId,leaseId:pending.leaseId,nameNumber:pending.nameNumber,
       capture:pending.assignment,
-      metadata:{...metadata,title:'',gps:pending.gps??null,
+      metadata:{...metadata,title:'',description:pending.description??'',tags:pending.tags??[],gps:pending.gps??null,
         gpsStatus:pending.gps?'ready':gpsStatus()==='denied'?'denied':gpsStatus()==='disabled'?'disabled':gpsStatus()==='unavailable'?'unavailable':'pending'},
     }
     const row=await this.vault.commit(input)
