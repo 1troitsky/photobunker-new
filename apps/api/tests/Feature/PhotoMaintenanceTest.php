@@ -50,9 +50,9 @@ final class PhotoMaintenanceTest extends TestCase {
         $owner=DB::table('photo_records')->where('id',$f['photo'])->value('account_id');
         Storage::disk('photo-ciphertext')->put($f['key'],random_bytes(32));
         try {
-            app(\\App\\Photo\\PhotoSync::class)->requirePhoto($f['photo'],$owner);
+            app(\App\Photo\PhotoSync::class)->requirePhoto($f['photo'],$owner);
             $this->fail('Expired ciphertext must be denied before scheduled GC.');
-        } catch(\\Symfony\\Component\\HttpKernel\\Exception\\HttpException $e) {
+        } catch(\Symfony\Component\HttpKernel\Exception\HttpException $e) {
             $this->assertSame(410,$e->getStatusCode());
         }
         $this->assertTrue(Storage::disk('photo-ciphertext')->exists($f['key']));
