@@ -46,6 +46,7 @@ const copy=computed(()=>ru.value?{
   allowBrowsing:'Разрешить просмотр участникам (только после проверки прав)',
   capturePreset:'Название пресета камеры',advanced:'Дополнительные правила съёмки',
   reusePreset:'Скопировать настройки другого задания',noPreset:'Выберите задание-образец',
+  securityPending:'Доступ участников и ограничения редактирования/удаления начнут применяться только после серверной проверки прав. Настройка не открывает доступ к файлам.',
   mode1:'1 — Без сжатия (недоступен)',mode2:'2 — Сжатый оригинал сохраняется',
   mode3:'3 — Сжатый master заменяется',save:'Сохранить',cancel:'Отмена',
   edit:'Редактировать',duplicate:'Дублировать',remove:'Удалить',removeConfirm:'Удалить задание? Это необратимо.',
@@ -77,6 +78,7 @@ const copy=computed(()=>ru.value?{
   allowBrowsing:'Allow participant browsing (only after permission review)',
   capturePreset:'Camera preset name',advanced:'Additional capture rules',
   reusePreset:'Copy another assignment’s camera settings',noPreset:'Choose an assignment template',
+  securityPending:'Participant access and edit/delete restrictions remain inactive until server authorization is verified. These settings do not expose files.',
   mode1:'1 — Camera source (unavailable)',mode2:'2 — Compressed original preserved',
   mode3:'3 — Compressed master replaced',save:'Save',cancel:'Cancel',
   edit:'Edit',duplicate:'Duplicate',remove:'Delete',removeConfirm:'Delete assignment permanently?',
@@ -319,6 +321,7 @@ onUnmounted(()=>{ended=true;epoch++;cleanup();unlisten()})
           <label class="assignment-toggle"><input v-model="form.keepOriginal" type="checkbox"> {{ copy.keepOriginal }}</label>
           <label class="assignment-toggle"><input v-model="form.allowDeletion" type="checkbox"> {{ copy.allowDeletion }}</label>
           <label class="assignment-toggle"><input v-model="form.allowBrowsing" type="checkbox"> {{ copy.allowBrowsing }}</label>
+          <p class="assignment-hint">{{ copy.securityPending }}</p>
         </fieldset>
         <p class="assignment-hint">{{ copy.noRetro }}</p>
         <div class="assignment-actions">
