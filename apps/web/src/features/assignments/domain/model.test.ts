@@ -45,7 +45,7 @@ describe('R2-08: Assignment domain rules',()=>{
     const snapshot=policySnapshot({id:'task-id',title:'x',instructions:'',
       status:'waiting',revision:5,policyRevision:2,mode:2,retentionDays:1,
       sync:'local',createdAt:null,updatedAt:null})
-    expect(snapshot).toEqual({assignmentId:'task-id',assignmentRevision:5,
-      policyRevision:2,mode:2,retentionDays:1})
+    expect(snapshot).toMatchObject({assignmentId:'task-id',assignmentRevision:5,
+      policyRevision:2,mode:2,retentionDays:1,requiredGps:false,enableNameId:true})
   })
 })
