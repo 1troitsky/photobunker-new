@@ -114,6 +114,39 @@ describe('R2-11 local encrypted crash-safe asset swaps',()=>{
    active={accountId:another,deviceId:device,generation:2}
    await expect(vault.saveEdit(photoId,flattened())).rejects.toThrow('storage.account_changed')
   })
+ it('survives encrypted offline edit and IndexedDB reopening while preserving shutter-time upload bytes',async()=>{
+   const {db}=await import('./database'),{openLocalPhotoVault}=await import('./vault')
+   const first=openLocalPhotoVault()
+   await first.commit(source(3))
+   const edited=await first.saveEdit(photoId,flattened())
+   expect(edited.revision).toBe(1)
+   // A fresh vault and a re-opened DB must see the durable photo and outbox,
+   // without relying on a server ACK or retaining the original JS object.
+   db.close();await db.open()
+   const reopened=openLocalPhotoVault()
+   const header=await reopened.readHeader(photoId)
+   expect(header?.assetId).toBe(edited.assetId)
+   expect(header?.initialAssetId).toBe(initial)
+   const pending=await reopened.pending()
+   expect(pending.filter(x=>x.photoId===photoId).map(x=>x.intent)).toEqual(['upload','edit'])
+   const original=await reopened.delivery(upload)
+   expect(original.assets.map(x=>x.assetId)).toContain(initial)
+   expect(original.assets.map(x=>x.assetId)).not.toContain(edited.assetId)
+   expect(original.assets).toHaveLength(2) // immutable shutter pixels and encrypted metadata
+   const modification=await reopened.editDelivery(edited.operationId)
+   expect(modification.asset.assetId).toBe(edited.assetId)
+   expect(modification.expectedRevision).toBe(0)
+   expect(modification.asset.kind).toBe('master')
+   expect((await reopened.read(photoId,edited.assetId)).size).toBeGreaterThan(0)
+   const stored=await db.blobFallback.toArray()
+   for(const item of stored){
+     const bytes=await item.blob.text()
+     expect(bytes).not.toContain('changed-secret-pixels')
+     expect(bytes).not.toContain('origin-private-pixels')
+   }
+   active={accountId:another,deviceId:device,generation:2}
+   await expect(reopened.read(photoId,edited.assetId)).rejects.toThrow('storage.account_changed')
+ })
  it('does not persist edits with suspicious APP1 JPEG metadata',async()=>{
   const {db}=await import('./database'),{openLocalPhotoVault}=await import('./vault')
   const vault=openLocalPhotoVault()
