@@ -66,7 +66,8 @@ export class AssignmentRepository{
   async duplicate(id:string):Promise<AssignmentView>{
     const source=await this.get(id)
     return this.create({title:source.title,instructions:source.instructions,
-      mode:source.mode,retentionDays:source.retentionDays})
+      mode:source.mode,retentionDays:source.retentionDays,startsAt:source.startsAt,
+      finishesAt:source.finishesAt,targetCount:source.targetCount})
   }
   private operation(contract:AssignmentContract):Operation{
     return{key:operationKey(this.account,contract.operationId),accountId:this.account,
@@ -79,7 +80,8 @@ export class AssignmentRepository{
     const previous=await this.record(id)
     const before=await this.project(previous)
     const fields=action==='edit'?validateFields(nextFields!):
-      {title:before.title,instructions:before.instructions,mode:before.mode,retentionDays:before.retentionDays}
+      {title:before.title,instructions:before.instructions,mode:before.mode,retentionDays:before.retentionDays,
+        startsAt:before.startsAt,finishesAt:before.finishesAt,targetCount:before.targetCount}
     const status=action==='transition'?nextState!:before.status
     if(action==='transition')nextStatus(before.status,status)
     if(action==='edit'&&before.status==='completed')throw Error('assignment.completed')
@@ -214,7 +216,8 @@ export class AssignmentRepository{
     void clear // validated before persistence
     if(retry){
       await this.edit(id,{title:previous.title,instructions:previous.instructions,
-        mode:local.mode,retentionDays:local.retentionDays})
+        mode:local.mode,retentionDays:local.retentionDays,
+        startsAt:previous.startsAt,finishesAt:previous.finishesAt,targetCount:previous.targetCount})
     }
   }
   async resetToServer(id:string,remote:ServerAssignment):Promise<void>{
