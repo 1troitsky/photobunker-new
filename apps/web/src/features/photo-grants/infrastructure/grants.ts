@@ -254,7 +254,7 @@ export async function publishRecipientThumbnail(grantId:string,photoId:string):
         x.generation===row.generation).first()
     same(active.accountId,active.deviceId)
     if(!existing)throw e
-    if(existing.state==='conflict')throw Error('grant.thumbnail_conflict')
+    if(existing.state==='conflict')throw new Error('grant.thumbnail_conflict',{cause:e})
     return {assetId:existing.assetId,operationId:existing.operationId}
   }
   same(active.accountId,active.deviceId)
