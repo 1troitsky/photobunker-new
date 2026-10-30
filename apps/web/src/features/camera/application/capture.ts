@@ -10,7 +10,7 @@ export type PendingCapture=Readonly<{
   jpeg:Blob;policy:CapturePolicy;assignment?:FrozenAssignment;method:Method;sourceWidth:number;sourceHeight:number
   outputWidth:number;outputHeight:number;capturedAt:number;expiresAt:number
   thumbnail?:Blob;thumbnailAssetId?:string;gps?:ReturnType<typeof captureGps>
-  nameId?:string;leaseId?:string;nameNumber?:number
+  nameId?:string;leaseId?:string;nameNumber?:number;nameDisabled?:boolean
   description?:string;tags?:string[]
 }>
 export type CaptureProgress='idle'|'compressing'|'encrypting'|'saved'|'failed'
@@ -96,6 +96,7 @@ export class CaptureSession{
     } satisfies FrozenAssignment:undefined
     this.pending={...ids,jpeg:converted.blob,policy,assignment:frozen,method,
       ...(thumbnail?{thumbnail,thumbnailAssetId:crypto.randomUUID()}: {}),gps,
+      nameDisabled:policy.source==='assignment'&&policy.enableNameId===false,
       ...(reserved?{nameId:reserved.nameId,leaseId:reserved.leaseId,nameNumber:reserved.number}:{}),
       description,tags,
       sourceWidth:converted.sourceWidth,sourceHeight:converted.sourceHeight,
@@ -120,6 +121,7 @@ export class CaptureSession{
       capturedAt:pending.capturedAt,expiresAt:pending.expiresAt,
       pixels:pending.jpeg,thumbnail:pending.thumbnail,thumbnailAssetId:pending.thumbnailAssetId,
       nameId:pending.nameId,leaseId:pending.leaseId,nameNumber:pending.nameNumber,
+      nameDisabled:pending.nameDisabled,
       capture:pending.assignment,
       metadata:{...metadata,title:'',description:pending.description??'',tags:pending.tags??[],gps:pending.gps??null,
         gpsStatus:pending.gps?'ready':gpsStatus()==='denied'?'denied':gpsStatus()==='disabled'?'disabled':gpsStatus()==='unavailable'?'unavailable':'pending'},
