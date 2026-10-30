@@ -147,6 +147,34 @@ describe('R2-11 local encrypted crash-safe asset swaps',()=>{
    active={accountId:another,deviceId:device,generation:2}
    await expect(reopened.read(photoId,edited.assetId)).rejects.toThrow('storage.account_changed')
  })
+
+ it('keeps mode2 original and offline edit independently encrypted across reopen, before upload ACK',async()=>{
+  const {db}=await import('./database'),{openLocalPhotoVault}=await import('./vault')
+  const first=openLocalPhotoVault()
+  await first.commit(source(2))
+  const edited=await first.saveEdit(photoId,flattened())
+  expect(edited.revision).toBe(1)
+  db.close();await db.open()
+  const reopened=openLocalPhotoVault()
+  const header=await reopened.readHeader(photoId)
+  expect(header?.sourceAssetId).toBe(initial)
+  expect(header?.assetId).toBe(edited.assetId)
+  expect((await reopened.pending()).filter(x=>x.photoId===photoId).map(x=>x.intent)).toEqual(['upload','edit'])
+  const originalDelivery=await reopened.delivery(upload)
+  expect(originalDelivery.assets.map(x=>x.assetId)).toContain(initial)
+  expect(originalDelivery.assets.map(x=>x.assetId)).not.toContain(edited.assetId)
+  const editDelivery=await reopened.editDelivery(edited.operationId)
+  expect(editDelivery.asset.assetId).toBe(edited.assetId)
+  expect(await (await reopened.read(photoId,initial)).text()).toBe('origin-private-pixels')
+  expect((await reopened.read(photoId,edited.assetId)).size).toBeGreaterThan(0)
+  const stored=await db.blobFallback.toArray()
+  for(const item of stored){
+   const bytes=await item.blob.text()
+   expect(bytes).not.toContain('origin-private-pixels')
+   expect(bytes).not.toContain('changed-secret-pixels')
+  }
+ })
+
  it('does not persist edits with suspicious APP1 JPEG metadata',async()=>{
   const {db}=await import('./database'),{openLocalPhotoVault}=await import('./vault')
   const vault=openLocalPhotoVault()
