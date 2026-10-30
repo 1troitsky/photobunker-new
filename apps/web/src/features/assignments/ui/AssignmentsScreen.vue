@@ -16,7 +16,10 @@ type AssignmentSort='updated'|'created'|'latest_photo'
 const visibilityFilter=ref<VisibilityFilter>('active'),sortBy=ref<AssignmentSort>('updated')
 const photoDates=ref<Record<string,number>>({})
 const form=ref<AssignmentFields>({title:'',instructions:'',mode:3,retentionDays:45,
-  startsAt:null,finishesAt:null,targetCount:null})
+  startsAt:null,finishesAt:null,targetCount:null,cameraInstructions:'',requiredGps:false,
+  requireDescription:false,descriptionMinLength:0,requireTags:false,allowedTags:[],
+  enableNameId:true,allowEditing:true,keepOriginal:false,allowDeletion:true,
+  allowBrowsing:false,capturePreset:null})
 const serverRevision=ref<number|null>(null),serverVersion=ref<Awaited<ReturnType<typeof fetchServerAssignment>>|null>(null)
 const details=computed(()=>typeof route.params.assignmentId==='string'?route.params.assignmentId:null)
 const create=computed(()=>route.path==='/assignments/new')
@@ -34,6 +37,13 @@ const copy=computed(()=>ru.value?{
   progress:'Снимков на устройстве',archive:'В архив',restoreArchive:'Вернуть из архива',
   active:'Активные',archived:'Архив',allAssignments:'Все задания',sort:'Сортировка',
   sortUpdated:'Последнее изменение',sortCreated:'Дата создания',sortPhoto:'Последняя фотография',
+  cameraInstructions:'Инструкция для камеры',requiredGps:'Обязательная геолокация',
+  requireDescription:'Обязательное описание снимка',descriptionMinLength:'Минимум символов описания',
+  requireTags:'Обязательные теги',allowedTags:'Разрешённые теги (через запятую)',
+  enableNameId:'Присваивать NAME-ID',allowEditing:'Разрешить редактирование',
+  keepOriginal:'Сохранять оригинал',allowDeletion:'Разрешить удаление',
+  allowBrowsing:'Разрешить просмотр участникам (только после проверки прав)',
+  capturePreset:'Название пресета камеры',advanced:'Дополнительные правила съёмки',
   mode1:'1 — Без сжатия (недоступен)',mode2:'2 — Сжатый оригинал сохраняется',
   mode3:'3 — Сжатый master заменяется',save:'Сохранить',cancel:'Отмена',
   edit:'Редактировать',duplicate:'Дублировать',remove:'Удалить',removeConfirm:'Удалить задание? Это необратимо.',
@@ -57,6 +67,13 @@ const copy=computed(()=>ru.value?{
   progress:'Photos on this device',archive:'Archive',restoreArchive:'Restore from archive',
   active:'Active',archived:'Archive',allAssignments:'All assignments',sort:'Sort by',
   sortUpdated:'Last edited',sortCreated:'Created',sortPhoto:'Latest photo',
+  cameraInstructions:'Camera instructions',requiredGps:'Require GPS',
+  requireDescription:'Require photo description',descriptionMinLength:'Minimum description length',
+  requireTags:'Require photo tags',allowedTags:'Allowed tags (comma-separated)',
+  enableNameId:'Assign NAME-ID',allowEditing:'Allow editing',
+  keepOriginal:'Preserve original',allowDeletion:'Allow deletion',
+  allowBrowsing:'Allow participant browsing (only after permission review)',
+  capturePreset:'Camera preset name',advanced:'Additional capture rules',
   mode1:'1 — Camera source (unavailable)',mode2:'2 — Compressed original preserved',
   mode3:'3 — Compressed master replaced',save:'Save',cancel:'Cancel',
   edit:'Edit',duplicate:'Duplicate',remove:'Delete',removeConfirm:'Delete assignment permanently?',
@@ -111,7 +128,13 @@ async function reload(){
       title:selected.value.title,instructions:selected.value.instructions,
       mode:selected.value.mode,retentionDays:selected.value.retentionDays,
       startsAt:selected.value.startsAt,finishesAt:selected.value.finishesAt,
-      targetCount:selected.value.targetCount,archived:selected.value.archived}
+      targetCount:selected.value.targetCount,archived:selected.value.archived,
+      cameraInstructions:selected.value.cameraInstructions,requiredGps:selected.value.requiredGps,
+      requireDescription:selected.value.requireDescription,descriptionMinLength:selected.value.descriptionMinLength,
+      requireTags:selected.value.requireTags,allowedTags:selected.value.allowedTags,
+      enableNameId:selected.value.enableNameId,allowEditing:selected.value.allowEditing,
+      keepOriginal:selected.value.keepOriginal,allowDeletion:selected.value.allowDeletion,
+      allowBrowsing:selected.value.allowBrowsing,capturePreset:selected.value.capturePreset}
   }catch(e){if(token===epoch)error.value=e instanceof Error?e.message:copy.value.error}
   finally{if(token===epoch)loading.value=false}
 }
@@ -193,7 +216,10 @@ async function retryChanges(){
   catch(e){error.value=e instanceof Error?e.message:copy.value.error}
 }
 function resetForm(){form.value={title:'',instructions:'',mode:3,retentionDays:45,
-  startsAt:null,finishesAt:null,targetCount:null}}
+  startsAt:null,finishesAt:null,targetCount:null,cameraInstructions:'',requiredGps:false,
+  requireDescription:false,descriptionMinLength:0,requireTags:false,allowedTags:[],
+  enableNameId:true,allowEditing:true,keepOriginal:false,allowDeletion:true,
+  allowBrowsing:false,capturePreset:null}}
 watch(()=>route.fullPath,()=>{error.value='';serverVersion.value=null;if(create.value)resetForm();void reload()})
 watch(identity,()=>{void reload()})
 onMounted(()=>{ended=false;unlisten=onAssignmentChange(()=>{void reload()});void reload()})
@@ -243,6 +269,30 @@ onUnmounted(()=>{ended=true;epoch++;cleanup();unlisten()})
         <label>{{ copy.targetCount }}
           <input v-model.number="form.targetCount" type="number" min="1" max="9999" step="1">
         </label>
+        <fieldset class="assignment-policy-fields">
+          <legend>{{ copy.advanced }}</legend>
+          <label>{{ copy.cameraInstructions }}
+            <textarea v-model="form.cameraInstructions" rows="3" maxlength="2000"></textarea>
+          </label>
+          <label>{{ copy.capturePreset }}
+            <input v-model="form.capturePreset" type="text" maxlength="80">
+          </label>
+          <label class="assignment-toggle"><input v-model="form.requiredGps" type="checkbox"> {{ copy.requiredGps }}</label>
+          <label class="assignment-toggle"><input v-model="form.enableNameId" type="checkbox"> {{ copy.enableNameId }}</label>
+          <label class="assignment-toggle"><input v-model="form.requireDescription" type="checkbox"> {{ copy.requireDescription }}</label>
+          <label>{{ copy.descriptionMinLength }}
+            <input v-model.number="form.descriptionMinLength" type="number" min="0" max="2000" step="1">
+          </label>
+          <label class="assignment-toggle"><input v-model="form.requireTags" type="checkbox"> {{ copy.requireTags }}</label>
+          <label>{{ copy.allowedTags }}
+            <input :value="(form.allowedTags??[]).join(', ')" type="text" maxlength="1250"
+              @input="form.allowedTags=($event.target as HTMLInputElement).value.split(',').map(s=>s.trim()).filter(Boolean)">
+          </label>
+          <label class="assignment-toggle"><input v-model="form.allowEditing" type="checkbox"> {{ copy.allowEditing }}</label>
+          <label class="assignment-toggle"><input v-model="form.keepOriginal" type="checkbox"> {{ copy.keepOriginal }}</label>
+          <label class="assignment-toggle"><input v-model="form.allowDeletion" type="checkbox"> {{ copy.allowDeletion }}</label>
+          <label class="assignment-toggle"><input v-model="form.allowBrowsing" type="checkbox"> {{ copy.allowBrowsing }}</label>
+        </fieldset>
         <p class="assignment-hint">{{ copy.noRetro }}</p>
         <div class="assignment-actions">
           <button class="primary-button" type="submit" :disabled="saving">{{ copy.save }}</button>
@@ -358,6 +408,9 @@ onUnmounted(()=>{ended=true;epoch++;cleanup();unlisten()})
 .assignment-form textarea{resize:vertical}
 .assignment-form fieldset{display:flex;flex-direction:column;gap:12px;border:1px solid var(--border);border-radius:9px;padding:14px}
 .assignment-form fieldset label{display:block;line-height:1.5}
+.assignment-form .assignment-policy-fields label{display:flex;flex-direction:column;gap:5px}
+.assignment-form .assignment-policy-fields label.assignment-toggle{display:flex;flex-direction:row;align-items:center}
+.assignment-toggle input{width:18px;height:18px;accent-color:var(--accent)}
 .assignment-actions{display:flex;flex-wrap:wrap;gap:12px;margin:15px 0}
 .assignment-actions button,.assignment-toolbar button{min-height:42px}
 .assignment-hint,.assignment-meta,.assignment-item small{font-size:12px;color:var(--secondary)}
