@@ -196,6 +196,7 @@ jobs:
           APP_URL: http://127.0.0.1:8099
           SESSION_DRIVER: file
           SESSION_SECURE_COOKIE: 'false'
+          PHP_CLI_SERVER_WORKERS: '4'
         run: |
           set -euo pipefail
           php artisan serve --host=127.0.0.1 --port=8099 > "$RUNNER_TEMP/pb2-http-server.log" 2>&1 &
