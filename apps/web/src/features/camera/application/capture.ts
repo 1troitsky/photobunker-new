@@ -87,7 +87,7 @@ export class CaptureSession{
     if(policy.source==='assignment'&&policy.requiredGps&&!gps)
       throw Error('camera.gps_required')
     const reserved=policy.source==='assignment'&&policy.enableNameId===false?
-      null:await takeReservedName().catch(()=>null)
+      null:await takeReservedName(policy.source==='assignment'?policy.assignmentId:null).catch(()=>null)
     this.check(ticket)
     const frozen=policy.source==='assignment'?{
       assignmentId:policy.assignmentId,assignmentRevision:policy.assignmentRevision,
