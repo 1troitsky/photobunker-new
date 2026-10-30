@@ -141,8 +141,9 @@ watch(identity,()=>{devices.value=[];void refresh()})
         <h2>{{copy.security}}</h2><IdentityPanel />
         <button type="button" :disabled="busy" @click="leave">{{copy.logout}}</button>
       </section>
-      <section class="pb-section"><h2>{{copy.storage}}</h2><StorageDiagnostics /></section>
     </template>
+    <!-- Probing browser storage is safe before account registration. -->
+    <section class="pb-section"><h2>{{copy.storage}}</h2><StorageDiagnostics /></section>
     <section class="pb-section">
       <h2>{{copy.location}}</h2>
       <p class="pb-muted">{{copy.locationHint}}</p>
@@ -173,7 +174,8 @@ watch(identity,()=>{devices.value=[];void refresh()})
   </section>
 </template>
 <style scoped>
-.pb-profile{max-width:830px;margin:0 auto;padding:18px 16px 130px;display:grid;gap:16px}
+.pb-profile{max-width:830px;margin:0 auto;padding:18px 16px 130px;display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+.pb-profile>*{min-width:0}
 .pb-profile-heading h1{font-size:25px;margin:0 0 6px}
 .pb-profile-heading p,.pb-muted{font-size:13px;color:var(--secondary);margin:4px 0}
 .pb-section{padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:14px;display:grid;gap:12px}

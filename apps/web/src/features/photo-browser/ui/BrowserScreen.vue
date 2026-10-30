@@ -6,7 +6,7 @@ import {GalleryThumbnail} from '../../gallery'
 import {onPhotoSync} from '../../photo-sync'
 import {language,AppIcon} from '../../ui-preview'
 import {loadLocalBrowser} from '../application/browse'
-import {exportOwnerBrowserZip} from '../application/export-owner'
+import {exportOwnerBrowserZip} from '../infrastructure/export-owner'
 import {browserFolders,visibleBrowserPhotos,type BrowserPhoto,type BrowserAssignment,
   type BrowserDisplay,type BrowserSort} from '../domain/model'
 

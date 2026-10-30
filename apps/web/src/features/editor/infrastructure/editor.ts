@@ -2,10 +2,10 @@ import {identity} from '../../identity'
 import {openLocalPhotoVault} from '../../local-storage'
 import {flushPhotoSync} from '../../photo-sync'
 import type {EditDocument} from '../domain/document'
-import {flattenJpeg} from '../infrastructure/render'
+import {flattenJpeg} from './render'
 export {EditSession,emptyEdit,normalizedPoint,updateText} from '../domain/document'
 export type {EditDocument,Point,Tool} from '../domain/document'
-export {renderEdits} from '../infrastructure/render'
+export {renderEdits} from './render'
 export type EditorSource={photoId:string;photo:Blob;mode:2|3;
   revision:number;expiresAt:number;accountId:string;deviceId:string}
 export async function openEditor(photoId:string):Promise<EditorSource>{

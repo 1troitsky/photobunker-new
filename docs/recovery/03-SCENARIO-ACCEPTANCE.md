@@ -1,6 +1,6 @@
 # Сквозные сценарии PB2: измеримая приёмка
 
-Статус всех проверок по состоянию 2026-10-30 — **NOT RUN / NOT VERIFIED**. Наличие теста в дереве не является PASS. Реальные UI/файлы/DB/безопасность проверяются отдельно и только на одном PB2 runtime. Матрица требований: [01](01-FUNCTIONAL-INVENTORY.md).
+На срезе 2026-10-30 **реальные backend/камера/S3/E2EE сквозные сценарии по-прежнему NOT RUN / NOT VERIFIED**; гостевые браузерные smoke и unit-тесты успешно запускались. Наличие теста в дереве не является PASS. Реальные UI/файлы/DB/безопасность проверяются отдельно и только на одном PB2 runtime. Матрица требований: [01](01-FUNCTIONAL-INVENTORY.md).
 
 ## Первые результаты G1: Chromium без серверного backend
 
@@ -10,6 +10,10 @@ Run [#41120434608](https://github.com/1troitsky/photobunker-new/actions/runs/411
 3. Старый mobile settings E2E ждал legacy кнопки RU/Light; native PB2 использует `<select>`. Проверка заменена реальным выбором RU/light, доступностью на 320px и сохранением после reload.
 
 Исправление сохранено коммитом `baec69c5` в PR #42. Новый run [#41121277070](https://github.com/1troitsky/photobunker-new/actions/runs/41121277070) на момент записи **QUEUED / NOT VERIFIED**; отсутствие реального backend продолжает явно пропускать production camera, assignment, S3, 2-account security tests. Подлинные S03–S19 принимаются отдельно на HTTPS staging/Garage, не по этим smoke checks.
+
+## Новое доказательство UI smoke (не G1 live PASS)
+
+[Run #41124216234](https://github.com/1troitsky/photobunker-new/actions/runs/41124216234) на commit `9a596b15f1f492a980af849e1f727ee9840b928f` завершился SUCCESS: 35/35 PHPUnit, 101/101 Vitest, frontend architecture/lint/typecheck/build, **15/15 доступных Chromium smoke PASS**, ещё 6 тестов **SKIPPED** без реального HTTPS backend. Фикс расширения сетки профиля на 320px проверен повторным Chromium run. Не подменять эту проверку реальной работой с фото. [План стенда](06-G1-STAGING-READINESS.md).
 
 ## Единый формат evidence
 

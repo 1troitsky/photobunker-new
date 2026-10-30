@@ -1,11 +1,11 @@
 import {identity,assignmentRequest,photoRequest,signMetadataContract,withCurrentOwnerAssetDEK,currentAccountSpki,signOwnerDeviceProof} from '../../identity'
 import {openAssignments} from '../../assignments'
 import {openLocalPhotoVault,type CloudAsset} from '../../local-storage'
-import {grantDb,scopedId,type OperationRow,type SecretRow,type ThumbnailShareRow} from '../infrastructure/database'
-import {sealLocalGrantSecret,openLocalGrantIdentity} from '../infrastructure/secret'
+import {grantDb,scopedId,type OperationRow,type SecretRow,type ThumbnailShareRow} from './database'
+import {sealLocalGrantSecret,openLocalGrantIdentity} from './secret'
 import {createPhotoGrantCode,photoGrantCodeHash,sealGrantSecretPinned,openGrantSecretPinned,sealRecipientKey,
   type KeyContext,
-  type GrantInvitationContext} from '../infrastructure/key-envelope'
+  type GrantInvitationContext} from './key-envelope'
 import {acquireStorageKeys} from '../../identity'
 import {command,validateServerGrant,type GrantCommand,type GrantRole,type ServerGrant,type GrantOperationKind} from '../domain/grants'
 
@@ -115,7 +115,7 @@ export async function changeAssignmentGrant(row:ServerGrant,
   wake()
 }
 export type GrantOutboxState=Readonly<{
-  opId:string;grantId:string;kind:GrantOperationKind;state:'pending'|'retry'|'conflict';
+  opId:string;grantId:string;kind:GrantOperationKind;state:'pending'|'retry'|'conflict'|'acknowledged';
   error:string|null
 }>
 /** Technical status only; never return an invitation code or secret to UI. */
@@ -248,7 +248,7 @@ export async function publishRecipientThumbnail(grantId:string,photoId:string):
 }
 
 export type ThumbnailShareStatus=Readonly<{
-  operationId:string;grantId:string;photoId:string;state:'pending'|'retry'|'conflict';
+  operationId:string;grantId:string;photoId:string;state:'pending'|'retry'|'conflict'|'acknowledged';
   lastError:string|null
 }>
 export async function pendingThumbnailShares():Promise<ThumbnailShareRow[]>{

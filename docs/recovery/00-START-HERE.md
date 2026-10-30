@@ -12,6 +12,19 @@
 - Поверх этого G0 добавлена отдельная ступень `browser` на Playwright Chromium. Первый [run #41120153684](https://github.com/1troitsky/photobunker-new/actions/runs/41120153684) выявил несовместимость locked Playwright 1.56.1 и выбранной GitHub Ubuntu 26.04; job закреплён на `ubuntu-24.04` в commit `e280d399`. Реальная browser E2E проверка **не стала автоматически VERIFIED**.
 - **P0 STOP:** `recipient_thumbnail_reads_enabled=false`; полная фото-миграция PB1→PB2 и живые двухаккаунтные E2E не завершены. Build success означает только исходный G0, не готовность продукта.
 
+## G0 завершён — PHP, Vue и браузерные проверки
+
+**Подтверждённый GitHub Actions run:** [#41124216234](https://github.com/1troitsky/photobunker-new/actions/runs/41124216234), PR #42 commit `9a596b15f1f492a980af849e1f727ee9840b928f`, **SUCCESS, все три jobs**.
+
+- **Laravel:** Composer, проверка PHP-синтаксиса и PHPUnit (35/35) — **PASS**.
+- **Frontend:** архитектурные границы с negative fixtures, ESLint (0 ошибок; предупреждения пока допустимы), TypeScript, Vitest (101/101), production build — **PASS**.
+- **Chromium (без сервера):** production preview, 21 Playwright тест — **15 PASS, 6 SKIP**, 0 FAIL. Проверены гостевая навигация, отсутствие фальшивых фотографий, account UI, storage capabilities, RU/light после reload и ширина 320px.
+- Исправлен конкретный layout overflow: профиль расширял auto grid track до 317px вместо доступных 288px; `grid-template-columns:minmax(0,1fr)` и min-width:0 сохраняют доступный контент без CSS-маскирования.
+- **НЕ ПРОВЕРЕНЫ:** реальное создание/восстановление с Laravel, камера на устройстве, encrypted persistence после login, Garage/S3, облачные ACK/retry, две учётные записи, межаккаунтная выдача миниатюр и отзыв прав. Six Playwright SKIPs как раз зависят от реального HTTPS API/storage.
+- **P0 STOP:** `recipient_thumbnail_reads_enabled=false`. Ни один реальный поток G1/G3 не принят. Документ и зелёный CI не разрешают merge.
+
+Следующий gate: [G1 — реальный HTTPS staging](06-G1-STAGING-READINESS.md) и [S01–S08](03-SCENARIO-ACCEPTANCE.md). Никаких дополнительных фиктивных PASS.
+
 ## Точка истины
 
 - [Точный файл владельца visual-ux.md (390 строк)](visual-ux-owner-2026-10-30.md) — зафиксирован напрямую из вложения; не подменять одноимённым PB1 файлом (277 строк, другая редакция).
@@ -19,7 +32,7 @@
 - [02-RESTORATION-PLAN.md](02-RESTORATION-PLAN.md) — приоритетный путь от неисправной CI к проверяемому приложению.
 - [03-SCENARIO-ACCEPTANCE.md](03-SCENARIO-ACCEPTANCE.md) — реальные пользовательские пути, позитивные/отказные сценарии и требуемые доказательства.
 - [04-OWNER-DECISIONS.md](04-OWNER-DECISIONS.md) — несовпадения новой спецификации и принятых PB2 решений; не решать их автоматически.
-- [05-GITHUB-ACTIONS-TRIAGE.md](05-GITHUB-ACTIONS-TRIAGE.md) — фактические данные о неуспешном CI и порядок расследования.
+- [05-GITHUB-ACTIONS-TRIAGE.md](05-GITHUB-ACTIONS-TRIAGE.md) — фактическая диагностика CI; [06-G1-STAGING-READINESS.md](06-G1-STAGING-READINESS.md) — следующий полноценный пользовательский gate.
 
 ## Зафиксированные SHA / scope
 

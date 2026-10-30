@@ -1,7 +1,7 @@
 import {identity,registerDecryptedObjectUrl,revokeDecryptedObjectUrl} from '../../identity'
 import {openLocalPhotoVault} from '../../local-storage'
 import type {BrowserPhoto} from '../domain/model'
-import {ZipWriter,safePart,distinctPath} from '../infrastructure/zip'
+import {ZipWriter,safePart,distinctPath} from './zip'
 
 const MAX_FILES=10,MAX_DOWNLOAD=16*1024*1024,MAX_SOURCE=32*1024*1024
 const NAME_ID=/^[A-Z]{4}[0-9]{4}$/

@@ -20,7 +20,7 @@ vi.mock('../../identity',()=>({
     },
   }),
 }))
-import {assignmentDb} from '../infrastructure/database'
+import {assignmentDb} from './database'
 import {openAssignments} from './repository'
 describe('R2-08 local encrypted aggregate / durable assignment outbox',()=>{
   beforeEach(async()=>{

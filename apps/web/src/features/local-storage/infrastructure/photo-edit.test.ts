@@ -100,14 +100,20 @@ describe('R2-11 local encrypted crash-safe asset swaps',()=>{
   expect(await db.assets.get(account+'/'+photoId+'/'+initial)).toBeTruthy()
   await expect(vault.saveEdit(photoId,flattened())).rejects.toThrow('editor.pending_edit')
  })
- it('refuses editing an unsynced original and locks stale vault after account switch',async()=>{
-  const {openLocalPhotoVault}=await import('./vault')
-  const vault=openLocalPhotoVault()
-  await vault.commit(source(3))
-  await expect(vault.saveEdit(photoId,flattened())).rejects.toThrow('editor.upload_original_first')
-  active={accountId:another,deviceId:device,generation:2}
-  await expect(vault.saveEdit(photoId,flattened())).rejects.toThrow('storage.account_changed')
- })
+ it('queues one offline edit and pins the initial ciphertext through upload ACK, then rejects stale account',async()=>{
+   const {openLocalPhotoVault}=await import('./vault'),{db}=await import('./database')
+   const vault=openLocalPhotoVault()
+   await vault.commit(source(3))
+   const saved=await vault.saveEdit(photoId,flattened())
+   const header=await vault.readHeader(photoId)
+   expect(header?.assetId).toBe(saved.assetId)
+   expect(header?.initialAssetId).toBe(initial)
+   expect(await db.assets.get(account+'/'+photoId+'/'+initial)).toBeTruthy()
+   expect((await db.outbox.get(account+'/'+upload))?.state).toBe('pending')
+   await expect(vault.saveEdit(photoId,flattened())).rejects.toThrow('editor.pending_edit')
+   active={accountId:another,deviceId:device,generation:2}
+   await expect(vault.saveEdit(photoId,flattened())).rejects.toThrow('storage.account_changed')
+  })
  it('does not persist edits with suspicious APP1 JPEG metadata',async()=>{
   const {db}=await import('./database'),{openLocalPhotoVault}=await import('./vault')
   const vault=openLocalPhotoVault()

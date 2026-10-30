@@ -2,6 +2,8 @@
 
 **Цель:** не ещё один rewrite, а перенос прежнего результата PB1 на единый PB2 runtime. Главный критерий — выполняемый пользовательский сценарий из [документа владельца](visual-ux-owner-2026-10-30.md), а не число классов/PR. Данный план **не** отменяет [PB2 product baseline](../13-PRODUCT-ACCEPTANCE-BASELINE.md), [storage](../03-PHOTO-STORAGE.md), [security](../05-SECURITY.md) или [roadmap](../08-ROADMAP.md). Расхождения только через решение владельца.
 
+**Статус gate G0:** подтверждён SUCCESS [#41124216234](https://github.com/1troitsky/photobunker-new/actions/runs/41124216234) на `9a596b15f1f492a980af849e1f727ee9840b928f`; это **не** приёмка полноценной камеры или межаккаунтных фото. Следующий gate G1 требует отдельного реального HTTPS backend+PostgreSQL+Garage — [условия](06-G1-STAGING-READINESS.md).
+
 ## Нулевая граница: только один runtime
 
 - **Runtime:** **PB2 Vue 3 + Vue Router + TypeScript + Laravel API**, единая PB2 key-only Identity и scoped encrypted vault. Сохранённый каталог compat/ — read-only evidence, не компонент runtime и не отдельный origin.

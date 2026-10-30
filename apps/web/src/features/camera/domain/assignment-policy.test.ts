@@ -1,6 +1,6 @@
 import {describe,expect,it} from 'vitest'
 import {assignmentPolicy,snapshot} from './policy'
-import {signedContract} from '../../photo-sync/application/sync'
+import {signedContract} from '../../photo-sync'
 import type {SyncSnapshot} from '../../local-storage'
 const s=()=>({assignmentId:'123e4567-e89b-42d3-a456-426614174000',
   assignmentRevision:3,policyRevision:2,mode:3 as const,retentionDays:7})

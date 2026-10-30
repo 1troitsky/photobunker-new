@@ -63,6 +63,7 @@ const detailId=computed(()=>typeof route.params.teamId==='string'?route.params.t
 const showContacts=computed(()=>route.path==='/contacts')
 const teams=ref<TeamView[]>([]),contacts=ref<Contact[]>([]),invites=ref<Invite[]>([]),outgoing=ref<OutgoingInvite[]>([]),blocks=ref<string[]>([])
 const selected=computed(()=>teams.value.find(x=>x.id===detailId.value))
+const selectedId=computed(()=>selected.value?.id??'')
 const loading=ref(false),busy=ref(false),error=ref(''),accountId=ref('')
 const creating=ref(false),editing=ref(false),invitePanel=ref(false)
 const draft=ref<TeamProfile>({name:'',description:'',avatar:null})
@@ -317,9 +318,9 @@ onUnmounted(()=>{closed=true;epoch++;unsubscribeIdentity();unsubscribe();clearSe
             <button type="button" :disabled="busy" @click="editMember(member.accountId,null)">{{ copy.revoke }}</button>
           </div>
         </li></ul>
-        <section v-if="outgoing.some(i=>i.teamId===selected.id)" class="collab-outgoing">
+        <section v-if="outgoing.some(i=>i.teamId===selectedId)" class="collab-outgoing">
           <h3>{{ copy.outgoing }}</h3>
-          <div v-for="item in outgoing.filter(i=>i.teamId===selected.id)" :key="item.id" class="collab-actions">
+          <div v-for="item in outgoing.filter(i=>i.teamId===selectedId)" :key="item.id" class="collab-actions">
             <code>{{ item.targetId }}</code><span>{{ copy[item.role] }}</span>
             <button type="button" :disabled="busy" @click="revokeInvite(item.id)">{{ copy.revokeInvite }}</button>
           </div>

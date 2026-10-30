@@ -10,11 +10,18 @@ export const steps:Readonly<Record<AssignmentStatus,readonly AssignmentStatus[]>
   waiting:['in_progress'],in_progress:['submitted'],submitted:['needs_changes','completed'],
   needs_changes:['in_progress'],completed:[],
 }
+function illegalControl(text:string,allowTabLf=false):boolean{
+  for(const char of text){
+    const code=char.charCodeAt(0)
+    if(code<32&&(!allowTabLf||(code!==9&&code!==10)))return true
+  }
+  return false
+}
 export function validateFields(fields:AssignmentFields):AssignmentFields{
   const title=fields.title.trim()
-  if(!title||title.length>80||/[\u0000-\u001f]/.test(title))throw Error('assignment.title_invalid')
+  if(!title||title.length>80||illegalControl(title))throw Error('assignment.title_invalid')
   if(typeof fields.instructions!=='string'||fields.instructions.length>4000||
-    /[\u0000-\u0008\u000b-\u001f]/.test(fields.instructions))throw Error('assignment.instructions_invalid')
+    illegalControl(fields.instructions,true))throw Error('assignment.instructions_invalid')
   if(fields.mode!==2&&fields.mode!==3)throw Error('assignment.mode_unavailable')
   if(!Number.isInteger(fields.retentionDays)||fields.retentionDays<1||fields.retentionDays>45)
     throw Error('assignment.retention_invalid')

@@ -15,6 +15,10 @@
 
 **Исторические факты до удачного rerun.** В первых пяти попытках PHP/Vitest/typecheck действительно **не запускались**.
 
+## Актуальный подтверждённый результат
+
+[Actions #41124216234](https://github.com/1troitsky/photobunker-new/actions/runs/41124216234), commit `9a596b15f1f492a980af849e1f727ee9840b928f`: **3/3 jobs SUCCESS**. PHP lint + PHPUnit 35/35, архитектура + ESLint 0 errors + TypeScript + Vitest 101/101 + Vite build, Chromium 15 passed / 6 intentionally skipped. Первоначальные 5 pre-run сбоев не означали сломанные PHP/Vue тесты. Browser smoke проверяет только работу без backend, **G1 live NOT RUN**. История ниже сохранена для аудита.
+
 ## Проверенные GitHub API evidence
 
 Репозиторий `1troitsky/photobunker-new` публичный (`private:false`). Доступный workflow [pb2-draft-quality.yml](https://github.com/1troitsky/photobunker-new/blob/13fdfbd7a74346a585a301f039259e4f56b348c8/.github/workflows/pb2-draft-quality.yml) имеет 2 обычных `runs-on: ubuntu-latest` jobs. Оба шага выполняют checkout/install/checks **только после выдачи runner**.
