@@ -2,6 +2,15 @@
 
 Статус всех проверок по состоянию 2026-10-30 — **NOT RUN / NOT VERIFIED**. Наличие теста в дереве не является PASS. Реальные UI/файлы/DB/безопасность проверяются отдельно и только на одном PB2 runtime. Матрица требований: [01](01-FUNCTIONAL-INVENTORY.md).
 
+## Первые результаты G1: Chromium без серверного backend
+
+Run [#41120434608](https://github.com/1troitsky/photobunker-new/actions/runs/41120434608) (PR #42, `e280d399`) действительно установил Chromium на Ubuntu 24.04, собрал PWA, выполнил Playwright: **10 passed / 5 failed / 6 intentionally skipped**. Это НЕ полноценный G1 PASS. Причины 5 ошибок:
+1. Три теста локальной storage диагностики ожидали capability probe на гостевом Profile. Новый ProfileScreen прятал `StorageDiagnostics` под проверкой аккаунта. Исправление: capability probe публично доступен, но проверка server time остаётся только с аутентификацией.
+2. Старый Browser E2E ждал **фиктивные** фотографии R2-02 и UI-класс `.browser-sidebar .folder-row`. Native PB2 Browser не должен показывать fake photos; E2E обновлён на fail-closed anonymous gallery/browser + create/recover links.
+3. Старый mobile settings E2E ждал legacy кнопки RU/Light; native PB2 использует `<select>`. Проверка заменена реальным выбором RU/light, доступностью на 320px и сохранением после reload.
+
+Исправление сохранено коммитом `baec69c5` в PR #42. Новый run [#41121277070](https://github.com/1troitsky/photobunker-new/actions/runs/41121277070) на момент записи **QUEUED / NOT VERIFIED**; отсутствие реального backend продолжает явно пропускать production camera, assignment, S3, 2-account security tests. Подлинные S03–S19 принимаются отдельно на HTTPS staging/Garage, не по этим smoke checks.
+
 ## Единый формат evidence
 
 Для каждого сценария хранить: SHA ветки, дату/устройство/браузер, подготовку аккаунта(ов), lockfile/runtime версии, шаги и полученные сообщения/HTTP статусы, локальные и серверные ciphertext/digest проверки, screenshots/video без приватных данных, тест run/log, FAIL/RETRY/PASS, review Codex и owner UX acceptance. Никаких recovery keys, PIN, GPS, DEK или чувствительных метаданных в артефактах.
