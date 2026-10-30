@@ -30,7 +30,7 @@ export async function seal(grant:Grant,assignmentId:string,operationId:string,re
   return{version:1,accountId:grant.scope.accountId,assignmentId,operationId,revision,
     iv:encode(iv),wrappedDEK:wrapped,ciphertext:encode(ciphertext)}
 }
-export async function unseal(grant:Grant,e:AssignmentEnvelope):Promise<AssignmentFields>{
+export async function unseal(grant:Grant,e:AssignmentEnvelope):Promise<Omit<AssignmentFields,'mode'|'retentionDays'>>{
   if(e.version!==1||e.accountId!==grant.scope.accountId||
     !Number.isSafeInteger(e.revision)||e.revision<1)throw Error('assignment.envelope_scope')
   const key=await grant.open(e.operationId,'assignment-v1',e.wrappedDEK)
