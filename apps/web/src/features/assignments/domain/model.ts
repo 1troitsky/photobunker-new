@@ -9,7 +9,7 @@ export type AssignmentFields={title:string;instructions:string;mode:AssignmentMo
   allowDeletion?:boolean;allowBrowsing?:boolean;capturePreset?:string|null}
 export type PolicySnapshot=Readonly<{assignmentId:string;assignmentRevision:number;
   policyRevision:number;mode:AssignmentMode;retentionDays:number;
-  requiredGps?:boolean;enableNameId?:boolean}>
+  requiredGps?:boolean;enableNameId?:boolean;startsAt?:string|null;finishesAt?:string|null}>
 export type AssignmentView=AssignmentFields&{id:string;status:AssignmentStatus;revision:number;
   policyRevision:number;sync:'local'|'retry'|'synced'|'conflict';createdAt:string|null;updatedAt:string|null}
 export const steps:Readonly<Record<AssignmentStatus,readonly AssignmentStatus[]>>={
@@ -79,5 +79,6 @@ export function nextStatus(before:AssignmentStatus,after:AssignmentStatus):void{
 export function policySnapshot(view:AssignmentView):PolicySnapshot{
   return{assignmentId:view.id,assignmentRevision:view.revision,
     policyRevision:view.policyRevision,mode:view.mode,retentionDays:view.retentionDays,
-    requiredGps:view.requiredGps??false,enableNameId:view.enableNameId??true}
+    requiredGps:view.requiredGps??false,enableNameId:view.enableNameId??true,
+    startsAt:view.startsAt??null,finishesAt:view.finishesAt??null}
 }
