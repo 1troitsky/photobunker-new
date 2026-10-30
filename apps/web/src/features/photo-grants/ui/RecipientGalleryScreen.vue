@@ -109,6 +109,10 @@ onMounted(()=>{
   document.addEventListener('visibilitychange',visible)
   window.addEventListener('focus',onFocus)
   window.addEventListener('online',onFocus)
+  // A local grant revoke, leave, or recipient state update immediately clears
+  // volatile plaintext previews and re-checks the server; never retain a
+  // previously opened preview solely because the gallery stays mounted.
+  window.addEventListener('photobunker-grant-updated',onFocus)
   window.addEventListener('pagehide',reset)
   clock=window.setInterval(tick,5000)
 })
@@ -117,6 +121,7 @@ onUnmounted(()=>{
   document.removeEventListener('visibilitychange',visible)
   window.removeEventListener('focus',onFocus)
   window.removeEventListener('online',onFocus)
+  window.removeEventListener('photobunker-grant-updated',onFocus)
   window.removeEventListener('pagehide',reset)
   if(clock!==undefined)window.clearInterval(clock)
 })
