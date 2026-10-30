@@ -12,6 +12,19 @@ describe('R2-08: Assignment domain rules',()=>{
     }
     expect(()=>validateFields({title:'Valid',instructions:'',mode:1 as 2,retentionDays:45})).toThrow()
   })
+  it('validates encrypted planning dates and photo targets',()=>{
+    const base={title:'Work',instructions:'',mode:3 as const,retentionDays:45}
+    expect(validateFields({...base,startsAt:'2026-10-31',finishesAt:'2026-11-02',targetCount:5}))
+      .toMatchObject({startsAt:'2026-10-31',finishesAt:'2026-11-02',targetCount:5})
+    expect(validateFields(base)).toMatchObject({startsAt:null,finishesAt:null,targetCount:null})
+    for(const targetCount of [0,-1,10000,2.5])
+      expect(()=>validateFields({...base,targetCount})).toThrow('assignment.target_invalid')
+    for(const dates of [
+      {startsAt:'2026-02-30'},
+      {startsAt:'2026-11-02',finishesAt:'2026-11-01'},
+      {finishesAt:'tomorrow'},
+    ])expect(()=>validateFields({...base,...dates})).toThrow('assignment.dates_invalid')
+  })
   it('accepts exactly the five authorized transitions, completed terminal',()=>{
     const accepted=[['waiting','in_progress'],['in_progress','submitted'],
       ['submitted','needs_changes'],['submitted','completed'],['needs_changes','in_progress']] as const
