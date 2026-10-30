@@ -4,7 +4,7 @@ import {useRoute} from 'vue-router'
 import {identity,onIdentityCleanup,registerDecryptedObjectUrl,revokeDecryptedObjectUrl} from '../../identity'
 import {language} from '../../ui-preview'
 import {listRecipientThumbnails,type RecipientThumbnailRef} from '../index'
-import {readRecipientThumbnail} from '../index'
+import {readRecipientThumbnail,recheckRecipientGrant} from '../index'
 
 const route=useRoute()
 const grantId=computed(()=>String(route.params.grantId??''))
@@ -30,6 +30,7 @@ const cursor=ref<string|null>(null),finished=ref(false),loading=ref(false)
 const error=ref(''),opening=ref<string|null>(null),now=ref(Date.now())
 const urls=ref<Record<string,string>>({})
 let generation=0,stopped=false,clock:number|undefined
+let lastAccessCheck=0,checkingAccess=false
 function clearUrls(){
   for(const url of Object.values(urls.value))revokeDecryptedObjectUrl(url)
   urls.value={}
@@ -37,6 +38,7 @@ function clearUrls(){
 function reset(){
   generation++;clearUrls();items.value=[];cursor.value=null
   finished.value=false;loading.value=false;opening.value=null;error.value=''
+  lastAccessCheck=0
 }
 const release=onIdentityCleanup(reset)
 function valid(account:string,device:string,token:number){
@@ -114,8 +116,27 @@ function onOffline(){
   // Current permission can no longer be checked after disconnection.
   reset();error.value=labels.value.offline
 }
+async function refreshOpenAccess(){
+  if(checkingAccess)return
+  const active=identity.value,token=generation,grant=grantId.value
+  if(!active||!Object.keys(urls.value).length||document.hidden)return
+  checkingAccess=true
+  try{
+    await recheckRecipientGrant(grant)
+    if(!valid(active.accountId,active.deviceId,token)||grant!==grantId.value)return
+  }catch{
+    if(!stopped&&token===generation&&grant===grantId.value){
+      reset()
+      error.value=labels.value.blocked
+    }
+  }finally{checkingAccess=false}
+}
 function tick(){
   now.value=Date.now()
+  if(Object.keys(urls.value).length&&now.value-lastAccessCheck>=20000){
+    lastAccessCheck=now.value
+    void refreshOpenAccess()
+  }
   for(const item of items.value){
     if(item.expiresAt<=now.value){
       const key=item.photoId+'/'+item.assetId
