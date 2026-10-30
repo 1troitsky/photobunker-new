@@ -248,7 +248,7 @@ export async function publishRecipientThumbnail(grantId:string,photoId:string):
 }
 
 export type ThumbnailShareStatus=Readonly<{
-  operationId:string;grantId:string;photoId:string;state:'pending'|'retry'|'conflict';
+  operationId:string;grantId:string;photoId:string;state:'pending'|'retry'|'conflict'|'acknowledged';
   lastError:string|null
 }>
 export async function pendingThumbnailShares():Promise<ThumbnailShareRow[]>{
