@@ -148,6 +148,50 @@ final class PhotoSyncV1Test extends TestCase {
         $this->assertSame([],Storage::disk('photo-ciphertext')->allFiles());
         $this->getJson('/photos/v1/'.$f['photo'].'/receipt')->assertGone();
     }
+    public function test_expiry_during_partial_upload_rejects_remaining_put_and_finalize():void {
+        $f=$this->fixture();
+        $this->reserve($f)->assertOk();
+        $first=$f['assets'][0];$second=$f['assets'][1];
+        $send=function(array $asset)use($f) {
+            $bytes=$f['content'][$asset['assetId']];
+            return $this->call('PUT','/photos/v1/'.$f['photo'].'/objects/'.$asset['assetId'],
+                [],[],[],['HTTP_ORIGIN'=>'https://localhost',
+                    'CONTENT_LENGTH'=>(string)strlen($bytes),
+                    'CONTENT_TYPE'=>'application/octet-stream'],$bytes);
+        };
+        $send($first)->assertOk();
+        DB::table('photo_records')->where('id',$f['photo'])
+            ->update(['expires_at'=>now()->subSecond()->getTimestampMs()]);
+        $send($second)->assertGone();
+        $this->postJson('/photos/v1/'.$f['photo'].'/finalize',
+            ['operationId'=>$f['operation']])->assertGone();
+        $this->getJson('/photos/v1/'.$f['photo'].'/receipt')->assertGone();
+        $this->assertDatabaseHas('photo_records',['id'=>$f['photo'],'state'=>'pending']);
+        $this->assertFalse(Storage::disk('photo-ciphertext')->exists(
+            DB::table('photo_objects')->where('id',$second['assetId'])->value('object_key')));
+        app(Lifecycle::class)->mark($f['photo']);
+        app(Lifecycle::class)->cleanup($f['photo']);
+        $this->assertSame([],Storage::disk('photo-ciphertext')->allFiles());
+        $send($second)->assertGone();
+        $this->reserve($f)->assertGone();
+        $this->assertDatabaseMissing('photo_records',['id'=>$f['photo']]);
+    }
+    public function test_deletion_during_pending_upload_blocks_all_further_writes_and_receipts():void {
+        $f=$this->fixture();
+        $this->reserve($f)->assertOk();
+        $first=$f['assets'][0];
+        $bytes=$f['content'][$first['assetId']];
+        app(Lifecycle::class)->mark($f['photo']);
+        $this->call('PUT','/photos/v1/'.$f['photo'].'/objects/'.$first['assetId'],
+            [],[],[],['HTTP_ORIGIN'=>'https://localhost',
+                'CONTENT_LENGTH'=>(string)strlen($bytes),
+                'CONTENT_TYPE'=>'application/octet-stream'],$bytes)->assertGone();
+        $this->postJson('/photos/v1/'.$f['photo'].'/finalize',
+            ['operationId'=>$f['operation']])->assertGone();
+        $this->reserve($f)->assertGone();
+        $this->assertSame([],Storage::disk('photo-ciphertext')->allFiles());
+    }
+
     public function test_metadata_revision_is_idempotently_bound_to_one_operation_and_asset():void {
         $f=$this->fixture();$this->reserve($f)->assertOk();$this->upload($f);
         $this->postJson('/photos/v1/'.$f['photo'].'/finalize',
