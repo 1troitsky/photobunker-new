@@ -46,7 +46,7 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     if(row){
       if(row.operationId!==input.operationId)throw new Error('storage.photo_conflict')
       if(row.accountId!==this.scope.accountId || row.assetId!==input.assetId ||
-        row.nameId!==input.nameId ||
+        row.nameId!==input.nameId ||Boolean(row.nameDisabled)!==Boolean(input.nameDisabled) ||
         row.metadataAssetId!==input.metadataAssetId || row.expiresAt!==input.expiresAt ||
         row.revision!==input.revision || row.state!=='local')
         throw new Error('storage.operation_conflict')
@@ -162,7 +162,8 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
       const stored:PhotoRow={
         key:photoReference,accountId:this.scope.accountId,photoId:input.photoId,assetId:input.assetId,
         metadataAssetId:input.metadataAssetId,thumbnailAssetId:input.thumbnailAssetId,
-        ...(input.nameId?{nameId:input.nameId,namePending:true,leaseId:input.leaseId,nameNumber:input.nameNumber}:{namePending:true}),
+        ...(input.nameDisabled?{nameDisabled:true,namePending:false}:
+          input.nameId?{nameId:input.nameId,namePending:true,leaseId:input.leaseId,nameNumber:input.nameNumber}:{namePending:true}),
         expiresAt:input.expiresAt,revision:input.revision,
         ...(input.capture?{capture:input.capture}:{}),operationId:input.operationId,state:'local',
       }
