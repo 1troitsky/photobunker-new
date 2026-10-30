@@ -101,7 +101,9 @@ async function submit(){
   if(!identity.value||saving.value)return
   saving.value=true;error.value=''
   try{
-    const input={...form.value,title:form.value.title.trim()}
+    const input={...form.value,title:form.value.title.trim(),
+      startsAt:form.value.startsAt||null,finishesAt:form.value.finishesAt||null,
+      targetCount:String(form.value.targetCount??'')===''?null:Number(form.value.targetCount)}
     if(!input.title||input.title.length>80){error.value=copy.value.nameInvalid;return}
     if(input.instructions.length>4000){error.value=copy.value.instructionsInvalid;return}
     const service=openAssignments()
