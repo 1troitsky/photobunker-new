@@ -11,6 +11,10 @@ const route=useRoute(),router=useRouter(),ru=computed(()=>language.value==='ru')
 const rows=ref<AssignmentView[]>([]),selected=ref<AssignmentView|null>(null)
 const assignmentPhotos=ref<{photoId:string;capturedAt:number}[]>([])
 const loading=ref(false),saving=ref(false),error=ref(''),filter=ref(''),statusFilter=ref('all')
+type VisibilityFilter='active'|'archive'|'all'
+type AssignmentSort='updated'|'created'|'latest_photo'
+const visibilityFilter=ref<VisibilityFilter>('active'),sortBy=ref<AssignmentSort>('updated')
+const photoDates=ref<Record<string,number>>({})
 const form=ref<AssignmentFields>({title:'',instructions:'',mode:3,retentionDays:45,
   startsAt:null,finishesAt:null,targetCount:null})
 const serverRevision=ref<number|null>(null),serverVersion=ref<Awaited<ReturnType<typeof fetchServerAssignment>>|null>(null)
@@ -27,7 +31,9 @@ const copy=computed(()=>ru.value?{
   empty:'Заданий пока нет',emptyFiltered:'Задания не найдены',emptyHelp:'Создайте первое приватное задание.',
   instructions:'Инструкции',required:'Название',mode:'Режим сохранения',retention:'Срок хранения (дни)',
   startsAt:'Дата начала',finishesAt:'Дата окончания',targetCount:'Нужно фотографий (1–9999)',
-  progress:'Снимков на устройстве',
+  progress:'Снимков на устройстве',archive:'В архив',restoreArchive:'Вернуть из архива',
+  active:'Активные',archived:'Архив',allAssignments:'Все задания',sort:'Сортировка',
+  sortUpdated:'Последнее изменение',sortCreated:'Дата создания',sortPhoto:'Последняя фотография',
   mode1:'1 — Без сжатия (недоступен)',mode2:'2 — Сжатый оригинал сохраняется',
   mode3:'3 — Сжатый master заменяется',save:'Сохранить',cancel:'Отмена',
   edit:'Редактировать',duplicate:'Дублировать',remove:'Удалить',removeConfirm:'Удалить задание? Это необратимо.',
@@ -48,7 +54,9 @@ const copy=computed(()=>ru.value?{
   empty:'No assignments yet',emptyFiltered:'Nothing matches',emptyHelp:'Create your first private assignment.',
   instructions:'Instructions',required:'Title',mode:'Storage mode',retention:'Retention (days)',
   startsAt:'Start date',finishesAt:'End date',targetCount:'Required photos (1–9999)',
-  progress:'Photos on this device',
+  progress:'Photos on this device',archive:'Archive',restoreArchive:'Restore from archive',
+  active:'Active',archived:'Archive',allAssignments:'All assignments',sort:'Sort by',
+  sortUpdated:'Last edited',sortCreated:'Created',sortPhoto:'Latest photo',
   mode1:'1 — Camera source (unavailable)',mode2:'2 — Compressed original preserved',
   mode3:'3 — Compressed master replaced',save:'Save',cancel:'Cancel',
   edit:'Edit',duplicate:'Duplicate',remove:'Delete',removeConfirm:'Delete assignment permanently?',
@@ -66,12 +74,21 @@ const copy=computed(()=>ru.value?{
   capture:'Capture in assignment',photos:'Assignment photos',noPhotos:'No local photos yet',review:'Review',nameInvalid:'Title must be 1–80 characters.',instructionsInvalid:'Instructions must not exceed 4000 characters.',
 })
 const filtered=computed(()=>rows.value.filter(a=>
+  (visibilityFilter.value==='all'||(visibilityFilter.value==='archive')===Boolean(a.archived))&&
   (statusFilter.value==='all'||a.status===statusFilter.value)&&
-  a.title.toLocaleLowerCase().includes(filter.value.toLocaleLowerCase())))
+  a.title.toLocaleLowerCase().includes(filter.value.toLocaleLowerCase()))
+  .sort((a,b)=>{
+    const first=sortBy.value==='created'?a.createdAt:
+      sortBy.value==='latest_photo'?photoDates.value[a.id]:a.updatedAt
+    const second=sortBy.value==='created'?b.createdAt:
+      sortBy.value==='latest_photo'?photoDates.value[b.id]:b.updatedAt
+    return String(second??'').localeCompare(String(first??''))||a.id.localeCompare(b.id)
+  }))
 const syncLabel=(value:AssignmentView)=>value.sync==='conflict'?copy.value.conflict:
   value.sync==='synced'?copy.value.synced:value.sync==='retry'?copy.value.retry:copy.value.offline
 let epoch=0,ended=false,unlisten:()=>void=()=>{}
-const cleanup=onIdentityCleanup(()=>{epoch++;rows.value=[];selected.value=null;serverVersion.value=null;error.value=''})
+const cleanup=onIdentityCleanup(()=>{epoch++;rows.value=[];selected.value=null;serverVersion.value=null;
+  photoDates.value={};error.value=''})
 function hasIdentity(){return Boolean(identity.value)}
 async function reload(){
   const token=++epoch,who=identity.value
@@ -83,6 +100,7 @@ async function reload(){
     if(ended||token!==epoch||identity.value?.accountId!==who.accountId||
        identity.value?.deviceId!==who.deviceId)return
     rows.value=current
+    if(sortBy.value==='latest_photo')void loadPhotoDates(current,token,who.accountId)
     selected.value=details.value?current.find(x=>x.id===details.value)??null:null
     const photos=details.value?await listAssignmentPhotos(details.value):[]
     if(ended||token!==epoch||identity.value?.accountId!==who.accountId)return
@@ -93,7 +111,7 @@ async function reload(){
       title:selected.value.title,instructions:selected.value.instructions,
       mode:selected.value.mode,retentionDays:selected.value.retentionDays,
       startsAt:selected.value.startsAt,finishesAt:selected.value.finishesAt,
-      targetCount:selected.value.targetCount}
+      targetCount:selected.value.targetCount,archived:selected.value.archived}
   }catch(e){if(token===epoch)error.value=e instanceof Error?e.message:copy.value.error}
   finally{if(token===epoch)loading.value=false}
 }
@@ -113,6 +131,26 @@ async function submit(){
   }catch(e){error.value=e instanceof Error?e.message:copy.value.error}
   finally{saving.value=false}
 }
+async function toggleArchive(){
+  if(!selected.value||saving.value)return
+  saving.value=true;error.value=''
+  try{await openAssignments().setArchived(selected.value.id,!selected.value.archived);await reload()}
+  catch(e){error.value=e instanceof Error?e.message:copy.value.error}
+  finally{saving.value=false}
+}
+async function loadPhotoDates(current:AssignmentView[],token:number,account:string){
+  const dates:Record<string,number>={}
+  // Lazy, on-demand photo sorting. Do not query every assignment during normal navigation.
+  for(const item of current){
+    if(token!==epoch||identity.value?.accountId!==account||sortBy.value!=='latest_photo')return
+    try{const photos=await listAssignmentPhotos(item.id)
+      dates[item.id]=Math.max(0,...photos.map(p=>p.capture?.capturedAt??0))}
+    catch{/* unavailable local photo metadata sorts last */}
+  }
+  if(token===epoch&&identity.value?.accountId===account)photoDates.value=dates
+}
+watch(sortBy,value=>{if(value==='latest_photo'&&identity.value)
+  void loadPhotoDates(rows.value,epoch,identity.value.accountId)})
 async function act(next:AssignmentStatus){
   if(!selected.value||saving.value)return
   saving.value=true;error.value=''
@@ -244,6 +282,9 @@ onUnmounted(()=>{ended=true;epoch++;cleanup();unlisten()})
           </section>
           <p :class="{ 'assignment-conflict':selected.sync==='conflict' }" role="status">{{ syncLabel(selected) }}</p>
           <div class="assignment-actions">
+            <button type="button" :disabled="saving" @click="toggleArchive">
+              {{ selected.archived?copy.restoreArchive:copy.archive }}
+            </button>
             <RouterLink v-if="selected.status==='in_progress'&&selected.sync==='synced'"
               :to="{path:'/camera',query:{assignment:selected.id}}" class="primary-button">{{ copy.capture }}</RouterLink>
             <RouterLink :to="'/assignments/'+selected.id+'/edit'" class="subtle-button">{{ copy.edit }}</RouterLink>
@@ -269,6 +310,16 @@ onUnmounted(()=>{ended=true;epoch++;cleanup();unlisten()})
       <template v-else-if="!details&&!create">
         <div class="assignment-toolbar">
           <input v-model="filter" type="search" :aria-label="copy.search" :placeholder="copy.search">
+          <select v-model="visibilityFilter" :aria-label="copy.archived">
+            <option value="active">{{ copy.active }}</option>
+            <option value="archive">{{ copy.archived }}</option>
+            <option value="all">{{ copy.allAssignments }}</option>
+          </select>
+          <select v-model="sortBy" :aria-label="copy.sort">
+            <option value="updated">{{ copy.sortUpdated }}</option>
+            <option value="created">{{ copy.sortCreated }}</option>
+            <option value="latest_photo">{{ copy.sortPhoto }}</option>
+          </select>
           <select v-model="statusFilter" :aria-label="copy.status">
             <option value="all">{{ copy.all }}</option>
             <option v-for="state in allStates" :key="state" :value="state">{{ labels[state] }}</option>
@@ -283,6 +334,7 @@ onUnmounted(()=>{ended=true;epoch++;cleanup();unlisten()})
             <RouterLink :to="'/assignments/'+item.id" class="assignment-item">
               <strong>{{ item.title }}</strong>
               <span>{{ labels[item.status] }} · {{ syncLabel(item) }}</span>
+              <small v-if="item.archived">{{ copy.archived }}</small>
               <small>{{ copy.retention }}: {{ item.retentionDays }} · {{ copy.mode }}: {{ item.mode }}</small>
             </RouterLink>
           </li>
