@@ -2,9 +2,14 @@ export type AssignmentStatus='waiting'|'in_progress'|'submitted'|'needs_changes'
 export type AssignmentMode=2|3
 export type AssignmentAction='create'|'edit'|'transition'|'delete'
 export type AssignmentFields={title:string;instructions:string;mode:AssignmentMode;retentionDays:number;
-  startsAt?:string|null;finishesAt?:string|null;targetCount?:number|null;archived?:boolean}
+  startsAt?:string|null;finishesAt?:string|null;targetCount?:number|null;archived?:boolean;
+  cameraInstructions?:string;requiredGps?:boolean;requireDescription?:boolean;
+  descriptionMinLength?:number;requireTags?:boolean;allowedTags?:string[];
+  enableNameId?:boolean;allowEditing?:boolean;keepOriginal?:boolean;
+  allowDeletion?:boolean;allowBrowsing?:boolean;capturePreset?:string|null}
 export type PolicySnapshot=Readonly<{assignmentId:string;assignmentRevision:number;
-  policyRevision:number;mode:AssignmentMode;retentionDays:number}>
+  policyRevision:number;mode:AssignmentMode;retentionDays:number;
+  requiredGps?:boolean;enableNameId?:boolean}>
 export type AssignmentView=AssignmentFields&{id:string;status:AssignmentStatus;revision:number;
   policyRevision:number;sync:'local'|'retry'|'synced'|'conflict';createdAt:string|null;updatedAt:string|null}
 export const steps:Readonly<Record<AssignmentStatus,readonly AssignmentStatus[]>>={
@@ -36,16 +41,43 @@ export function validateFields(fields:AssignmentFields):AssignmentFields{
     startsAt&&finishesAt&&startsAt>finishesAt)throw Error('assignment.dates_invalid')
   if(fields.archived!==undefined&&typeof fields.archived!=='boolean')
     throw Error('assignment.archived_invalid')
+  const cameraInstructions=fields.cameraInstructions??''
+  if(typeof cameraInstructions!=='string'||cameraInstructions.length>2000||
+    illegalControl(cameraInstructions,true))throw Error('assignment.camera_instructions_invalid')
+  const booleanFields=['requiredGps','requireDescription','requireTags','enableNameId',
+    'allowEditing','keepOriginal','allowDeletion','allowBrowsing'] as const
+  for(const field of booleanFields){
+    if(fields[field]!==undefined&&typeof fields[field]!=='boolean')
+      throw Error('assignment.policy_invalid')
+  }
+  const descriptionMinLength=fields.descriptionMinLength??0
+  if(!Number.isInteger(descriptionMinLength)||descriptionMinLength<0||descriptionMinLength>2000)
+    throw Error('assignment.description_min_invalid')
+  const rawTags=fields.allowedTags??[]
+  if(!Array.isArray(rawTags)||rawTags.length>30||
+    rawTags.some(tag=>typeof tag!=='string'||tag.length>40||!tag.trim()||
+      illegalControl(tag)))throw Error('assignment.tags_invalid')
+  const allowedTags=[...new Set(rawTags.map(tag=>tag.trim()))]
+  const capturePreset=fields.capturePreset??null
+  if(capturePreset!==null&&(typeof capturePreset!=='string'||capturePreset.length>80||
+    illegalControl(capturePreset)))throw Error('assignment.preset_invalid')
   const targetCount=fields.targetCount??null
   if(targetCount!==null&&(!Number.isInteger(targetCount)||targetCount<1||targetCount>9999))
     throw Error('assignment.target_invalid')
   return{title,instructions:fields.instructions,mode:fields.mode,retentionDays:fields.retentionDays,
-    startsAt,finishesAt,targetCount,archived:fields.archived??false}
+    startsAt,finishesAt,targetCount,archived:fields.archived??false,
+    cameraInstructions,requiredGps:fields.requiredGps??false,
+    requireDescription:fields.requireDescription??false,descriptionMinLength,
+    requireTags:fields.requireTags??false,allowedTags,
+    enableNameId:fields.enableNameId??true,allowEditing:fields.allowEditing??true,
+    keepOriginal:fields.keepOriginal??false,allowDeletion:fields.allowDeletion??true,
+    allowBrowsing:fields.allowBrowsing??false,capturePreset}
 }
 export function nextStatus(before:AssignmentStatus,after:AssignmentStatus):void{
   if(!steps[before].includes(after))throw Error('assignment.invalid_transition')
 }
 export function policySnapshot(view:AssignmentView):PolicySnapshot{
   return{assignmentId:view.id,assignmentRevision:view.revision,
-    policyRevision:view.policyRevision,mode:view.mode,retentionDays:view.retentionDays}
+    policyRevision:view.policyRevision,mode:view.mode,retentionDays:view.retentionDays,
+    requiredGps:view.requiredGps??false,enableNameId:view.enableNameId??true}
 }
