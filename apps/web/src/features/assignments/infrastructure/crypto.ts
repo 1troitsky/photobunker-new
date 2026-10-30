@@ -25,12 +25,14 @@ export async function seal(grant:Grant,assignmentId:string,operationId:string,re
   const iv=crypto.getRandomValues(new Uint8Array(12))
   const ciphertext=new Uint8Array(await crypto.subtle.encrypt({
     name:'AES-GCM',iv,additionalData:aad(grant.scope.accountId,assignmentId,operationId,revision),
-  },key,utf8.encode(JSON.stringify({title:fields.title,instructions:fields.instructions}))))
+  },key,utf8.encode(JSON.stringify({title:fields.title,instructions:fields.instructions,
+    startsAt:fields.startsAt??null,finishesAt:fields.finishesAt??null,
+    targetCount:fields.targetCount??null}))))
   grant.check()
   return{version:1,accountId:grant.scope.accountId,assignmentId,operationId,revision,
     iv:encode(iv),wrappedDEK:wrapped,ciphertext:encode(ciphertext)}
 }
-export async function unseal(grant:Grant,e:AssignmentEnvelope):Promise<{title:string;instructions:string}>{
+export async function unseal(grant:Grant,e:AssignmentEnvelope):Promise<Pick<AssignmentFields,'title'|'instructions'|'startsAt'|'finishesAt'|'targetCount'>>{
   if(e.version!==1||e.accountId!==grant.scope.accountId||
     !Number.isSafeInteger(e.revision)||e.revision<1)throw Error('assignment.envelope_scope')
   const key=await grant.open(e.operationId,'assignment-v1',e.wrappedDEK)
@@ -39,7 +41,17 @@ export async function unseal(grant:Grant,e:AssignmentEnvelope):Promise<{title:st
     additionalData:aad(e.accountId,e.assignmentId,e.operationId,e.revision),
   },key,decode(e.ciphertext))
   grant.check()
-  const data=JSON.parse(decoder.decode(clear)) as {title:string;instructions:string}
+  const data=JSON.parse(decoder.decode(clear)) as {title:string;instructions:string;
+    startsAt?:unknown;finishesAt?:unknown;targetCount?:unknown}
   if(typeof data.title!=='string'||typeof data.instructions!=='string')throw Error('assignment.payload_invalid')
-  return data
+  // Accept old ciphertext without these fields; reject malformed new private data.
+  for(const date of [data.startsAt,data.finishesAt])
+    if(date!==undefined&&date!==null&&typeof date!=='string')throw Error('assignment.payload_invalid')
+  if(data.targetCount!==undefined&&data.targetCount!==null&&
+    (typeof data.targetCount!=='number'||!Number.isInteger(data.targetCount)))
+    throw Error('assignment.payload_invalid')
+  return{title:data.title,instructions:data.instructions,
+    startsAt:data.startsAt as string|null|undefined??null,
+    finishesAt:data.finishesAt as string|null|undefined??null,
+    targetCount:data.targetCount as number|null|undefined??null}
 }
