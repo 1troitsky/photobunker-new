@@ -25,6 +25,15 @@
 
 Следующий gate: [G1 — реальный HTTPS staging](06-G1-STAGING-READINESS.md) и [S01–S08](03-SCENARIO-ACCEPTANCE.md). Никаких дополнительных фиктивных PASS.
 
+## G1 local ciphertext recovery — real unit regression, not live backend
+
+[GitHub Actions #41124987607](https://github.com/1troitsky/photobunker-new/actions/runs/41124987607) on PR #42 commit `9cf9df3c4ee736f414332dfb152e5e63d044c883` — **SUCCESS**: PHP 35/35, frontend architecture/lint/TS/build, **Vitest 102/102**, Chromium **15 PASS / 6 SKIP**. Added G1 **client-only** regression `apps/web/src/features/local-storage/infrastructure/photo-edit.test.ts`:
+- Commit encrypted mode-3 capture and make one local edit **before original cloud ACK**.
+- Reopen IndexedDB and create a new vault instance. Pending queue stays ordered **upload → edit**.
+- Initial shutter ciphertext and metadata remain available for original upload, and are not replaced by the new edit; edited ciphertext remains separately decryptable.
+- No original/edit plaintext appears in persisted encrypted Blob records; account switch invalidates the old vault.
+- **Scope:** fake-indexeddb/Node WebCrypto test, not Safari/Android PWA or Garage. Real G1 S01–S08 remain **NOT VERIFIED** until same-origin HTTPS Laravel/PostgreSQL/Garage and device scenarios.
+
 ## Точка истины
 
 - [Точный файл владельца visual-ux.md (390 строк)](visual-ux-owner-2026-10-30.md) — зафиксирован напрямую из вложения; не подменять одноимённым PB1 файлом (277 строк, другая редакция).

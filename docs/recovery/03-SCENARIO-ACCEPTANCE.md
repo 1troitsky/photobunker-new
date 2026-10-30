@@ -15,6 +15,15 @@ Run [#41120434608](https://github.com/1troitsky/photobunker-new/actions/runs/411
 
 [Run #41124216234](https://github.com/1troitsky/photobunker-new/actions/runs/41124216234) на commit `9a596b15f1f492a980af849e1f727ee9840b928f` завершился SUCCESS: 35/35 PHPUnit, 101/101 Vitest, frontend architecture/lint/typecheck/build, **15/15 доступных Chromium smoke PASS**, ещё 6 тестов **SKIPPED** без реального HTTPS backend. Фикс расширения сетки профиля на 320px проверен повторным Chromium run. Не подменять эту проверку реальной работой с фото. [План стенда](06-G1-STAGING-READINESS.md).
 
+## G1 local ciphertext recovery — real unit regression, not live backend
+
+[GitHub Actions #41124987607](https://github.com/1troitsky/photobunker-new/actions/runs/41124987607) on PR #42 commit `9cf9df3c4ee736f414332dfb152e5e63d044c883` — **SUCCESS**: PHP 35/35, frontend architecture/lint/TS/build, **Vitest 102/102**, Chromium **15 PASS / 6 SKIP**. Added G1 **client-only** regression `apps/web/src/features/local-storage/infrastructure/photo-edit.test.ts`:
+- Commit encrypted mode-3 capture and make one local edit **before original cloud ACK**.
+- Reopen IndexedDB and create a new vault instance. Pending queue stays ordered **upload → edit**.
+- Initial shutter ciphertext and metadata remain available for original upload, and are not replaced by the new edit; edited ciphertext remains separately decryptable.
+- No original/edit plaintext appears in persisted encrypted Blob records; account switch invalidates the old vault.
+- **Scope:** fake-indexeddb/Node WebCrypto test, not Safari/Android PWA or Garage. Real G1 S01–S08 remain **NOT VERIFIED** until same-origin HTTPS Laravel/PostgreSQL/Garage and device scenarios.
+
 ## Единый формат evidence
 
 Для каждого сценария хранить: SHA ветки, дату/устройство/браузер, подготовку аккаунта(ов), lockfile/runtime версии, шаги и полученные сообщения/HTTP статусы, локальные и серверные ciphertext/digest проверки, screenshots/video без приватных данных, тест run/log, FAIL/RETRY/PASS, review Codex и owner UX acceptance. Никаких recovery keys, PIN, GPS, DEK или чувствительных метаданных в артефактах.

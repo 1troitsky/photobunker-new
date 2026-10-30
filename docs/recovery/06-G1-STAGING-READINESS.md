@@ -2,6 +2,15 @@
 
 **Статус:** READY TO EXECUTE после развёртывания выделенного HTTPS staging; **NOT RUN / NOT VERIFIED** для реального G1. Snapshot PR #42: `9a596b15f1f492a980af849e1f727ee9840b928f`. G0 Chromium smoke [#41124216234](https://github.com/1troitsky/photobunker-new/actions/runs/41124216234) PASS, но выполнялся **без Laravel API, PostgreSQL и S3**.
 
+## G1 local ciphertext recovery — real unit regression, not live backend
+
+[GitHub Actions #41124987607](https://github.com/1troitsky/photobunker-new/actions/runs/41124987607) on PR #42 commit `9cf9df3c4ee736f414332dfb152e5e63d044c883` — **SUCCESS**: PHP 35/35, frontend architecture/lint/TS/build, **Vitest 102/102**, Chromium **15 PASS / 6 SKIP**. Added G1 **client-only** regression `apps/web/src/features/local-storage/infrastructure/photo-edit.test.ts`:
+- Commit encrypted mode-3 capture and make one local edit **before original cloud ACK**.
+- Reopen IndexedDB and create a new vault instance. Pending queue stays ordered **upload → edit**.
+- Initial shutter ciphertext and metadata remain available for original upload, and are not replaced by the new edit; edited ciphertext remains separately decryptable.
+- No original/edit plaintext appears in persisted encrypted Blob records; account switch invalidates the old vault.
+- **Scope:** fake-indexeddb/Node WebCrypto test, not Safari/Android PWA or Garage. Real G1 S01–S08 remain **NOT VERIFIED** until same-origin HTTPS Laravel/PostgreSQL/Garage and device scenarios.
+
 ## Минимальная проверяемая среда
 
 - **Один HTTPS origin** отдаёт статический production PB2 PWA, маршруты Vue Router и same-origin Laravel API. Нельзя делать redirect во второй legacy origin; Matrix/старые PB1 Identity не запускать.
