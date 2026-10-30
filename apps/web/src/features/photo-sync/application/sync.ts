@@ -139,6 +139,9 @@ async function syncEdit(row:OutboxEntry,accountId:string,deviceId:string):Promis
   const vault=openLocalPhotoVault()
   bound(accountId,deviceId)
   try{
+    // Server revision zero does not exist until the initial encrypted capture
+    // has been durably acknowledged. Keep the local edit queued meanwhile.
+    if(await vault.initialUploadAcknowledged(row.photoId)===false)return
     const edit=await vault.editDelivery(row.operationId)
     const {ciphertext,manifest,...asset}=edit.asset
     const contract={v:1,photoId:edit.photoId,operationId:edit.operationId,

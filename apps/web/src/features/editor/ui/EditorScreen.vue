@@ -136,7 +136,7 @@ function pointerUp(event:PointerEvent){
 }
 function pointerCancel(event:PointerEvent){
  if(currentGesture.value?.id!==event.pointerId)return
- currentGesture.value=null;lastPointer=-1;schedule()
+ currentGesture.value=null;schedule()
 }
 function schedule(){
  cancelAnimationFrame(frame)

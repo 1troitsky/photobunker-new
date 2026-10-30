@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import FoundationView from './features/foundation/ui/FoundationView.vue'
-import { assignmentReleaseUrl } from './features/assignment-release'
 
 const WelcomeView = () => import('./features/ui-preview/ui/WelcomeView.vue')
 const IdentityPage = () => import('./features/identity/ui/IdentityPage.vue')
@@ -15,6 +14,7 @@ const EditorScreen = () => import('./features/editor/ui/EditorScreen.vue')
 const AssignmentsScreen = () => import('./features/assignments/ui/AssignmentsScreen.vue')
 const CollaborationScreen = () => import('./features/collaboration/ui/CollaborationScreen.vue')
 const PhotoReviewScreen = () => import('./features/photo-review/ui/ReviewScreen.vue')
+const ProfileScreen = () => import('./features/account/ui/ProfileScreen.vue')
 
 /* Shell always opens without blocking HTTP; Identity v2 is initialized lazily. */
 export const router = createRouter({
@@ -44,7 +44,7 @@ export const router = createRouter({
         { path: 'contacts', name: 'contacts', component: CollaborationScreen },
         { path: 'teams', name: 'teams', component: CollaborationScreen },
         { path: 'teams/:teamId', name: 'team-detail', component: CollaborationScreen },
-        { path: 'profile', name: 'profile', component: MainScreens },
+        { path: 'profile', name: 'profile', component: ProfileScreen },
         { path: 'editor/preview', name: 'editor-preview', component: MainScreens },
         { path: 'photo-card/preview', name: 'photo-card-preview', component: MainScreens },
         { path: 'pin/preview', name: 'pin-preview', component: MainScreens },
@@ -55,12 +55,4 @@ export const router = createRouter({
   ],
 })
 
-// Compatibility origin is a separate identity/crypto realm. Never initialize
-// a PB2 session and legacy authenticated data in the same browser navigation.
-router.beforeEach(to => {
-  const destination = assignmentReleaseUrl(to.path)
-  if (destination) {
-    window.location.assign(destination)
-    return false
-  }
-})
+

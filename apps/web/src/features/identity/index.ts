@@ -24,3 +24,6 @@ export {verifyOwnerThumbnailStatement} from './infrastructure/identity'
 
 export {currentAccountSpki,signOwnerDeviceProof} from './infrastructure/identity'
 export {verifyPinnedOwnerDeviceProof} from './infrastructure/identity'
+
+export {accountDeviceRecords} from './infrastructure/identity'
+export type {AccountDeviceRecord} from './infrastructure/identity'

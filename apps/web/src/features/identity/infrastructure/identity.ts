@@ -42,6 +42,28 @@ export async function logout():Promise<void>{
 }
 export function forgetRuntime():void{dispose();resetCsrf()}
 export async function availableDevices():Promise<LocalDevice[]> {return listDevices()}
+export type AccountDeviceRecord=Readonly<{
+  id:string;createdAt:string;revokedAt:string|null
+}>
+/** Fetch server-authoritative device revocation status, never local guesses. */
+export async function accountDeviceRecords():Promise<AccountDeviceRecord[]>{
+  const active=state.value,epoch=currentGeneration()
+  if(!active||active.offline)throw Error('identity.requires_online')
+  const response=await call<{devices:{
+    id:string;created_at:string;revoked_at:string|null
+  }[]}>('/devices')
+  assertEpoch(epoch)
+  if(active!==state.value)throw Error('identity.account_changed')
+  if(!Array.isArray(response.devices)||response.devices.length>200)
+    throw Error('identity.invalid_devices')
+  return response.devices.map(d=>{
+    if(!d||typeof d.id!=='string'||!/^[a-f0-9-]{36}$/.test(d.id)||
+      typeof d.created_at!=='string'||!(d.revoked_at===null||typeof d.revoked_at==='string'))
+      throw Error('identity.invalid_devices')
+    return{id:d.id,createdAt:d.created_at,revokedAt:d.revoked_at}
+  })
+}
+
 export async function prepareCreate():Promise<string>{
   await probeCapabilities()
   const existing=await getPending()

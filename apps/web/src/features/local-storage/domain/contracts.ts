@@ -18,6 +18,8 @@ export type PhotoHeader = Readonly<{
   accountId:string; photoId:string; assetId:string; metadataAssetId:string
   expiresAt:number; state:PhotoState; revision:number; operationId:string
   thumbnailAssetId?:string;nameId?:string;namePending?:boolean;capture?:FrozenCapture;
+  /** Immutable identifiers of initial ciphertext until initial upload ACK. */
+  initialAssetId?:string;initialThumbnailAssetId?:string;
   leaseId?:string;nameNumber?:number
   sourceAssetId?:string;editRevision?:number
   reviewState?:ReviewDecision;reviewRevision?:number

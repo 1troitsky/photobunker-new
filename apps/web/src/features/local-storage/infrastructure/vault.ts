@@ -3,6 +3,7 @@ import type { CreatePhoto, EncryptedBlobStore, PhotoRepository, PhotoSyncOutbox,
 import { db, photoKey, assetKey, writeCiphertext, readCiphertext, deleteCiphertext } from './database'
 import type { PhotoRow, ManifestRow, JournalRow, StoredOutbox } from './database'
 import { encryptAsset, decryptAsset, identifier, invalid, manifestValid, sha } from './cipher'
+import {originalUploadPointers} from '../domain/original-upload'
 import { probeStorageCapabilities } from './capabilities'
 import { BrowserTimeAuthority, clearLiveTime } from './time'
 import { MAX_CLOCK_SKEW_MS, retentionValid } from '../domain/time-policy'
@@ -395,9 +396,11 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     const mode=metadata?.mode
     invalid((mode===2||mode===3)&&metadata.policy?.mode===mode&&
       (!header.capture||header.capture.mode===mode),'editor.mode_mismatch')
+    // Local-first: a verified, durable original capture exists even before the
+    // server ACK. Its initial ciphertext must remain pinned until uploaded.
     const originalUpload=await db.outbox.get(this.scope.accountId+'/'+header.operationId)
     invalid(!!originalUpload&&originalUpload.intent==='upload'&&
-      originalUpload.state==='acknowledged','editor.upload_original_first')
+      originalUpload.state!=='cancelled','editor.original_unavailable')
     const pending=await db.outbox.where('accountId').equals(this.scope.accountId)
       .filter(x=>x.photoId===photoId&&x.intent==='edit'&&
         !['cancelled','acknowledged'].includes(x.state)).first()
@@ -447,6 +450,10 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
         await db.assets.add({key:assetKey(this.scope,photoId,assetId),...manifest})
         await db.photos.update(reference,{
           assetId,editRevision:revision,
+          // Preserve the immutable shutter-time upload set before changing the
+          // current rendition pointer. Both IDs may outlive the first edit.
+          initialAssetId:row.initialAssetId??row.assetId,
+          initialThumbnailAssetId:row.initialThumbnailAssetId??row.thumbnailAssetId,
           ...(mode===2?{sourceAssetId:row.sourceAssetId??row.assetId}:
             {thumbnailAssetId:undefined,sourceAssetId:undefined}),
         })
@@ -482,18 +489,29 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
   /** Removes only ciphertext no longer named by an active photo pointer. */
   private async cleanReplacedRenditions(photoId:string):Promise<void>{
     const current=await this.current(photoId)
+    const initialUpload=await db.outbox.get(this.scope.accountId+'/'+current.operationId)
+    const protectOriginal=!!initialUpload&&initialUpload.state!=='acknowledged'
+    const originalId=current.initialAssetId??current.assetId
+    const thumbnailId=current.initialThumbnailAssetId??current.thumbnailAssetId
     const objects=await db.assets.where('[accountId+photoId]')
       .equals([this.scope.accountId,photoId]).toArray()
     for(const a of objects){
       this.check()
       if(!['master','edit','thumbnail'].includes(a.kind)||
         a.assetId===current.assetId||a.assetId===current.sourceAssetId||
-        a.assetId===current.thumbnailAssetId)continue
+        a.assetId===current.thumbnailAssetId||
+        protectOriginal&&(a.assetId===originalId||a.assetId===thumbnailId))continue
       // Do not delete until another master/edit has been stored and CAS committed.
       await deleteCiphertext(a.backend,a.storageKey)
       await db.assets.delete(a.key)
       if(a.kind==='thumbnail')await db.thumbnailCache.delete(a.key)
     }
+  }
+  async initialUploadAcknowledged(photoId:string):Promise<boolean>{
+    const photo=await this.current(photoId)
+    const row=await db.outbox.get(this.scope.accountId+'/'+photo.operationId)
+    this.check()
+    return row?.intent==='upload'&&row.state==='acknowledged'
   }
   async editDelivery(operationId:string):Promise<{photoId:string;operationId:string;
     expectedRevision:number;mode:2|3;asset:SyncSnapshot['assets'][number]}>{
@@ -719,12 +737,24 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     if(photo.operationId!==operationId||photo.expiresAt!==task.expiresAt)throw new Error('sync.operation_conflict')
     const records=await db.assets.where('[accountId+photoId]')
       .equals([this.scope.accountId,photo.photoId]).toArray()
-    const baseline=records.filter(x=>x.kind!=='metadata'||x.revision===1)
-    invalid(baseline.length>=2&&baseline.length<=3,'sync.assets_incomplete')
+    // The visible asset pointer may already be a local offline edit. Upload
+    // precisely the original shutter-time ciphertext, never a later revision.
+    const {primary:initialAssetId,thumbnail:initialThumbId,
+      metadata:initialMetadataId}=originalUploadPointers(photo)
+    const baseline=records.filter(x=>
+      x.assetId===initialAssetId||
+      x.assetId===initialMetadataId&&x.kind==='metadata'&&x.revision===1||
+      initialThumbId!==undefined&&x.assetId===initialThumbId)
+    invalid(baseline.length>=2&&baseline.length<=3&&
+      baseline.some(x=>x.assetId===initialAssetId&&
+        (x.kind==='master'||x.kind==='original'))&&
+      baseline.some(x=>x.kind==='metadata'&&x.revision===1),
+      'sync.assets_incomplete')
     const assets=[]
     for(const asset of baseline){
       this.check()
-      invalid(asset.assetId===photo.assetId||asset.kind==='metadata'||asset.assetId===photo.thumbnailAssetId,'sync.asset_unexpected')
+      invalid(asset.assetId===initialAssetId||asset.kind==='metadata'&&asset.revision===1||
+        asset.assetId===initialThumbId,'sync.asset_unexpected')
       const {key,backend,storageKey,...manifest}=asset
       void key
       manifestValid({...manifest,backend,storageKey},{scope:this.scope,photoId:photo.photoId,assetId:asset.assetId})
@@ -776,6 +806,8 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
       else await db.outbox.update(key,{state:'acknowledged',receiptHash,
         attempts:0,nextAttemptAt:0,lastError:undefined})
     })
+    // Safe after acknowledged original receipt; never prune baseline earlier.
+    await this.cleanReplacedRenditions(data.photoId)
   }
   async syncState(photoId:string):Promise<SyncState>{
     this.check();identifier(photoId)
