@@ -104,7 +104,12 @@ function visible(){
   if(document.hidden){reset();return}
   void load()
 }
-function onFocus(){if(!document.hidden){clearUrls();void load()}}
+function onFocus(){
+  if(document.hidden)return
+  // Cancel any in-flight list/decrypt request from the previous grant epoch.
+  // load() starts a fresh server authorization check and revokes old blobs.
+  reset();void load()
+}
 function onOffline(){
   // Current permission can no longer be checked after disconnection.
   reset();error.value=labels.value.offline
