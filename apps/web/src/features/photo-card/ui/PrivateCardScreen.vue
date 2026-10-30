@@ -25,6 +25,7 @@ const txt=computed(()=>ru.value?{
   copyFailed:'Не удалось скопировать',sync:'Хранение',local:'На устройстве',
   synced:'В облаке',retry:'Ожидает повтор',syncing:'Синхронизация',
   unavailable:'Карточка не найдена или не может быть расшифрована.',retryAction:'Повторить',
+  shareThumbnail:'Передать миниатюру участнику',
 }:{
   title:'Photo Card',private:'Owner only · local',
   note:'This card is private. External links and shared access are not available yet.',
@@ -37,6 +38,7 @@ const txt=computed(()=>ru.value?{
   copyFailed:'Could not copy',sync:'Storage',local:'On device',
   synced:'In cloud',retry:'Retry pending',syncing:'Syncing',
   unavailable:'Card not found or cannot be decrypted.',retryAction:'Retry',
+  shareThumbnail:'Share thumbnail with participant',
 })
 const visible=computed(()=>card.value&&identity.value&&card.value.expiresAt>now.value?card.value:null)
 const expired=computed(()=>!!card.value&&card.value.expiresAt<=now.value)
@@ -118,6 +120,9 @@ watch([photoId,()=>identity.value?.accountId,()=>identity.value?.deviceId],()=>{
         <div><dt>{{ txt.sync }}</dt><dd>{{ visible.sync==='synced'?txt.synced:
           visible.sync==='syncing'?txt.syncing:visible.sync==='retry'?txt.retry:txt.local }}</dd></div>
       </dl>
+      <RouterLink v-if="visible.assignmentId&&visible.sync==='synced'"
+        :to="{path:'/assignment-grants',query:{assignment:visible.assignmentId,photo:visible.photoId}}"
+        class="subtle-button private-card-share">{{ txt.shareThumbnail }}</RouterLink>
       <section v-if="location" class="private-card-location">
         <h3>{{ txt.gps }}</h3>
         <button type="button" class="subtle-button" :aria-expanded="reveal"
@@ -143,6 +148,7 @@ watch([photoId,()=>identity.value?.accountId,()=>identity.value?.deviceId],()=>{
 .private-card-facts dt{color:var(--muted);font-size:11px;margin-bottom:6px}
 .private-card-facts dd{font-size:13px;margin:0;overflow-wrap:anywhere}
 .private-card-location{margin-top:24px}
+.private-card-share{display:inline-flex;margin-top:18px}
 .private-card-location>div{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:12px}
 .private-card-location code{overflow-wrap:anywhere;font-size:12px}
 @media(max-width:600px){.private-card{padding:16px}.private-card-facts{grid-template-columns:1fr}}
