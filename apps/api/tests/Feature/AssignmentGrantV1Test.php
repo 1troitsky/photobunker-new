@@ -26,7 +26,7 @@ final class AssignmentGrantV1Test extends TestCase {
             'mode'=>3,'retention_days'=>1,'cipher_envelope'=>'{}',
             'last_operation_id'=>(string)Str::uuid(),'created_at'=>now(),'updated_at'=>now(),
         ]);
-        $this->be('owner');
+        $this->selectActor('owner');
     }
     private function makeActor(string $name):void {
         $signer=openssl_pkey_new(['private_key_type'=>OPENSSL_KEYTYPE_EC,'curve_name'=>'prime256v1']);
@@ -45,7 +45,7 @@ final class AssignmentGrantV1Test extends TestCase {
         ]);
         $this->accounts[$name]=$account;$this->devices[$name]=$device;$this->signers[$name]=$signer;
     }
-    private function be(string $name):void {
+    private function selectActor(string $name):void {
         $this->actor=$name;
         $this->withSession([
             'identity_account'=>$this->accounts[$name],
@@ -102,10 +102,10 @@ final class AssignmentGrantV1Test extends TestCase {
         $this->assertSame(1,DB::table('assignment_grants_v1')->count());
         $this->getJson('/assignments/v1/grants')->assertOk()
             ->assertJsonPath('grants.0.sealedKey',null);
-        $this->be('outsider');
+        $this->selectActor('outsider');
         $this->getJson('/assignments/v1/grants')->assertOk()->assertJsonCount(0,'grants');
         $this->send($this->action('accept',$grant,1))->assertNotFound();
-        $this->be('guest');
+        $this->selectActor('guest');
         $this->getJson('/assignments/v1/grants')->assertOk()
             ->assertJsonPath('grants.0.codeHash',str_repeat('c',64))
             ->assertJsonPath('grants.0.state','pending');
@@ -113,9 +113,9 @@ final class AssignmentGrantV1Test extends TestCase {
         $this->send($accept)->assertOk()->assertJsonPath('generation',2);
         $this->send($accept)->assertOk()->assertJsonPath('generation',2);
         $this->send($this->action('accept',$grant,1))->assertStatus(409);
-        $this->be('owner');
+        $this->selectActor('owner');
         $this->send($this->action('revoke',$grant,2))->assertOk()->assertJsonPath('state','revoked');
-        $this->be('guest');
+        $this->selectActor('guest');
         $this->getJson('/assignments/v1/grants')->assertOk()->assertJsonCount(0,'grants');
         $this->assertDatabaseHas('assignment_grants_v1',['id'=>$grant,'generation'=>3,'state'=>'revoked']);
     }
@@ -128,16 +128,16 @@ final class AssignmentGrantV1Test extends TestCase {
             'account_id'=>$this->accounts['owner'],'blocked_account_id'=>$this->accounts['guest'],
             'created_at'=>now(),
         ]);
-        $this->be('guest');
+        $this->selectActor('guest');
         $this->getJson('/assignments/v1/grants')->assertOk()->assertJsonCount(0,'grants');
         $this->send($this->action('accept',$grant,1))->assertForbidden();
-        $this->be('owner');
+        $this->selectActor('owner');
         DB::table('contact_blocks_v1')->delete();
         DB::table('assignment_grants_v1')->where('id',$grant)
             ->update(['invite_expires_at'=>now()->getTimestampMs()-1]);
-        $this->be('guest');
+        $this->selectActor('guest');
         $this->send($this->action('accept',$grant,1))->assertStatus(409);
-        $this->be('owner');
+        $this->selectActor('owner');
         $this->send($this->action('invite',(string)Str::uuid()))->assertOk();
         $this->send($this->action('invite',(string)Str::uuid(),0,null,
             now()->getTimestampMs()-1))->assertStatus(422);
@@ -160,7 +160,7 @@ final class AssignmentGrantV1Test extends TestCase {
             'signature'=>P::encode(random_bytes(64)),'receipt'=>'{}',
             'created_at'=>now(),'updated_at'=>now(),
         ]);
-        $this->be('guest');
+        $this->selectActor('guest');
         $this->send($this->action('accept',$grant,1))->assertOk();
         $this->getJson('/photos/v1/'.$photo.'/manifests')->assertNotFound();
         $this->getJson('/photos/v1/'.$photo.'/objects/'.Str::uuid())->assertNotFound();
@@ -221,15 +221,15 @@ final class AssignmentGrantV1Test extends TestCase {
     public function test_recipient_thumbnail_read_requires_signed_current_grant_and_feature_gate():void{
         $this->acceptedContact();$grant=(string)Str::uuid();
         $this->send($this->action('invite',$grant))->assertOk();
-        $this->be('guest');
+        $this->selectActor('guest');
         $this->send($this->action('accept',$grant,1))->assertOk();
-        $this->be('owner');[$photo,$asset,$expiry,$digest]=$this->thumbnailFixture();
+        $this->selectActor('owner');[$photo,$asset,$expiry,$digest]=$this->thumbnailFixture();
         $route="/photos/v1/shared/grants/$grant/photos/$photo/assets/$asset";
         $publish=$this->shareStatement($grant,$photo,$asset,$expiry,$digest);
         $this->putJson($route,$publish)->assertOk()->assertJsonPath('accepted',true);
         $this->putJson($route,$publish)->assertOk()->assertJsonPath('replayed',true);
         $this->assertSame(1,DB::table('photo_recipient_keys_v1')->count());
-        $this->be('guest');
+        $this->selectActor('guest');
         // Feature remains disabled unless security verification explicitly enables it.
         $this->getJson($route)->assertNotFound();
         config()->set('photo_sync.recipient_thumbnail_reads_enabled',true);
@@ -243,16 +243,16 @@ final class AssignmentGrantV1Test extends TestCase {
         $this->getJson($route)->assertNotFound();
         DB::table('identity_devices')->where('id',$this->devices['owner'])
             ->update(['revoked_at'=>null]);
-        $this->be('owner');
+        $this->selectActor('owner');
         $this->send($this->action('revoke',$grant,2))->assertOk();
-        $this->be('guest');
+        $this->selectActor('guest');
         $this->getJson($route)->assertNotFound();
     }
     public function test_thumbnail_share_rejects_wrong_digest_wrong_actor_block_and_original_kind():void{
         $this->acceptedContact();$grant=(string)Str::uuid();
         $this->send($this->action('invite',$grant))->assertOk();
-        $this->be('guest');$this->send($this->action('accept',$grant,1))->assertOk();
-        $this->be('owner');[$photo,$asset,$expiry,$digest]=$this->thumbnailFixture();
+        $this->selectActor('guest');$this->send($this->action('accept',$grant,1))->assertOk();
+        $this->selectActor('owner');[$photo,$asset,$expiry,$digest]=$this->thumbnailFixture();
         $route="/photos/v1/shared/grants/$grant/photos/$photo/assets/$asset";
         $bad=$this->shareStatement($grant,$photo,$asset,$expiry,str_repeat('b',64));
         $this->putJson($route,$bad)->assertNotFound();
@@ -273,13 +273,13 @@ final class AssignmentGrantV1Test extends TestCase {
         ]);
         $this->putJson($route,$statement)->assertNotFound();
         DB::table('contact_blocks_v1')->delete();
-        $this->be('guest');
+        $this->selectActor('guest');
         $this->putJson($route,$statement)->assertUnauthorized();
-        $this->be('owner');
+        $this->selectActor('owner');
         $this->putJson($route,$statement)->assertOk();
         config()->set('photo_sync.recipient_thumbnail_reads_enabled',true);
-        $this->be('outsider');$this->getJson($route)->assertNotFound();
-        $this->be('guest');$this->getJson($route)->assertOk();
+        $this->selectActor('outsider');$this->getJson($route)->assertNotFound();
+        $this->selectActor('guest');$this->getJson($route)->assertOk();
         DB::table('photo_records')->where('id',$photo)->update(['expires_at'=>now()->getTimestampMs()-1]);
         $this->getJson($route)->assertNotFound();
     }
@@ -288,14 +288,14 @@ final class AssignmentGrantV1Test extends TestCase {
     public function test_recipient_list_is_acl_scoped_paginated_and_disabled_by_default():void{
         $this->acceptedContact();$grant=(string)Str::uuid();
         $this->send($this->action('invite',$grant))->assertOk();
-        $this->be('guest');$this->send($this->action('accept',$grant,1))->assertOk();
-        $this->be('owner');
+        $this->selectActor('guest');$this->send($this->action('accept',$grant,1))->assertOk();
+        $this->selectActor('owner');
         [$photo,$asset,$expiry,$digest]=$this->thumbnailFixture();
         $path="/photos/v1/shared/grants/$grant/photos/$photo/assets/$asset";
         $this->putJson($path,$this->shareStatement($grant,$photo,$asset,$expiry,$digest))
             ->assertOk();
         $list="/photos/v1/shared/grants/$grant/photos";
-        $this->be('guest');
+        $this->selectActor('guest');
         $this->getJson($list)->assertNotFound();
         config()->set('photo_sync.recipient_thumbnail_reads_enabled',true);
         $this->getJson($list)->assertOk()->assertJsonCount(1,'photos')
@@ -305,12 +305,12 @@ final class AssignmentGrantV1Test extends TestCase {
         // A raw photo ID is not a cursor and must be rejected.
         $this->getJson($list.'?after='.$photo.'&limit=1')->assertUnprocessable();
         // A second authorized photo yields an encrypted, account-bound cursor.
-        $this->be('owner');
+        $this->selectActor('owner');
         [$second,$secondAsset,$secondExpiry,$secondDigest]=$this->thumbnailFixture();
         $this->putJson("/photos/v1/shared/grants/$grant/photos/$second/assets/$secondAsset",
             $this->shareStatement($grant,$second,$secondAsset,$secondExpiry,$secondDigest))
             ->assertOk();
-        $this->be('guest');
+        $this->selectActor('guest');
         $first=$this->getJson($list.'?limit=1')->assertOk()
             ->assertJsonCount(1,'photos');
         $token=$first->json('nextCursor');
@@ -324,8 +324,8 @@ final class AssignmentGrantV1Test extends TestCase {
 
         $this->getJson($list.'?after=invalid&limit=1')->assertUnprocessable();
         $this->getJson($list.'?after='.$photo.'&limit=99')->assertUnprocessable();
-        $this->be('outsider');$this->getJson($list)->assertNotFound();
-        $this->be('guest');
+        $this->selectActor('outsider');$this->getJson($list)->assertNotFound();
+        $this->selectActor('guest');
         DB::table('contact_blocks_v1')->insert([
             'account_id'=>$this->accounts['guest'],
             'blocked_account_id'=>$this->accounts['owner'],'created_at'=>now(),
@@ -335,8 +335,8 @@ final class AssignmentGrantV1Test extends TestCase {
         DB::table('assignments')->where('id',$this->assignment)->update(['status'=>'completed']);
         $this->getJson($list)->assertOk()->assertJsonCount(0,'photos');
         DB::table('assignments')->where('id',$this->assignment)->update(['status'=>'in_progress']);
-        $this->be('owner');$this->send($this->action('revoke',$grant,2))->assertOk();
-        $this->be('guest');$this->getJson($list)->assertNotFound();
+        $this->selectActor('owner');$this->send($this->action('revoke',$grant,2))->assertOk();
+        $this->selectActor('guest');$this->getJson($list)->assertNotFound();
     }
 
 }

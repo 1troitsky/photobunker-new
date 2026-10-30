@@ -34,9 +34,12 @@ jobs:
           failures=0
           for task in test:architecture lint typecheck test:unit build; do
             echo "=== pnpm ${task} ===" | tee -a web-check.log
-            pnpm "${task}" 2>&1 | tee -a web-check.log
-            status=${PIPESTATUS[0]}
-            if [ "${status}" -ne 0 ]; then failures=1; fi
+            if pnpm "${task}" 2>&1 | tee -a web-check.log; then
+              echo "PASS: pnpm ${task}" | tee -a web-check.log
+            else
+              echo "FAIL: pnpm ${task}" | tee -a web-check.log
+              failures=1
+            fi
           done
           exit "${failures}"
       - name: Keep diagnostics from failed checks
@@ -69,13 +72,19 @@ jobs:
         run: |
           failures=0
           echo '=== PHP lint ===' | tee -a php-check.log
-          find app tests database -name '*.php' -print0 | xargs -0 -n1 php -l 2>&1 | tee -a php-check.log
-          status=${PIPESTATUS[0]}
-          if [ "${status}" -ne 0 ]; then failures=1; fi
+          if find app tests database -name '*.php' -print0 | xargs -0 -n1 php -l 2>&1 | tee -a php-check.log; then
+            echo 'PASS: PHP syntax' | tee -a php-check.log
+          else
+            echo 'FAIL: PHP syntax' | tee -a php-check.log
+            failures=1
+          fi
           echo '=== PHPUnit ===' | tee -a php-check.log
-          php vendor/bin/phpunit 2>&1 | tee -a php-check.log
-          status=${PIPESTATUS[0]}
-          if [ "${status}" -ne 0 ]; then failures=1; fi
+          if php vendor/bin/phpunit 2>&1 | tee -a php-check.log; then
+            echo 'PASS: PHPUnit' | tee -a php-check.log
+          else
+            echo 'FAIL: PHPUnit' | tee -a php-check.log
+            failures=1
+          fi
           exit "${failures}"
       - name: Keep diagnostics from failed checks
         if: always()
