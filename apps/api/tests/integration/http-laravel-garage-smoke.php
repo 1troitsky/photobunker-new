@@ -56,6 +56,39 @@ function requestG1(string $method,string $path,array|string|null $body=null):arr
     $parsed=json_decode($raw,true);
     return [$status,is_array($parsed)?$parsed:[], $raw];
 }
+/**
+ * Two independent HTTP connections attempt the same immutable object key.
+ * Server must never create two operations or acknowledge a corrupt object.
+ */
+function parallelPutG1(string $path,string $body):array{
+    global $origin,$cookie,$token;
+    $mh=curl_multi_init();$handles=[];
+    foreach([0,1] as $_){
+        $ch=curl_init($origin.$path);
+        curl_setopt_array($ch,[
+            CURLOPT_CUSTOMREQUEST=>'PUT',CURLOPT_RETURNTRANSFER=>true,
+            CURLOPT_HTTPHEADER=>[
+                'Accept: application/json','Origin: '.$origin,
+                'X-CSRF-TOKEN: '.$token,'Content-Type: application/octet-stream',
+            ],
+            CURLOPT_COOKIEFILE=>$cookie,CURLOPT_CONNECTTIMEOUT=>4,
+            CURLOPT_TIMEOUT=>20,CURLOPT_POSTFIELDS=>$body,
+        ]);
+        curl_multi_add_handle($mh,$ch);$handles[]=$ch;
+    }
+    do {
+        $code=curl_multi_exec($mh,$running);
+        if($running)curl_multi_select($mh,0.2);
+    }while($running&&$code===CURLM_OK);
+    $statuses=[];
+    foreach($handles as $ch){
+        $statuses[]=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);
+        expectG1(curl_errno($ch)===0,'parallel PUT transport error');
+        curl_multi_remove_handle($mh,$ch);curl_close($ch);
+    }
+    curl_multi_close($mh);
+    return $statuses;
+}
 function statusG1(array $result,int $status,string $label):array {
     expectG1($result[0]===$status,$label.' expected HTTP '.$status.' got '.$result[0]);
     return $result[1];
@@ -150,12 +183,17 @@ try {
         'signature'=>signG1("photobunker.photo-sync.v1\n".$contract,$devicePrivate)];
     statusG1(requestG1('POST','/photos/v1/reserve',$reservation),200,'reserve');
     statusG1(requestG1('POST','/photos/v1/reserve',$reservation),200,'reserve replay');
-    $pairs=[[$master,$masterBytes],[$meta,$metaBytes]];
-    foreach($pairs as [$asset,$bytes]){
-        $path='/photos/v1/'.$photo.'/objects/'.$asset['assetId'];
-        statusG1(requestG1('PUT',$path,$bytes),200,'ciphertext PUT');
-        statusG1(requestG1('PUT',$path,$bytes),200,'lost PUT ACK retry');
-    }
+    $masterPath='/photos/v1/'.$photo.'/objects/'.$master['assetId'];
+    $concurrent=parallelPutG1($masterPath,$masterBytes);
+    expectG1(in_array(200,$concurrent,true),'parallel upload yielded no success');
+    foreach($concurrent as $status)
+        expectG1(in_array($status,[200,409],true),'unsafe parallel PUT response '.$status);
+    statusG1(requestG1('PUT',$masterPath,$masterBytes),200,'master lost PUT ACK retry');
+    $metaPath='/photos/v1/'.$photo.'/objects/'.$meta['assetId'];
+    statusG1(requestG1('PUT',$metaPath,$metaBytes),200,'metadata PUT');
+    statusG1(requestG1('PUT',$metaPath,$metaBytes),200,'metadata PUT idempotent retry');
+    expectG1(DB::table('photo_records')->where('id',$photo)->count()===1,
+        'parallel PUT created duplicate photo');
     $final=statusG1(requestG1('POST','/photos/v1/'.$photo.'/finalize',
         ['operationId'=>$op]),200,'finalize');
     expectG1(($final['receipt']['photoId']??null)===$photo,'invalid finalize receipt');
