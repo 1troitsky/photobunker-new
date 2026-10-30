@@ -12,3 +12,6 @@ export { default as StorageDiagnostics } from './ui/StorageDiagnostics.vue'
 
 export {takeReservedName,reserveNameRange,claimName} from './infrastructure/names'
 export {decryptRecipientThumbnail} from './infrastructure/recipient-thumbnail'
+
+// Canonical asset cipher encoder for cross-feature interoperability and crypto vectors.
+export {encryptAsset} from './infrastructure/cipher'
