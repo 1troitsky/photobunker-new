@@ -27,12 +27,12 @@ export async function seal(grant:Grant,assignmentId:string,operationId:string,re
     name:'AES-GCM',iv,additionalData:aad(grant.scope.accountId,assignmentId,operationId,revision),
   },key,utf8.encode(JSON.stringify({title:fields.title,instructions:fields.instructions,
     startsAt:fields.startsAt??null,finishesAt:fields.finishesAt??null,
-    targetCount:fields.targetCount??null}))))
+    targetCount:fields.targetCount??null,archived:fields.archived??false}))))
   grant.check()
   return{version:1,accountId:grant.scope.accountId,assignmentId,operationId,revision,
     iv:encode(iv),wrappedDEK:wrapped,ciphertext:encode(ciphertext)}
 }
-export async function unseal(grant:Grant,e:AssignmentEnvelope):Promise<Pick<AssignmentFields,'title'|'instructions'|'startsAt'|'finishesAt'|'targetCount'>>{
+export async function unseal(grant:Grant,e:AssignmentEnvelope):Promise<Pick<AssignmentFields,'title'|'instructions'|'startsAt'|'finishesAt'|'targetCount'|'archived'>>{
   if(e.version!==1||e.accountId!==grant.scope.accountId||
     !Number.isSafeInteger(e.revision)||e.revision<1)throw Error('assignment.envelope_scope')
   const key=await grant.open(e.operationId,'assignment-v1',e.wrappedDEK)
@@ -42,7 +42,7 @@ export async function unseal(grant:Grant,e:AssignmentEnvelope):Promise<Pick<Assi
   },key,decode(e.ciphertext))
   grant.check()
   const data=JSON.parse(decoder.decode(clear)) as {title:string;instructions:string;
-    startsAt?:unknown;finishesAt?:unknown;targetCount?:unknown}
+    startsAt?:unknown;finishesAt?:unknown;targetCount?:unknown;archived?:unknown}
   if(typeof data.title!=='string'||typeof data.instructions!=='string')throw Error('assignment.payload_invalid')
   // Accept old ciphertext without these fields; reject malformed new private data.
   for(const date of [data.startsAt,data.finishesAt])
@@ -50,8 +50,10 @@ export async function unseal(grant:Grant,e:AssignmentEnvelope):Promise<Pick<Assi
   if(data.targetCount!==undefined&&data.targetCount!==null&&
     (typeof data.targetCount!=='number'||!Number.isInteger(data.targetCount)))
     throw Error('assignment.payload_invalid')
+  if(data.archived!==undefined&&typeof data.archived!=='boolean')throw Error('assignment.payload_invalid')
   return{title:data.title,instructions:data.instructions,
     startsAt:data.startsAt as string|null|undefined??null,
     finishesAt:data.finishesAt as string|null|undefined??null,
-    targetCount:data.targetCount as number|null|undefined??null}
+    targetCount:data.targetCount as number|null|undefined??null,
+    archived:data.archived as boolean|undefined??false}
 }
