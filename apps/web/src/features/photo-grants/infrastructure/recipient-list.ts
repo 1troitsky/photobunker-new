@@ -1,5 +1,5 @@
-import {identity,photoRequest} from '../../identity'
-import {fetchAssignmentGrants} from './grants'
+import {photoRequest} from '../../identity'
+import {requireRecipientScope} from './recipient-scope'
 
 export type RecipientThumbnailRef=Readonly<{photoId:string;assetId:string;expiresAt:number}>
 export type RecipientThumbnailPage=Readonly<{
@@ -7,10 +7,6 @@ export type RecipientThumbnailPage=Readonly<{
 }>
 const cursorPattern=/^[A-Za-z0-9_-]{40,768}$/
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/
-function same(account:string,device:string){
-  if(identity.value?.accountId!==account||identity.value?.deviceId!==device||
-    identity.value.offline)throw Error('grant.identity_changed')
-}
 export function validateThumbnailPage(
   value:unknown,previousCursor:string|null,now:number,
 ):RecipientThumbnailPage{
@@ -39,17 +35,11 @@ export async function listRecipientThumbnails(
 ):Promise<RecipientThumbnailPage>{
   if(!uuid.test(grantId)||after!==null&&!cursorPattern.test(after))
     throw Error('grant.invalid_scope')
-  const active=identity.value
-  if(!active||active.offline||!navigator.onLine)throw Error('grant.offline')
-  const {accountId,deviceId}=active
-  const grants=await fetchAssignmentGrants()
-  same(accountId,deviceId)
-  if(!grants.some(x=>x.grantId===grantId&&x.state==='accepted'&&x.recipientId===accountId))
-    throw Error('grant.denied')
+  const scope=await requireRecipientScope(grantId)
   const route='/shared/grants/'+grantId+'/photos'+
     (after?'?after='+after+'&limit=30':'')
   const response=await photoRequest(route)
-  same(accountId,deviceId)
+  scope.check()
   if(!response.ok)throw Error('grant.photo_list_http_'+response.status)
   const data=await response.json() as unknown
   same(accountId,deviceId)
