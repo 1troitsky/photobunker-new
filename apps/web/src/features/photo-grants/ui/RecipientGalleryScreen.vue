@@ -68,6 +68,9 @@ async function load(more=false){
     now.value=Date.now()
   }catch(e){
     if(valid(active.accountId,active.deviceId,token)){
+      // An uncertain server failure cannot uphold permission to keep plaintext
+      // previews visible. Keep opaque items for retry, but clear every blob URL.
+      clearUrls()
       const denied=e instanceof Error&&(
         e.message==='grant.denied'||/grant\.photo_list_http_(401|403|404|410)$/.test(e.message))
       if(denied){
@@ -93,6 +96,9 @@ async function show(item:RecipientThumbnailRef){
     urls.value={...urls.value,[key]:url}
   }catch(e){
     if(valid(active.accountId,active.deviceId,token)){
+      // An uncertain server failure cannot uphold permission to keep plaintext
+      // previews visible. Keep opaque items for retry, but clear every blob URL.
+      clearUrls()
       const denied=e instanceof Error&&(
         e.message==='grant.read_no_grant'||e.message==='grant.denied'||
         /grant\.read_http_(401|403|404|410)$/.test(e.message))
