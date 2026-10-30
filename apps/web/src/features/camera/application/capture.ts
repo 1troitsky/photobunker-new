@@ -58,13 +58,21 @@ export class CaptureSession{
     if(performance.now()-started>MAX_PENDING_MS)throw new Error('camera.frame_stale')
     let capturedAt:number
     try{capturedAt=this.time.now()}catch{throw new Error('camera.untrusted_time_retry_capture')}
+    if(policy.source==='assignment'){
+      const day=new Date(capturedAt).toISOString().slice(0,10)
+      if(policy.startsAt&&day<policy.startsAt||policy.finishesAt&&day>policy.finishesAt)
+        throw Error('camera.assignment_outside_dates')
+    }
     const metadata=snapshot(policy,capturedAt,
       {width:converted.sourceWidth,height:converted.sourceHeight},
       {width:converted.outputWidth,height:converted.outputHeight},method)
     const thumbnail=await thumbnailWebp(converted.blob).catch(()=>null)
     this.check(ticket)
     const gps=captureGps(metadata.capturedAt)
-    const reserved=await takeReservedName().catch(()=>null)
+    if(policy.source==='assignment'&&policy.requiredGps&&!gps)
+      throw Error('camera.gps_required')
+    const reserved=policy.source==='assignment'&&policy.enableNameId===false?
+      null:await takeReservedName().catch(()=>null)
     this.check(ticket)
     const frozen=policy.source==='assignment'?{
       assignmentId:policy.assignmentId,assignmentRevision:policy.assignmentRevision,
