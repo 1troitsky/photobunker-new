@@ -62,6 +62,8 @@ final class AssignmentV1Test extends TestCase{
         $first=$this->command($id,0,'create','waiting');
         $this->send($id,$first)->assertOk()->assertJsonPath('revision',1);
         $this->send($id,$first)->assertOk()->assertJsonPath('replayed',true);
+        $this->getJson('/assignments/v1/'.$id.'/progress')->assertOk()
+          ->assertJsonPath('assignmentId',$id)->assertJsonPath('confirmed',0);
         $this->assertSame(1,DB::table('assignment_history')->where('assignment_id',$id)->count());
         $this->getJson('/assignments/v1/list')->assertOk()->assertJsonCount(1,'assignments')
           ->assertDontSee('private title');
