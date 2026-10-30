@@ -77,6 +77,22 @@ final class AssignmentV1Test extends TestCase{
         $this->assertDatabaseHas('assignments',['id'=>$id,'policy_revision'=>2,'retention_days'=>1,'mode'=>2]);
         $this->assertSame(3,DB::table('assignment_history')->where('assignment_id',$id)->count());
     }
+    public function test_private_policy_change_and_archive_of_completed_assignment_are_signed_and_revisioned():void{
+        $id=(string)Str::uuid();
+        $this->send($id,$this->command($id,0,'create','waiting'))->assertOk();
+        // E2EE-only policy changed without publicly visible mode/TTL mutation.
+        $this->send($id,$this->command($id,1,'edit','waiting',3,45,2))->assertOk();
+        $this->assertDatabaseHas('assignments',['id'=>$id,'policy_revision'=>2]);
+        $this->send($id,$this->command($id,2,'transition','in_progress',3,45,2))->assertOk();
+        $this->send($id,$this->command($id,3,'transition','submitted',3,45,2))->assertOk();
+        $this->send($id,$this->command($id,4,'transition','completed',3,45,2))->assertOk();
+        $this->send($id,$this->command($id,5,'edit','completed',3,45,2))->assertStatus(422);
+        $archive=$this->command($id,5,'archive','completed',3,45,2);
+        $this->send($id,$archive)->assertOk()->assertJsonPath('revision',6);
+        $this->send($id,$archive)->assertOk()->assertJsonPath('replayed',true);
+        $this->assertDatabaseHas('assignments',['id'=>$id,'status'=>'completed','policy_revision'=>2]);
+        $this->send($id,$this->command($id,6,'archive','completed',2,45,2))->assertStatus(422);
+    }
     public function test_delete_retains_tombstone_and_rejects_late_write():void{
         $id=(string)Str::uuid();
         $this->send($id,$this->command($id,0,'create','waiting'))->assertOk();
