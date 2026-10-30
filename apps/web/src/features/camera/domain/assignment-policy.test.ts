@@ -8,8 +8,8 @@ describe('R2-10 frozen assignment capture',()=>{
   it('records immutable mode/revision and expires from trusted capture timestamp',()=>{
     const policy=assignmentPolicy(s()),at=1_795_000_000_000
     const meta=snapshot(policy,at,{width:1200,height:800},{width:1200,height:800},'video-frame')
-    expect(meta.policy).toEqual({policyVersion:1,source:'assignment',assignmentId:s().assignmentId,
-      assignmentRevision:3,policyRevision:2,mode:3,ttlDays:7})
+    expect(meta.policy).toMatchObject({policyVersion:1,source:'assignment',assignmentId:s().assignmentId,
+      assignmentRevision:3,policyRevision:2,mode:3,ttlDays:7,requiredGps:false,enableNameId:true})
     expect(meta.expiresAt).toBe(at+7*86400000)
     expect(Object.isFrozen(meta.policy)).toBe(true)
     expect(()=>assignmentPolicy({...s(),mode:1 as unknown as 3})).toThrow()
