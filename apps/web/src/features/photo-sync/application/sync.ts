@@ -249,7 +249,7 @@ async function execute(force=false):Promise<void>{
         bound(accountId,deviceId)
         await runOne(snapshot,accountId,deviceId)
         const header=await vault.readHeader(row.photoId)
-        if(header && (!header.nameId||header.namePending)){try{await claimName(row.photoId,header.nameId??null,header.leaseId,header.nameNumber)}catch{/* retry on gallery refresh */}}
+        if(header && !header.nameDisabled && (!header.nameId||header.namePending)){try{await claimName(row.photoId,header.nameId??null,header.leaseId,header.nameNumber)}catch{/* retry on gallery refresh */}}
         publish({photoId:row.photoId,state:await vault.syncState(row.photoId)})
       }catch(e){
         if((e instanceof Error && e.message==='sync.account_changed')||!identity.value)return
