@@ -23,9 +23,12 @@ export async function seal(grant:Grant,assignmentId:string,operationId:string,re
   fields:AssignmentFields):Promise<AssignmentEnvelope>{
   const {key,wrapped}=await grant.create(operationId,'assignment-v1')
   const iv=crypto.getRandomValues(new Uint8Array(12))
+  const privateFields:Partial<AssignmentFields>={...validateFields(fields)}
+  delete privateFields.mode
+  delete privateFields.retentionDays
   const ciphertext=new Uint8Array(await crypto.subtle.encrypt({
     name:'AES-GCM',iv,additionalData:aad(grant.scope.accountId,assignmentId,operationId,revision),
-  },key,utf8.encode(JSON.stringify((({mode:_mode,retentionDays:_days,...privateFields})=>privateFields)(validateFields(fields))))))
+  },key,utf8.encode(JSON.stringify(privateFields))))
   grant.check()
   return{version:1,accountId:grant.scope.accountId,assignmentId,operationId,revision,
     iv:encode(iv),wrappedDEK:wrapped,ciphertext:encode(ciphertext)}
@@ -44,9 +47,11 @@ export async function unseal(grant:Grant,e:AssignmentEnvelope):Promise<Omit<Assi
     typeof data.title!=='string'||typeof data.instructions!=='string')
     throw Error('assignment.payload_invalid')
   // Private payload stays authenticated; legacy ciphertext receives safe defaults.
-  const {mode:_mode,retentionDays:_days,...fields}=validateFields({
+  const fields:Partial<AssignmentFields>={...validateFields({
     ...data,title:data.title,instructions:data.instructions,
     mode:2,retentionDays:1,
-  })
-  return fields
+  })}
+  delete fields.mode
+  delete fields.retentionDays
+  return fields as Omit<AssignmentFields,'mode'|'retentionDays'>
 }
