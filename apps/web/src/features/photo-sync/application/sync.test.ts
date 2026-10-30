@@ -9,6 +9,7 @@ const fx=vi.hoisted(()=>{
     receipt,call:vi.fn(),signed:vi.fn(async()=> 'p1363-signature'),
     pending:vi.fn(),delivery:vi.fn(),ack:vi.fn(),retry:vi.fn(),manualRetry:vi.fn(),
     revoke:vi.fn(),reconcile:vi.fn(async()=>{}),
+    initialUploadAcknowledged:vi.fn(),editDelivery:vi.fn(),ackEdit:vi.fn(),conflictEdit:vi.fn(),syncState:vi.fn(),
     refresh:vi.fn(async()=>{}),cacheThumbnail:vi.fn(async()=>{}),
   }
 })
@@ -22,6 +23,8 @@ vi.mock('../../local-storage',()=>({
   openLocalPhotoVault:()=>({
     pending:fx.pending,delivery:fx.delivery,acknowledge:fx.ack,failDelivery:fx.retry,retry:fx.manualRetry,
     revokeFromServer:fx.revoke,
+    initialUploadAcknowledged:fx.initialUploadAcknowledged,editDelivery:fx.editDelivery,
+    acknowledgeEdit:fx.ackEdit,markEditConflict:fx.conflictEdit,syncState:fx.syncState,
     reconcile:fx.reconcile,cacheThumbnail:fx.cacheThumbnail,
     readHeader:vi.fn(async()=>null),
     time:{status:()=>({trusted:true}),now:()=>1800000000000,
@@ -48,6 +51,10 @@ describe('R2-05 one R2-04 outbox, lost-ACK and retry protocol',()=>{
     fx.ack.mockResolvedValue(undefined)
     fx.retry.mockResolvedValue(undefined)
     fx.manualRetry.mockResolvedValue(undefined)
+    fx.initialUploadAcknowledged.mockResolvedValue(true)
+    fx.ackEdit.mockResolvedValue(undefined)
+    fx.conflictEdit.mockResolvedValue(undefined)
+    fx.syncState.mockResolvedValue('synced')
   })
   it('canonical contract contains ciphertext hashes/manifests but no decoded image',()=>{
     const encoded=signedContract({
@@ -83,6 +90,51 @@ describe('R2-05 one R2-04 outbox, lost-ACK and retry protocol',()=>{
     expect(fx.manualRetry).toHaveBeenCalledWith(fx.receipt.operationId)
     expect(fx.ack).toHaveBeenCalledWith(fx.receipt.operationId,fx.receipt)
   })
+
+  it('does not send an offline edit before the original capture is acknowledged',async()=>{
+    fx.pending.mockResolvedValueOnce([{photoId:fx.receipt.photoId,
+      operationId:fx.receipt.operationId,intent:'edit',nextAttemptAt:0}])
+    fx.initialUploadAcknowledged.mockResolvedValueOnce(false)
+    await flushPhotoSync()
+    expect(fx.call).not.toHaveBeenCalled()
+    expect(fx.editDelivery).not.toHaveBeenCalled()
+    expect(fx.ackEdit).not.toHaveBeenCalled()
+    expect(fx.retry).not.toHaveBeenCalled()
+  })
+  it('reconciles an already committed edit after lost finalize ACK without re-uploading ciphertext',async()=>{
+    const assetId=fx.receipt.assets[0].assetId
+    fx.pending.mockResolvedValueOnce([{photoId:fx.receipt.photoId,
+      operationId:fx.receipt.operationId,intent:'edit',nextAttemptAt:0}])
+    fx.editDelivery.mockResolvedValueOnce({
+      photoId:fx.receipt.photoId,operationId:fx.receipt.operationId,
+      expectedRevision:0,mode:3,asset:{assetId,kind:'master',revision:1,
+        bytes:4,sha256:'a'.repeat(64),manifest:{version:1},
+        ciphertext:new Blob([Uint8Array.of(1,2,3,4)])},
+    })
+    fx.call.mockResolvedValueOnce(json({state:'active',assetId,revision:1}))
+    await flushPhotoSync()
+    expect(fx.call).toHaveBeenCalledTimes(1)
+    expect(fx.call.mock.calls[0]?.[0]).toBe('/'+fx.receipt.photoId+'/edits/reserve')
+    expect(fx.ackEdit).toHaveBeenCalledWith(fx.receipt.operationId,assetId,1)
+    expect(fx.retry).not.toHaveBeenCalled()
+  })
+  it('does not acknowledge an edit when server reports a conflicting revision',async()=>{
+    const assetId=fx.receipt.assets[0].assetId
+    fx.pending.mockResolvedValueOnce([{photoId:fx.receipt.photoId,
+      operationId:fx.receipt.operationId,intent:'edit',nextAttemptAt:0}])
+    fx.editDelivery.mockResolvedValueOnce({
+      photoId:fx.receipt.photoId,operationId:fx.receipt.operationId,
+      expectedRevision:0,mode:2,asset:{assetId,kind:'edit',revision:1,
+        bytes:4,sha256:'a'.repeat(64),manifest:{version:1},
+        ciphertext:new Blob([Uint8Array.of(1,2,3,4)])},
+    })
+    fx.call.mockResolvedValueOnce(json({error:'conflict'},409))
+    await flushPhotoSync()
+    expect(fx.conflictEdit).toHaveBeenCalledWith(fx.receipt.operationId)
+    expect(fx.ackEdit).not.toHaveBeenCalled()
+    expect(fx.call).toHaveBeenCalledTimes(1)
+  })
+
   it('410 from authenticated receipt cannot reupload or acknowledge an expired photo',async()=>{
     fx.call.mockResolvedValueOnce(json({error:'gone'},410))
     await flushPhotoSync()
