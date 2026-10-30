@@ -25,7 +25,7 @@ export async function seal(grant:Grant,assignmentId:string,operationId:string,re
   const iv=crypto.getRandomValues(new Uint8Array(12))
   const ciphertext=new Uint8Array(await crypto.subtle.encrypt({
     name:'AES-GCM',iv,additionalData:aad(grant.scope.accountId,assignmentId,operationId,revision),
-  },key,utf8.encode(JSON.stringify((({mode:_mode,retentionDays:_days,...privateFields})=>privateFields)(validateFields(fields)))))
+  },key,utf8.encode(JSON.stringify((({mode:_mode,retentionDays:_days,...privateFields})=>privateFields)(validateFields(fields))))))
   grant.check()
   return{version:1,accountId:grant.scope.accountId,assignmentId,operationId,revision,
     iv:encode(iv),wrappedDEK:wrapped,ciphertext:encode(ciphertext)}
