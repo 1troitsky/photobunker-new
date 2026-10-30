@@ -1,16 +1,13 @@
-import {identity,photoRequest,verifyPinnedOwnerDeviceProof} from '../../identity'
+import {photoRequest,verifyPinnedOwnerDeviceProof} from '../../identity'
 import {decryptRecipientThumbnail,type CloudAsset} from '../../local-storage'
-import {fetchAssignmentGrants,getLocalGrantIdentity} from './grants'
+import {getLocalGrantIdentity} from './grants'
+import {requireRecipientScope} from './recipient-scope'
 import {openRecipientKey,type KeyContext,type RecipientKeyEnvelope} from './key-envelope'
 
 type ResponseEnvelope={photoId:string;assetId:string;bytes:number;sha256:string;
   manifest:CloudAsset['manifest'];contract:string;signature:string;signerSpki:string;
   ownerAccountSpki:string;ownerRootSignature:string;publisherDeviceId:string}
 
-function guard(account:string,device:string):void{
-  if(identity.value?.accountId!==account||identity.value?.deviceId!==device||
-    identity.value.offline)throw Error('grant.identity_changed')
-}
 function error(reason:string):never{throw Error('grant.read_'+reason)}
 function checkedStatement(input:ResponseEnvelope,grantId:string,photoId:string,assetId:string,
   ownerId:string,recipientId:string,generation:number,assignmentId:string):{
@@ -43,48 +40,44 @@ function checkedStatement(input:ResponseEnvelope,grantId:string,photoId:string,a
  * and ciphertext SHA-256 are checked; current live server ACL controls each read.
  */
 export async function readRecipientThumbnail(grantId:string,photoId:string,assetId:string):Promise<Blob>{
-  const who=identity.value
-  if(!who||who.offline||!navigator.onLine)error('offline')
-  const {accountId,deviceId}=who
-  const grant=(await fetchAssignmentGrants()).find(x=>x.grantId===grantId)
-  guard(accountId,deviceId)
-  if(!grant||grant.recipientId!==accountId||grant.state!=='accepted')error('no_grant')
+  const scope=await requireRecipientScope(grantId)
+  const {grant,accountId}=scope
   const path='/shared/grants/'+grantId+'/photos/'+photoId+'/assets/'+assetId
   const result=await photoRequest(path)
-  guard(accountId,deviceId)
+  scope.check()
   if(!result.ok)error('http_'+result.status)
   const info=await result.json() as ResponseEnvelope
-  guard(accountId,deviceId)
+  scope.check()
   if(info.photoId!==photoId||info.assetId!==assetId)error('wrong_asset')
   const local=await getLocalGrantIdentity(grant)
-  guard(accountId,deviceId)
+  scope.check()
   if(!local.ownerAccountSpki)error('untrusted_legacy_invitation')
   if(!await verifyPinnedOwnerDeviceProof(info.contract,info.signature,info.signerSpki,
     info.ownerAccountSpki,info.publisherDeviceId,info.ownerRootSignature,
     local.ownerAccountSpki))error('author_provenance')
-  guard(accountId,deviceId)
+  scope.check()
   const {envelope,context}=checkedStatement(info,grantId,photoId,assetId,
     grant.ownerId,accountId,grant.generation,grant.assignmentId)
   const raw=await openRecipientKey(local.secret,envelope,context,Date.now())
-  guard(accountId,deviceId)
+  scope.check()
   let key:CryptoKey
   try{key=await crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['decrypt'])}
   finally{raw.fill(0)}
   if(Date.now()>=context.expiresAt)error('expired')
   const response=await photoRequest(path+'/ciphertext')
-  guard(accountId,deviceId)
+  scope.check()
   if(!response.ok)error('http_'+response.status)
   const ciphertext=await response.blob()
-  guard(accountId,deviceId)
+  scope.check()
   if(ciphertext.size!==info.bytes)error('length')
   const hash=new Uint8Array(await crypto.subtle.digest('SHA-256',await ciphertext.arrayBuffer()))
   const actual=[...hash].map(b=>b.toString(16).padStart(2,'0')).join('')
-  guard(accountId,deviceId)
+  scope.check()
   if(actual!==info.sha256)error('digest')
   if(Date.now()>=context.expiresAt)error('expired')
   const plaintext=await decryptRecipientThumbnail(grant.ownerId,info.manifest,ciphertext,key,
-    ()=>{guard(accountId,deviceId);if(Date.now()>=context.expiresAt)error('expired')})
-  guard(accountId,deviceId)
+    ()=>{scope.check();if(Date.now()>=context.expiresAt)error('expired')})
+  scope.check()
   if(Date.now()>=context.expiresAt)error('expired')
   return plaintext
 }
