@@ -4,10 +4,18 @@ import {useRouter} from 'vue-router'
 import {identity,IdentityPanel,accountDeviceRecords,revokeDevice,logout,
   onIdentityCleanup,type AccountDeviceRecord} from '../../identity'
 import {StorageDiagnostics} from '../../local-storage'
+import {gpsStatus,subscribeGps,setGpsEnabled,requestGps} from '../../gallery'
 import {language,setLanguage,setTheme,theme} from '../../ui-preview'
 const ru=computed(()=>language.value==='ru'),router=useRouter()
 const devices=ref<AccountDeviceRecord[]>([]),loading=ref(false),busy=ref(false)
 const error=ref(''),notice=ref(''),copied=ref(false)
+const gps=ref(gpsStatus()),gpsAllowed=ref(gpsStatus()!=='disabled')
+let releaseGps:()=>void=()=>{}
+function toggleGps(){
+  gpsAllowed.value=!gpsAllowed.value
+  setGpsEnabled(gpsAllowed.value)
+}
+
 const copy=computed(()=>ru.value?{
   title:'Мой аккаунт',anonymous:'Анонимный аккаунт PB2',locked:'Аккаунт закрыт',
   create:'Создать аккаунт',recover:'Восстановить доступ',devices:'Доверенные устройства',
@@ -21,6 +29,10 @@ const copy=computed(()=>ru.value?{
   teams:'Команды',storage:'Защищённое хранилище',security:'Ключи и устройства',
   error:'Операция не выполнена',noDevices:'Нет доступных данных об устройствах',
   noLegacy:'Единая Identity PB2. Старый аккаунт и Matrix не используются.',
+  location:'Геолокация',locationHint:'Только после разрешения браузера и только пока приложение открыто.',
+  gpsEnable:'Включить GPS',gpsDisable:'Отключить GPS',gpsPrompt:'Запросить разрешение',
+  gpsReady:'Координаты получены',gpsDenied:'Доступ запрещён',gpsUnavailable:'GPS недоступен',
+  gpsWaiting:'Ожидание разрешения',
 }:{
   title:'My account',anonymous:'Anonymous PB2 account',locked:'Account locked',
   create:'Create account',recover:'Recover access',devices:'Trusted devices',
@@ -34,6 +46,10 @@ const copy=computed(()=>ru.value?{
   teams:'Teams',storage:'Encrypted storage',security:'Keys and devices',
   error:'Action failed',noDevices:'No device information available',
   noLegacy:'Single PB2 identity. No legacy account or Matrix runtime.',
+  location:'Location',locationHint:'Only with browser permission and while the app is open.',
+  gpsEnable:'Enable GPS',gpsDisable:'Disable GPS',gpsPrompt:'Request permission',
+  gpsReady:'GPS fix ready',gpsDenied:'Permission denied',gpsUnavailable:'GPS unavailable',
+  gpsWaiting:'Waiting for permission',
 })
 let epoch=0,stopped=false
 const cleanup=onIdentityCleanup(()=>{epoch++;devices.value=[];error.value='';notice.value=''})
@@ -73,8 +89,12 @@ async function leave(){
   catch(e){error.value=e instanceof Error?e.message:copy.value.error}
   finally{busy.value=false}
 }
-onMounted(()=>{stopped=false;void refresh()})
-onUnmounted(()=>{stopped=true;epoch++;cleanup()})
+onMounted(()=>{
+  stopped=false
+  releaseGps=subscribeGps(value=>{gps.value=value;gpsAllowed.value=value!=='disabled'})
+  void refresh()
+})
+onUnmounted(()=>{stopped=true;epoch++;cleanup();releaseGps()})
 watch(identity,()=>{devices.value=[];void refresh()})
 </script>
 <template>
@@ -123,6 +143,21 @@ watch(identity,()=>{devices.value=[];void refresh()})
       </section>
       <section class="pb-section"><h2>{{copy.storage}}</h2><StorageDiagnostics /></section>
     </template>
+    <section class="pb-section">
+      <h2>{{copy.location}}</h2>
+      <p class="pb-muted">{{copy.locationHint}}</p>
+      <div class="pb-profile-controls">
+        <button type="button" :aria-pressed="gpsAllowed" @click="toggleGps">
+          {{gpsAllowed?copy.gpsDisable:copy.gpsEnable}}
+        </button>
+        <button v-if="gpsAllowed&&identity&&gps==='permission'" type="button"
+          @click="requestGps">{{copy.gpsPrompt}}</button>
+      </div>
+      <p v-if="gps==='ready'" role="status">{{copy.gpsReady}}</p>
+      <p v-if="gps==='denied'" role="status">{{copy.gpsDenied}}</p>
+      <p v-if="gps==='unavailable'" role="status">{{copy.gpsUnavailable}}</p>
+      <p v-if="gps==='permission'" role="status">{{copy.gpsWaiting}}</p>
+    </section>
     <section class="pb-section"><h2>{{copy.appearance}}</h2>
       <div class="pb-profile-controls">
         <label>{{copy.theme}}

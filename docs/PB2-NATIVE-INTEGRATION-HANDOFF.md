@@ -4,7 +4,7 @@
 
 - The old external compatibility origin redirect was removed from the PB2 router. PB2 initializes one Identity v2, one local encrypted photo vault, and its own photo/assignment/collaboration/grant workers independently of VITE_ASSIGNMENT_RELEASE_ORIGIN.
 - The assignment-release navigation adapter now returns allowlisted local PB2 route paths only. It rejects unsupported legacy paths and all external URLs. No PB1 or Matrix session/bootstrap is required to navigate.
-- Native PB2 account screen adapted from legacy Settings and AccountSecurity UX: account ID, server-backed current/revoked device listing, device revoke, logout, language, appearance, links to PB2 photos/camera/assignments/contacts/teams and encrypted storage diagnostics. It does not import PB1 key stores/PINs.
+- Native PB2 account screen adapted from legacy Settings and AccountSecurity UX: account ID, server-backed current/revoked device listing, device revoke, logout, language, appearance, optional geolocation permission/preferences using PB2's single GPS service, links to PB2 photos/camera/assignments/contacts/teams and encrypted storage diagnostics. It does not import PB1 key stores/PINs.
 - R2-11 editor: removed undefined lastPointer reference. A photo can now be edited and its new rendition durably encrypted while the initial encrypted capture is still queued offline. Immutable initial capture asset IDs are frozen before local mode-3 replacement. The original ciphertext must remain until initial upload ACK; worker defers sending edit to server until original upload has been acknowledged. No unsafe server-side CAS bypass. Tests for original snapshot IDs and internal-only native navigation.
 
 ## Legacy evidence and status
@@ -15,7 +15,7 @@
 | views/GalleryView.vue, photo-browser/* | features/gallery, photo-browser | Native; export parity not verified |
 | views/AssignmentView.vue, studio/model.ts | features/assignments | Native; advanced legacy rules missing |
 | views/ContactsView.vue, TeamView.vue | features/collaboration | Native; membership does not confer photo access |
-| views/AccountSecurityView.vue, SettingsView.vue | features/account | Device/account/settings UX adapted; PIN/presence not ported |
+| views/AccountSecurityView.vue, SettingsView.vue | features/account | Device/account/GPS/settings UX adapted; PIN/presence not ported |
 | views/PhotoEditView.vue | features/editor | Offline save/build defects repaired; real tests NOT RUN |
 | views/PhotoCardView.vue | features/photo-card | Native private card; recipient scopes incomplete |
 | legacy identity, keys, Matrix bootstrap | none | REJECT: cannot share PB1 identity, ciphertext or Matrix |
