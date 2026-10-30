@@ -94,3 +94,35 @@ jobs:
           path: apps/api/php-check.log
           if-no-files-found: ignore
           retention-days: 7
+
+  browser:
+    name: Chromium production bundle smoke (no backend)
+    needs: web
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Playwright Chromium + system libraries
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Compile production PWA bundle
+        run: pnpm build
+      - name: Browser UI smoke; live server scenarios skip explicitly
+        run: pnpm test:browser
+      - name: Preserve browser traces if tests fail
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pb2-browser-smoke-failures
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
