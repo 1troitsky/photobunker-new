@@ -31,7 +31,7 @@ vi.mock('../../local-storage',()=>({
       restoreFromStorage:fx.refresh,refreshFromServer:fx.refresh},
   }),
 }))
-import {flushPhotoSync,signedContract} from './sync'
+import {flushPhotoSync,readCloudCiphertext,signedContract} from './sync'
 const json=(payload:unknown,status=200)=>new Response(JSON.stringify(payload),{
   status,headers:{'Content-Type':'application/json'},
 })
@@ -141,5 +141,48 @@ describe('R2-05 one R2-04 outbox, lost-ACK and retry protocol',()=>{
     expect(fx.ack).not.toHaveBeenCalled()
     expect(fx.signed).not.toHaveBeenCalled()
     expect(fx.revoke).toHaveBeenCalledWith(fx.receipt.photoId)
+  })
+})
+
+describe('G1 cloud ciphertext read-back integrity and expiry',()=>{
+  beforeEach(()=>{vi.clearAllMocks()})
+  const bytes=Uint8Array.of(1,2,3,4)
+  async function receipt(){
+    const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)))
+      .map(n=>n.toString(16).padStart(2,'0')).join('')
+    return {...fx.receipt,assets:[{...fx.receipt.assets[0],kind:'master' as const,bytes:4,sha256}]}
+  }
+  it('returns only ciphertext after matching length and SHA-256',async()=>{
+    const valid=await receipt()
+    fx.call.mockResolvedValueOnce(new Response(bytes))
+    const result=await readCloudCiphertext(valid.photoId,valid.assets[0].assetId,valid)
+    expect(Array.from(new Uint8Array(await result.arrayBuffer()))).toEqual([1,2,3,4])
+    expect(fx.call).toHaveBeenCalledTimes(1)
+  })
+  it('rejects wrong photo or unlisted asset before making a network request',async()=>{
+    const valid=await receipt()
+    await expect(readCloudCiphertext('wrong-photo',valid.assets[0].assetId,valid))
+      .rejects.toThrow('sync.receipt_mismatch')
+    await expect(readCloudCiphertext(valid.photoId,'unknown-asset',valid))
+      .rejects.toThrow('sync.asset_denied')
+    expect(fx.call).not.toHaveBeenCalled()
+  })
+  it('rejects truncated server ciphertext before returning bytes',async()=>{
+    const valid=await receipt()
+    fx.call.mockResolvedValueOnce(new Response(Uint8Array.of(1,2)))
+    await expect(readCloudCiphertext(valid.photoId,valid.assets[0].assetId,valid))
+      .rejects.toThrow('sync.readback_length')
+  })
+  it('rejects same-length tampered ciphertext by digest',async()=>{
+    const valid=await receipt()
+    fx.call.mockResolvedValueOnce(new Response(Uint8Array.of(1,2,3,5)))
+    await expect(readCloudCiphertext(valid.photoId,valid.assets[0].assetId,valid))
+      .rejects.toThrow('sync.readback_corrupt')
+  })
+  it('fails closed when server denies expired ciphertext with 410',async()=>{
+    const valid=await receipt()
+    fx.call.mockResolvedValueOnce(json({error:'expired'},410))
+    await expect(readCloudCiphertext(valid.photoId,valid.assets[0].assetId,valid))
+      .rejects.toThrow('sync.http_410')
   })
 })
