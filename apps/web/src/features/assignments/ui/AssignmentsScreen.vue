@@ -44,6 +44,7 @@ const copy=computed(()=>ru.value?{
   keepOriginal:'Сохранять оригинал',allowDeletion:'Разрешить удаление',
   allowBrowsing:'Разрешить просмотр участникам (только после проверки прав)',
   capturePreset:'Название пресета камеры',advanced:'Дополнительные правила съёмки',
+  reusePreset:'Скопировать настройки другого задания',noPreset:'Выберите задание-образец',
   mode1:'1 — Без сжатия (недоступен)',mode2:'2 — Сжатый оригинал сохраняется',
   mode3:'3 — Сжатый master заменяется',save:'Сохранить',cancel:'Отмена',
   edit:'Редактировать',duplicate:'Дублировать',remove:'Удалить',removeConfirm:'Удалить задание? Это необратимо.',
@@ -74,6 +75,7 @@ const copy=computed(()=>ru.value?{
   keepOriginal:'Preserve original',allowDeletion:'Allow deletion',
   allowBrowsing:'Allow participant browsing (only after permission review)',
   capturePreset:'Camera preset name',advanced:'Additional capture rules',
+  reusePreset:'Copy another assignment’s camera settings',noPreset:'Choose an assignment template',
   mode1:'1 — Camera source (unavailable)',mode2:'2 — Compressed original preserved',
   mode3:'3 — Compressed master replaced',save:'Save',cancel:'Cancel',
   edit:'Edit',duplicate:'Duplicate',remove:'Delete',removeConfirm:'Delete assignment permanently?',
@@ -215,6 +217,17 @@ async function retryChanges(){
     serverVersion.value=null;await reload();void flushAssignments()}
   catch(e){error.value=e instanceof Error?e.message:copy.value.error}
 }
+function copyCaptureTemplate(id:string){
+  const source=rows.value.find(row=>row.id===id)
+  if(!source)return
+  form.value={...form.value,
+    cameraInstructions:source.cameraInstructions,requiredGps:source.requiredGps,
+    requireDescription:source.requireDescription,descriptionMinLength:source.descriptionMinLength,
+    requireTags:source.requireTags,allowedTags:[...(source.allowedTags??[])],
+    enableNameId:source.enableNameId,allowEditing:source.allowEditing,
+    keepOriginal:source.keepOriginal,allowDeletion:source.allowDeletion,
+    allowBrowsing:source.allowBrowsing,capturePreset:source.capturePreset||source.title}
+}
 function resetForm(){form.value={title:'',instructions:'',mode:3,retentionDays:45,
   startsAt:null,finishesAt:null,targetCount:null,cameraInstructions:'',requiredGps:false,
   requireDescription:false,descriptionMinLength:0,requireTags:false,allowedTags:[],
@@ -271,6 +284,14 @@ onUnmounted(()=>{ended=true;epoch++;cleanup();unlisten()})
         </label>
         <fieldset class="assignment-policy-fields">
           <legend>{{ copy.advanced }}</legend>
+          <label v-if="rows.some(row=>row.id!==details)">{{ copy.reusePreset }}
+            <select :value="''" @change="copyCaptureTemplate(($event.target as HTMLSelectElement).value)">
+              <option value="">{{ copy.noPreset }}</option>
+              <option v-for="source in rows.filter(row=>row.id!==details)" :key="source.id" :value="source.id">
+                {{ source.title }}
+              </option>
+            </select>
+          </label>
           <label>{{ copy.cameraInstructions }}
             <textarea v-model="form.cameraInstructions" rows="3" maxlength="2000"></textarea>
           </label>
