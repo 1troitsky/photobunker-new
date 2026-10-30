@@ -1,6 +1,5 @@
 import {describe,it,expect} from 'vitest'
-import {encryptAsset} from '../../local-storage/infrastructure/cipher'
-import {decryptRecipientThumbnail} from '../../local-storage/infrastructure/recipient-thumbnail'
+import {encryptAsset,decryptRecipientThumbnail} from '../../local-storage'
 import {createPhotoGrantCode,photoGrantCodeHash,sealRecipientKey,openRecipientKey,
  type KeyContext,sealGrantSecret,openGrantSecret,sealGrantSecretPinned,openGrantSecretPinned} from './key-envelope'
 const id=()=>crypto.randomUUID()
@@ -107,6 +106,7 @@ describe('two independent accounts: exact encrypted photo bytes through invitati
       {name:'AES-GCM'},false,['decrypt'])
     transported.fill(0)
     const {backend:_backend,storageKey:_key,...cloudManifest}=manifest
+    void _backend;void _key
     const output=await decryptRecipientThumbnail(owner,cloudManifest,encrypted.blob,
       recipientKey,()=>{})
     expect([...new Uint8Array(await output.arrayBuffer())])
