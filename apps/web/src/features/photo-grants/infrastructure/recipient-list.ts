@@ -42,6 +42,6 @@ export async function listRecipientThumbnails(
   scope.check()
   if(!response.ok)throw Error('grant.photo_list_http_'+response.status)
   const data=await response.json() as unknown
-  same(accountId,deviceId)
+  scope.check()
   return validateThumbnailPage(data,after,Date.now())
 }
