@@ -65,9 +65,14 @@ async function load(more=false){
     finished.value=page.nextCursor===null
     now.value=Date.now()
   }catch(e){
-    if(valid(active.accountId,active.deviceId,token))
-      error.value=e instanceof Error&&e.message.endsWith('_404')?
-        labels.value.blocked:labels.value.error
+    if(valid(active.accountId,active.deviceId,token)){
+      const denied=e instanceof Error&&(
+        e.message==='grant.denied'||/grant\.photo_list_http_(401|403|404|410)$/.test(e.message))
+      if(denied){
+        // Even failed pagination must not leave older decrypted previews visible.
+        reset();error.value=labels.value.blocked
+      }else error.value=labels.value.error
+    }
   }finally{if(token===generation)loading.value=false}
 }
 async function show(item:RecipientThumbnailRef){
@@ -85,9 +90,14 @@ async function show(item:RecipientThumbnailRef){
     if(!valid(active.accountId,active.deviceId,token)){revokeDecryptedObjectUrl(url);return}
     urls.value={...urls.value,[key]:url}
   }catch(e){
-    if(valid(active.accountId,active.deviceId,token))
-      error.value=e instanceof Error&&e.message.endsWith('_404')?
-        labels.value.blocked:labels.value.error
+    if(valid(active.accountId,active.deviceId,token)){
+      const denied=e instanceof Error&&(
+        e.message==='grant.read_no_grant'||
+        /grant\.read_http_(401|403|404|410)$/.test(e.message))
+      if(denied){
+        reset();error.value=labels.value.blocked
+      }else error.value=labels.value.error
+    }
   }finally{if(token===generation)opening.value=null}
 }
 function visible(){
