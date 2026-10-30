@@ -17,7 +17,7 @@ export type ReviewSnapshot=Readonly<{photoId:string;assignmentId:string;state:Re
 export type PhotoHeader = Readonly<{
   accountId:string; photoId:string; assetId:string; metadataAssetId:string
   expiresAt:number; state:PhotoState; revision:number; operationId:string
-  thumbnailAssetId?:string;nameId?:string;namePending?:boolean;capture?:FrozenCapture;
+  thumbnailAssetId?:string;nameId?:string;namePending?:boolean;nameDisabled?:boolean;capture?:FrozenCapture;
   /** Immutable identifiers of initial ciphertext until initial upload ACK. */
   initialAssetId?:string;initialThumbnailAssetId?:string;
   leaseId?:string;nameNumber?:number
@@ -42,7 +42,7 @@ export type CreatePhoto = Readonly<{
   kind:Exclude<AssetKind,'metadata'>; revision:1
   capturedAt:number; expiresAt:number; pixels:Blob; metadata:unknown
   thumbnail?:Blob;thumbnailAssetId?:string
-  nameId?:string;leaseId?:string;nameNumber?:number;capture?:FrozenCapture
+  nameId?:string;leaseId?:string;nameNumber?:number;nameDisabled?:boolean;capture?:FrozenCapture
 }>
 export type TimeStatus = Readonly<{
   trusted:boolean; now:number|null; reason:'fresh'|'restored'|'missing'|'reload'|'corrupt'|'wall_jump'|'monotonic_lost'
