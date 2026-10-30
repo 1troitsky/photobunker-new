@@ -162,6 +162,7 @@ jobs:
             sleep 1
           done
           node="$(docker exec pb2-g1-garage /garage node id -q | tr -d '\r\n')"
+          node="${node%%@*}"
           test -n "$node"
           docker exec pb2-g1-garage /garage layout assign -z ci -c 1G "$node"
           docker exec pb2-g1-garage /garage layout apply --version 1
