@@ -12,6 +12,7 @@ const ru=computed(()=>language.value==='ru')
 const video=ref<HTMLVideoElement|null>(null),frozen=ref<HTMLCanvasElement|null>(null)
 const started=ref(false),starting=ref(false),processing=ref(false),grid=ref(false)
 const facing=ref<Facing>('environment'),mode=ref<CaptureMode>(3),ttl=ref(DEFAULT_TTL_DAYS)
+const description=ref(''),tagText=ref('')
 const status=ref(''),error=ref(''),savedId=ref(''),savedCount=ref(0),clock=ref('unknown')
 const router=useRouter(),route=useRoute()
 const assignmentId=ref(''),availableAssignments=ref<AssignmentView[]>([]),assignmentError=ref('')
@@ -27,6 +28,7 @@ const assignmentCopy=computed(()=>ru.value?{
   invalid:'Нет разрешения или актуальной подтверждённой политики. Выберите задание снова.',
   gps:'Геолокация обязательна для этого задания.',date:'Период съёмки',
   preset:'Пресет камеры',cameraInstructions:'Инструкция для съёмки',
+  description:'Описание снимка',tags:'Теги (через запятую)',
 }:{
   choose:'Assignment',personal:'Personal capture',refresh:'Refresh assignments',
   locked:'Assignment capture requires a server-acknowledged In progress status.',
@@ -34,6 +36,7 @@ const assignmentCopy=computed(()=>ru.value?{
   invalid:'Assignment permission or current confirmed policy is missing. Choose again.',
   gps:'GPS is required for this assignment.',date:'Capture period',
   preset:'Camera preset',cameraInstructions:'Capture instructions',
+  description:'Photo description',tags:'Tags (comma-separated)',
 })
 async function refreshAssignments(){
   if(!identity.value){availableAssignments.value=[];assignmentId.value='';return}
@@ -92,6 +95,10 @@ const errorText=computed(()=>{
     'camera.canvas_unavailable':['Обработка изображения не поддерживается браузером.','Image processing is unavailable in this browser.'],
     'camera.gps_required':['Нужна точная геолокация. Разрешите GPS и повторите съёмку.','GPS location required. Allow GPS and retry.'],
     'camera.assignment_outside_dates':['Съёмка вне установленного периода задания.','Capture is outside the assignment date range.'],
+    'camera.description_required':['Требуется описание снимка.','Photo description is required.'],
+    'camera.tags_required':['Укажите обязательные теги.','Photo tags are required.'],
+    'camera.tags_not_allowed':['Теги не соответствуют правилам задания.','Tags are not permitted by this assignment.'],
+    'camera.annotation_invalid':['Описание или теги некорректны.','Invalid photo description or tags.'],
   }
   return dictionary[key]?.[ru.value?0:1]??(key?copy.value.error+' '+key:'')
 })
@@ -196,9 +203,10 @@ async function shutter(){
     const source=await controller.take()
     const selectedMode=frozen?.mode??mode.value,selectedTtl=frozen?.retentionDays??ttl.value
     const record=await session.value.prepare(source.blob,source.method,selectedMode,selectedTtl,
-      progress,frozen)
+      progress,frozen,{description:description.value,
+        tags:tagText.value.split(',').map(tag=>tag.trim()).filter(Boolean)})
     savedId.value=record.photoId;savedCount.value++;status.value=copy.value.saved
-    clock.value='trusted'
+    description.value='';tagText.value='';clock.value='trusted'
   }catch(e){error.value=captureError(e);status.value=''}
   finally{processing.value=false;clearFreeze()}
 }
@@ -256,6 +264,17 @@ const viewSaved=()=>savedId.value?router.push('/photos/'+savedId.value):undefine
           <p v-if="chosenAssignment.requiredGps" class="camera-hint">{{ assignmentCopy.gps }}</p>
           <p v-if="chosenAssignment.startsAt||chosenAssignment.finishesAt" class="camera-hint">
             {{ assignmentCopy.date }}: {{ chosenAssignment.startsAt||'…' }} — {{ chosenAssignment.finishesAt||'…' }}
+          </p>
+        </div>
+        <div v-if="chosenAssignment" class="camera-annotation">
+          <label>{{ assignmentCopy.description }}
+            <textarea v-model="description" maxlength="2000" rows="2" :disabled="processing"></textarea>
+          </label>
+          <label>{{ assignmentCopy.tags }}
+            <input v-model="tagText" type="text" maxlength="1250" :disabled="processing">
+          </label>
+          <p v-if="chosenAssignment.allowedTags?.length" class="camera-hint">
+            {{ chosenAssignment.allowedTags.join(', ') }}
           </p>
         </div>
         <p v-if="assignmentId" class="camera-hint">{{ chosenAssignment?
@@ -453,6 +472,10 @@ const viewSaved=()=>savedId.value?router.push('/photos/'+savedId.value):undefine
 .capture-policy{padding:13px 16px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
 .capture-policy h2{font-size:14px;margin:0 0 7px}
 .assignment-capture-instructions{padding:6px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.camera-annotation{display:grid;gap:8px;padding:8px 0}
+.camera-annotation label{display:grid;gap:4px;font-size:13px}
+.camera-annotation input,.camera-annotation textarea{width:100%;box-sizing:border-box;
+  background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px;font:inherit}
 .capture-policy fieldset{border:0;padding:0;margin:0;display:grid;gap:3px}
 .capture-mode{display:flex;align-items:center;gap:8px;padding:7px 0;min-height:44px;font-size:13px}
 .capture-mode input{width:18px;height:18px;accent-color:var(--accent)}
