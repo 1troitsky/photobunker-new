@@ -21,6 +21,21 @@ final class AssignmentController extends Controller {
           ->where('account_id',$a->id)->exists(),410);abort(404);}
         return C::json(C::dto($row));
     }
+    public function progress(Request $r,string $assignmentId){
+        [$account]=C::actor($r);P::uuid($assignmentId);
+        $owned=DB::table('assignments')->where('id',$assignmentId)
+            ->where('account_id',$account->id)->exists();
+        abort_unless($owned,404);
+        // Count only physically finalized, unexpired receipts; never include
+        // local pending uploads or deduplicate by client-supplied counter.
+        $count=DB::table('assignment_photo_bindings_v1 as binding')
+            ->join('photo_records as photo','photo.id','=','binding.photo_id')
+            ->where('binding.assignment_id',$assignmentId)
+            ->where('photo.state','active')
+            ->where('photo.expires_at','>',\App\Photo\PhotoSync::nowMs())
+            ->distinct()->count('photo.id');
+        return C::json(['assignmentId'=>$assignmentId,'confirmed'=>$count]);
+    }
     public function history(Request $r,string $assignmentId){
         [$a]=C::actor($r);P::uuid($assignmentId);
         abort_unless(DB::table('assignments')->where('id',$assignmentId)->where('account_id',$a->id)->exists(),404);
