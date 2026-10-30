@@ -337,6 +337,7 @@ onUnmounted(()=>{ended=true;epoch++;cleanup();unlisten()})
             </button>
             <RouterLink v-if="selected.status==='in_progress'&&selected.sync==='synced'"
               :to="{path:'/camera',query:{assignment:selected.id}}" class="primary-button">{{ copy.capture }}</RouterLink>
+            <RouterLink :to="{path:'/assignment-grants',query:{assignment:selected.id}}" class="subtle-button">{{ copy.grants }}</RouterLink>
             <RouterLink :to="'/assignments/'+selected.id+'/edit'" class="subtle-button">{{ copy.edit }}</RouterLink>
             <button type="button" @click="duplicate" :disabled="saving">{{ copy.duplicate }}</button>
             <button type="button" @click="remove" :disabled="saving">{{ copy.remove }}</button>
