@@ -11,7 +11,8 @@ const route=useRoute(),router=useRouter(),ru=computed(()=>language.value==='ru')
 const rows=ref<AssignmentView[]>([]),selected=ref<AssignmentView|null>(null)
 const assignmentPhotos=ref<{photoId:string;capturedAt:number}[]>([])
 const loading=ref(false),saving=ref(false),error=ref(''),filter=ref(''),statusFilter=ref('all')
-const form=ref<AssignmentFields>({title:'',instructions:'',mode:3,retentionDays:45})
+const form=ref<AssignmentFields>({title:'',instructions:'',mode:3,retentionDays:45,
+  startsAt:null,finishesAt:null,targetCount:null})
 const serverRevision=ref<number|null>(null),serverVersion=ref<Awaited<ReturnType<typeof fetchServerAssignment>>|null>(null)
 const details=computed(()=>typeof route.params.assignmentId==='string'?route.params.assignmentId:null)
 const create=computed(()=>route.path==='/assignments/new')
@@ -25,6 +26,8 @@ const copy=computed(()=>ru.value?{
   title:'Задания',new:'Новое задание',search:'Поиск по названию',all:'Все статусы',
   empty:'Заданий пока нет',emptyFiltered:'Задания не найдены',emptyHelp:'Создайте первое приватное задание.',
   instructions:'Инструкции',required:'Название',mode:'Режим сохранения',retention:'Срок хранения (дни)',
+  startsAt:'Дата начала',finishesAt:'Дата окончания',targetCount:'Нужно фотографий (1–9999)',
+  progress:'Снимков на устройстве',
   mode1:'1 — Без сжатия (недоступен)',mode2:'2 — Сжатый оригинал сохраняется',
   mode3:'3 — Сжатый master заменяется',save:'Сохранить',cancel:'Отмена',
   edit:'Редактировать',duplicate:'Дублировать',remove:'Удалить',removeConfirm:'Удалить задание? Это необратимо.',
@@ -44,6 +47,8 @@ const copy=computed(()=>ru.value?{
   title:'Assignments',new:'New assignment',search:'Search titles',all:'All statuses',
   empty:'No assignments yet',emptyFiltered:'Nothing matches',emptyHelp:'Create your first private assignment.',
   instructions:'Instructions',required:'Title',mode:'Storage mode',retention:'Retention (days)',
+  startsAt:'Start date',finishesAt:'End date',targetCount:'Required photos (1–9999)',
+  progress:'Photos on this device',
   mode1:'1 — Camera source (unavailable)',mode2:'2 — Compressed original preserved',
   mode3:'3 — Compressed master replaced',save:'Save',cancel:'Cancel',
   edit:'Edit',duplicate:'Duplicate',remove:'Delete',removeConfirm:'Delete assignment permanently?',
@@ -86,7 +91,9 @@ async function reload(){
     })).sort((a,b)=>b.capturedAt-a.capturedAt)
     if(edit.value&&selected.value)form.value={
       title:selected.value.title,instructions:selected.value.instructions,
-      mode:selected.value.mode,retentionDays:selected.value.retentionDays}
+      mode:selected.value.mode,retentionDays:selected.value.retentionDays,
+      startsAt:selected.value.startsAt,finishesAt:selected.value.finishesAt,
+      targetCount:selected.value.targetCount}
   }catch(e){if(token===epoch)error.value=e instanceof Error?e.message:copy.value.error}
   finally{if(token===epoch)loading.value=false}
 }
@@ -145,7 +152,8 @@ async function retryChanges(){
     serverVersion.value=null;await reload();void flushAssignments()}
   catch(e){error.value=e instanceof Error?e.message:copy.value.error}
 }
-function resetForm(){form.value={title:'',instructions:'',mode:3,retentionDays:45}}
+function resetForm(){form.value={title:'',instructions:'',mode:3,retentionDays:45,
+  startsAt:null,finishesAt:null,targetCount:null}}
 watch(()=>route.fullPath,()=>{error.value='';serverVersion.value=null;if(create.value)resetForm();void reload()})
 watch(identity,()=>{void reload()})
 onMounted(()=>{ended=false;unlisten=onAssignmentChange(()=>{void reload()});void reload()})
@@ -186,6 +194,15 @@ onUnmounted(()=>{ended=true;epoch++;cleanup();unlisten()})
         <label>{{ copy.retention }}
           <input v-model.number="form.retentionDays" type="number" min="1" max="45" step="1" required>
         </label>
+        <label>{{ copy.startsAt }}
+          <input v-model="form.startsAt" type="date">
+        </label>
+        <label>{{ copy.finishesAt }}
+          <input v-model="form.finishesAt" type="date" :min="form.startsAt||undefined">
+        </label>
+        <label>{{ copy.targetCount }}
+          <input v-model.number="form.targetCount" type="number" min="1" max="9999" step="1">
+        </label>
         <p class="assignment-hint">{{ copy.noRetro }}</p>
         <div class="assignment-actions">
           <button class="primary-button" type="submit" :disabled="saving">{{ copy.save }}</button>
@@ -203,10 +220,17 @@ onUnmounted(()=>{ended=true;epoch++;cleanup();unlisten()})
             <span>{{ copy.policyRevision }}: {{ selected.policyRevision }}</span>
             <span>{{ copy.mode }}: {{ selected.mode }}</span>
             <span>{{ copy.retention }}: {{ selected.retentionDays }}</span>
+            <span v-if="selected.startsAt">{{ copy.startsAt }}: {{ selected.startsAt }}</span>
+            <span v-if="selected.finishesAt">{{ copy.finishesAt }}: {{ selected.finishesAt }}</span>
           </div>
           <p class="assignment-hint">{{ copy.noRetro }}</p>
           <section class="assignment-local-photos">
             <h3>{{ copy.photos }}</h3>
+            <p v-if="selected.targetCount" class="assignment-hint">
+              {{ copy.progress }}: {{ assignmentPhotos.length }} / {{ selected.targetCount }}
+            </p>
+            <progress v-if="selected.targetCount" class="assignment-progress"
+              :value="Math.min(assignmentPhotos.length,selected.targetCount)" :max="selected.targetCount"></progress>
             <p v-if="!assignmentPhotos.length" class="assignment-hint">{{ copy.noPhotos }}</p>
             <ul v-else class="assignment-list">
               <li v-for="photo in assignmentPhotos" :key="photo.photoId">
@@ -286,6 +310,7 @@ onUnmounted(()=>{ended=true;epoch++;cleanup();unlisten()})
 .assignment-meta{display:flex;gap:12px;flex-wrap:wrap}
 .assignment-detail h2{font-size:21px;margin:0 0 12px;overflow-wrap:anywhere}
 .assignment-text{white-space:pre-wrap;overflow-wrap:anywhere}
+.assignment-progress{width:100%;height:9px;accent-color:var(--accent)}
 .assignment-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:16px 0}
 .assignment-toolbar input{flex:2;min-width:150px}
 .assignment-toolbar select{flex:1;min-width:125px}
