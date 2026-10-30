@@ -141,8 +141,9 @@ watch(identity,()=>{devices.value=[];void refresh()})
         <h2>{{copy.security}}</h2><IdentityPanel />
         <button type="button" :disabled="busy" @click="leave">{{copy.logout}}</button>
       </section>
-      <section class="pb-section"><h2>{{copy.storage}}</h2><StorageDiagnostics /></section>
     </template>
+    <!-- Probing browser storage is safe before account registration. -->
+    <section class="pb-section"><h2>{{copy.storage}}</h2><StorageDiagnostics /></section>
     <section class="pb-section">
       <h2>{{copy.location}}</h2>
       <p class="pb-muted">{{copy.locationHint}}</p>
