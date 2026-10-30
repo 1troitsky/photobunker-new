@@ -3,7 +3,7 @@ import {computed,nextTick,onMounted,onUnmounted,ref,shallowRef,watch} from 'vue'
 import {useRoute,useRouter} from 'vue-router'
 import {identity,onIdentityCleanup} from '../../identity'
 import {language} from '../../ui-preview'
-import {startGrantedGps} from '../../gallery'
+import {startGrantedGps,reserveNameRange} from '../../gallery'
 import {openAssignments,onAssignmentChange,policySnapshot,type AssignmentView} from '../../assignments'
 import {BrowserCamera,captureError,openCaptureSession,DEFAULT_TTL_DAYS} from '../index'
 import type {CaptureMode,Facing,CaptureProgress,CaptureSession} from '../index'
@@ -19,7 +19,11 @@ const assignmentId=ref(''),availableAssignments=ref<AssignmentView[]>([]),assign
 let releaseAssignments:()=>void=()=>{}
 const chosenAssignment=computed(()=>availableAssignments.value.find(x=>x.id===assignmentId.value))
 watch(chosenAssignment,(next)=>{
-  if(next){mode.value=next.mode;ttl.value=next.retentionDays}
+  if(next){
+    mode.value=next.mode;ttl.value=next.retentionDays
+    if(next.sync==='synced'&&next.enableNameId!==false&&!identity.value?.offline)
+      void reserveNameRange(next.id).catch(()=>{/* offline capture keeps stable UUID */})
+  }
 })
 const assignmentCopy=computed(()=>ru.value?{
   choose:'Задание',personal:'Личная съёмка',refresh:'Обновить задания',
