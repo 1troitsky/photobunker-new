@@ -105,6 +105,10 @@ function visible(){
   void load()
 }
 function onFocus(){if(!document.hidden){clearUrls();void load()}}
+function onOffline(){
+  // Current permission can no longer be checked after disconnection.
+  reset();error.value=labels.value.offline
+}
 function tick(){
   now.value=Date.now()
   for(const item of items.value){
@@ -119,6 +123,7 @@ onMounted(()=>{
   document.addEventListener('visibilitychange',visible)
   window.addEventListener('focus',onFocus)
   window.addEventListener('online',onFocus)
+  window.addEventListener('offline',onOffline)
   // A local grant revoke, leave, or recipient state update immediately clears
   // volatile plaintext previews and re-checks the server; never retain a
   // previously opened preview solely because the gallery stays mounted.
@@ -131,6 +136,7 @@ onUnmounted(()=>{
   document.removeEventListener('visibilitychange',visible)
   window.removeEventListener('focus',onFocus)
   window.removeEventListener('online',onFocus)
+  window.removeEventListener('offline',onOffline)
   window.removeEventListener('photobunker-grant-updated',onFocus)
   window.removeEventListener('pagehide',reset)
   if(clock!==undefined)window.clearInterval(clock)
