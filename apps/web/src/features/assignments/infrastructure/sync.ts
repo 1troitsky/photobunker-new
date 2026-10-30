@@ -89,6 +89,15 @@ export async function fetchServerAssignment(id:string):Promise<ServerAssignment>
   check(before.accountId,before.deviceId)
   return result
 }
+export async function fetchAssignmentProgress(id:string):Promise<number>{
+  const before=identity.value
+  if(!before||before.offline)throw Error('assignment.offline')
+  const response=await remote<{assignmentId:string;confirmed:number}>('/'+id+'/progress')
+  check(before.accountId,before.deviceId)
+  if(response.assignmentId!==id||!Number.isSafeInteger(response.confirmed)||response.confirmed<0)
+    throw Error('assignment.progress_invalid')
+  return response.confirmed
+}
 export function startAssignmentSync():()=>void{
   if(unbind)return unbind
   const wake=()=>{void flushAssignments()}
