@@ -130,6 +130,10 @@ try {
     ]),200,'proof');
     $identity=statusG1(requestG1('GET','/identity/v2/session'),200,'session persisted');
     expectG1($identity['accountId']===$account&&$identity['deviceId']===$device,'wrong identity session');
+    // Identity proof regenerates the session and CSRF token: use the new token.
+    $newCsrf=statusG1(requestG1('GET','/identity/v2/csrf'),200,'post-proof csrf');
+    $token=$newCsrf['csrfToken']??'';
+    expectG1(strlen($token)>20,'post-proof CSRF token unavailable');
 
     $photo=(string)Str::uuid();$op=(string)Str::uuid();
     $expires=now()->addDay()->getTimestampMs();
