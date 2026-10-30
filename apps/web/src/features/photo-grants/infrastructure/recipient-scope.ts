@@ -26,3 +26,9 @@ export async function requireRecipientScope(grantId:string):Promise<RecipientSco
   if(!grant)throw Error('grant.denied')
   return {grant,accountId,deviceId,check}
 }
+
+/** Refresh a recipient's current grant from the server without downloading a file. */
+export async function recheckRecipientGrant(grantId:string):Promise<void>{
+  const active=await requireRecipientScope(grantId)
+  active.check()
+}
