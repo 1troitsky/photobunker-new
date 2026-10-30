@@ -74,7 +74,21 @@ test('native account locale, appearance and 320px mobile safe-area layout', asyn
   await preferences.nth(0).selectOption('light')
   await expect(page.locator('html')).toHaveAttribute('data-theme','light')
   await expect(page.locator('html')).toHaveAttribute('lang','ru')
-  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true)
+  // Diagnose actual 320px overflow rather than hiding content with overflow-x:hidden.
+  const overflowReport=()=>page.evaluate(()=>{
+    const viewport=window.innerWidth
+    const offenders=[...document.querySelectorAll<HTMLElement>('body *')]
+      .map(el=>({tag:el.tagName.toLowerCase(),className:String(el.className).slice(0,100),
+        text:(el.textContent||'').trim().slice(0,60),rect:el.getBoundingClientRect()}))
+      .filter(x=>x.rect.right>viewport+1&&x.rect.width>1)
+      .map(x=>({tag:x.tag,className:x.className,text:x.text,
+        left:Math.round(x.rect.left),right:Math.round(x.rect.right),width:Math.round(x.rect.width)}))
+      .sort((a,b)=>b.right-a.right).slice(0,15)
+    return {viewport,scrollWidth:document.documentElement.scrollWidth,offenders}
+  })
+  const initial=await overflowReport()
+  if(initial.scrollWidth>initial.viewport)console.log('320px overflow elements:',JSON.stringify(initial))
+  await expect.poll(async()=>{const x=await overflowReport();return x.scrollWidth<=x.viewport}).toBe(true)
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('data-theme','light')
   await expect(page.locator('html')).toHaveAttribute('lang','ru')
