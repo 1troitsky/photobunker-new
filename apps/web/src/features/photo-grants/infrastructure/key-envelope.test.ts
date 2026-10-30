@@ -1,4 +1,6 @@
 import {describe,it,expect} from 'vitest'
+import {encryptAsset} from '../../local-storage/infrastructure/cipher'
+import {decryptRecipientThumbnail} from '../../local-storage/infrastructure/recipient-thumbnail'
 import {createPhotoGrantCode,photoGrantCodeHash,sealRecipientKey,openRecipientKey,
  type KeyContext,sealGrantSecret,openGrantSecret,sealGrantSecretPinned,openGrantSecretPinned} from './key-envelope'
 const id=()=>crypto.randomUUID()
@@ -73,5 +75,45 @@ describe('OOB owner account root pinning for new invitations',()=>{
     await expect(openGrantSecretPinned(code,sealed,{...invite,ownerAccountId:id()})).rejects.toThrow()
     const legacy=await sealGrantSecret(code,secret,invite)
     await expect(openGrantSecretPinned(code,legacy,invite)).rejects.toThrow()
+  })
+})
+
+describe('two independent accounts: exact encrypted photo bytes through invitation and recipient DEK',()=>{
+  it('decrypts the owner-scoped thumbnail only with the accepted recipient grant secret',async()=>{
+    const owner=id(),recipient=id(),photoId=id(),assetId=id(),assignmentId=id(),grantId=id()
+    const expiresAt=Date.now()+3600000
+    const raw=crypto.getRandomValues(new Uint8Array(32))
+    const ownerKey=await crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['encrypt'])
+    const source=new Blob([new TextEncoder().encode('RIFF-original-thumbnail-WEBP')])
+    const scope={accountId:owner,deviceId:id(),generation:1}
+    const placeholderWrap={iv:'AAAAAAAAAAAAAAAA',ciphertext:'transported-out-of-band'}
+    const encrypted=await encryptAsset(scope,photoId,assetId,'thumbnail',1,expiresAt,
+      source,ownerKey,placeholderWrap,'idb-blob',
+      [owner,photoId,assetId,assetId].join('/'),()=>{})
+    const manifest=encrypted.manifest
+    const context:KeyContext={grantId,generation:2,assignmentId,
+      ownerAccountId:owner,recipientAccountId:recipient,photoId,assetId,
+      kind:'thumbnail',revision:1,expiresAt,cipherDigest:manifest.cipherDigest}
+    const invitation={grantId,assignmentId,ownerAccountId:owner,recipientAccountId:recipient}
+    const oob=createPhotoGrantCode(),secret=createPhotoGrantCode()
+    const pinned=await sealGrantSecretPinned(oob,secret,invitation,'A'.repeat(120))
+    const sealedDEK=await sealRecipientKey(secret,context,raw)
+    raw.fill(0)
+    // This simulates another account/device: it possesses neither the original
+    // asset key nor owner's account keys. Only its separately delivered invite.
+    const accepted=await openGrantSecretPinned(oob,pinned,invitation)
+    const transported=await openRecipientKey(accepted.secret,sealedDEK,context,Date.now())
+    const recipientKey=await crypto.subtle.importKey('raw',transported,
+      {name:'AES-GCM'},false,['decrypt'])
+    transported.fill(0)
+    const {backend:_backend,storageKey:_key,...cloudManifest}=manifest
+    const output=await decryptRecipientThumbnail(owner,cloudManifest,encrypted.blob,
+      recipientKey,()=>{})
+    expect([...new Uint8Array(await output.arrayBuffer())])
+      .toEqual([...new Uint8Array(await source.arrayBuffer())])
+    await expect(openRecipientKey(accepted.secret,sealedDEK,
+      {...context,recipientAccountId:id()},Date.now())).rejects.toThrow()
+    await expect(decryptRecipientThumbnail(recipient,cloudManifest,
+      encrypted.blob,recipientKey,()=>{})).rejects.toThrow()
   })
 })
