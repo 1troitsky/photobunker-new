@@ -25,7 +25,7 @@ export async function scanLocalOwnership(accountId:string,deviceId:string):Promi
     leases,thumbnails,clocks]=await Promise.all([
     db.photos.where('accountId').equals(accountId).toArray(),
     db.assets.where('accountId').equals(accountId).toArray(),
-    db.blobFallback.where('accountId').equals(accountId).toArray(),
+    db.blobFallback.where('accountId').equals(accountId).primaryKeys(),
     db.outbox.where('accountId').equals(accountId).toArray(),
     db.journal.where('accountId').equals(accountId).toArray(),
     db.tombstones.where('accountId').equals(accountId).toArray(),
@@ -43,8 +43,8 @@ export async function scanLocalOwnership(accountId:string,deviceId:string):Promi
   }
   for(const row of photos)add('photo',row.accountId,undefined,true,row.state==='delete_pending')
   for(const row of assets)add('asset',row.accountId,undefined,livePhotoIds.has(row.photoId),false)
-  for(const row of blobs)add('blob',row.accountId,undefined,
-    assetPaths.has(row.key)||stagedPaths.has(row.key),false)
+  for(const key of blobs)add('blob',accountId,undefined,
+    assetPaths.has(key)||stagedPaths.has(key),false)
   for(const row of operations)add('outbox',row.accountId,undefined,
     livePhotoIds.has(row.photoId),row.state!=='acknowledged'&&row.state!=='cancelled')
   for(const row of journals)add('journal',row.accountId,row.deviceId,
@@ -59,9 +59,9 @@ export async function scanLocalOwnership(accountId:string,deviceId:string):Promi
   const counts=Object.fromEntries(kinds.map(kind=>[kind,rows.filter(row=>row.kind===kind).length]))
     as Record<LocalRecordKind,number>
   const orphanAssetRows=assets.filter(a=>!livePhotoIds.has(a.photoId)).length
-  const orphanBlobRows=blobs.filter(b=>!assetPaths.has(b.key)&&!stagedPaths.has(b.key)).length
+  const orphanBlobRows=blobs.filter(key=>!assetPaths.has(key)&&!stagedPaths.has(key)).length
   const unresolvedJournalPaths=journals.reduce((n,journal)=>
-    n+journal.assetKeys.filter(path=>!assetPaths.has(path)&&!blobs.some(b=>b.key===path)).length,0)
+    n+journal.assetKeys.filter(path=>!assetPaths.has(path)&&!blobs.includes(path)).length,0)
   const unconfirmedPhotoOperations=operations.filter(row=>
     row.state!=='acknowledged'&&row.state!=='cancelled').length
   const summary=summarizeOwnership(rows)
