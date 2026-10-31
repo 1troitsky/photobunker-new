@@ -36,6 +36,17 @@ describe('PB2 App Lock PIN identity barrier',()=>{
     await unlockAppPin('87654321')
     expect(appLockState.value.locked).toBe(false)
   })
+  it('three failed PIN attempts enforce a cooldown even for a later correct PIN',async()=>{
+    const dev=device+'-'+counter
+    await prepareAppLock(account,dev)
+    await configureAppPin('44556677')
+    lockApp()
+    for(let i=0;i<3;i++){
+      await expect(unlockAppPin('00000000')).rejects.toThrow('pin.invalid')
+    }
+    await expect(unlockAppPin('44556677')).rejects.toThrow('pin.cooldown')
+    expect(appLockState.value.locked).toBe(true)
+  })
   it('other account or device cannot inherit an unlocked gate',async()=>{
     await prepareAppLock(account,device+'-'+counter)
     await configureAppPin('11223344')
