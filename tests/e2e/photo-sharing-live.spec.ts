@@ -8,15 +8,29 @@ import {chromium,expect,test,type Page} from '@playwright/test'
 const origin=process.env.PB_PHOTO_SHARE_LIVE_ORIGIN
 test.skip(!origin,'Requires isolated PB2 Identity + PostgreSQL + Garage browser runtime')
 test.use({trace:'off'})
-test.setTimeout(240_000)
+test.setTimeout(210_000)
+test.describe.configure({retries:0})
 
 async function createAccount(page:Page):Promise<string>{
+  const failures:string[]=[]
+  const observe=(response:import('@playwright/test').Response)=>{
+    const url=new URL(response.url())
+    if(url.pathname.startsWith('/identity/v2/')&&response.status()>=400)
+      failures.push(url.pathname.split('/').slice(0,5).join('/')+':'+response.status())
+  }
+  page.on('response',observe)
   await page.goto('/account/create')
   await page.getByRole('button',{name:/Generate Recovery Key|Создать ключ восстановления/i}).click()
   await expect(page.locator('#identity-key')).toHaveValue(/^PB2\./)
   await page.locator('input[type=checkbox]').check()
   await page.getByRole('button',{name:/Confirm and create|Подтвердить и создать/i}).click()
-  await expect(page).toHaveURL(/\/profile$/,{timeout:45000})
+  try{
+    await expect(page).toHaveURL(/\/profile$/,{timeout:25000})
+  }catch(e){
+    const visible=(await page.getByRole('alert').allTextContents()).join(' ').slice(0,300)
+    throw new Error('live_identity_create_failed: http='+failures.join(',')+
+      ' visible_error='+visible,{cause:e})
+  }finally{page.off('response',observe)}
   await page.goto('/contacts')
   const id=await page.locator('.collab-panel code').first().textContent()
   expect(id?.trim()).toMatch(/^[a-f0-9-]{36}$/)
