@@ -6,10 +6,17 @@ import {identity,IdentityPanel,accountDeviceRecords,revokeDevice,logout,
 import {StorageDiagnostics} from '../../local-storage'
 import {gpsStatus,subscribeGps,setGpsEnabled,requestGps} from '../../gallery'
 import {language,setLanguage,setTheme,theme} from '../../ui-preview'
+import {homeSection,setHomeSection,type HomeSection} from '../../ui-preview/application/home-preference'
 const ru=computed(()=>language.value==='ru'),router=useRouter()
 const devices=ref<AccountDeviceRecord[]>([]),loading=ref(false),busy=ref(false)
 const error=ref(''),notice=ref(''),copied=ref(false)
 const gps=ref(gpsStatus()),gpsAllowed=ref(gpsStatus()!=='disabled')
+const selectedHome=ref<HomeSection>(homeSection())
+function updateHome(value:string){
+  const section=value as HomeSection
+  if(setHomeSection(section))selectedHome.value=section
+  else error.value=ru.value?'Не удалось сохранить выбор на этом устройстве':'Could not save preference on this device'
+}
 let releaseGps:()=>void=()=>{}
 function toggleGps(){
   gpsAllowed.value=!gpsAllowed.value
@@ -33,6 +40,8 @@ const copy=computed(()=>ru.value?{
   gpsEnable:'Включить GPS',gpsDisable:'Отключить GPS',gpsPrompt:'Запросить разрешение',
   gpsReady:'Координаты получены',gpsDenied:'Доступ запрещён',gpsUnavailable:'GPS недоступен',
   gpsWaiting:'Ожидание разрешения',
+  startup:'Стартовый экран',startupCamera:'Камера',startupAssignments:'Задания',
+  startupBrowser:'Фото-браузер',startupPhotos:'Мои фото',
 }:{
   title:'My account',anonymous:'Anonymous PB2 account',locked:'Account locked',
   create:'Create account',recover:'Recover access',devices:'Trusted devices',
@@ -50,6 +59,8 @@ const copy=computed(()=>ru.value?{
   gpsEnable:'Enable GPS',gpsDisable:'Disable GPS',gpsPrompt:'Request permission',
   gpsReady:'GPS fix ready',gpsDenied:'Permission denied',gpsUnavailable:'GPS unavailable',
   gpsWaiting:'Waiting for permission',
+  startup:'Start screen',startupCamera:'Camera',startupAssignments:'Assignments',
+  startupBrowser:'Photo Browser',startupPhotos:'My photos',
 })
 let epoch=0,stopped=false
 const cleanup=onIdentityCleanup(()=>{epoch++;devices.value=[];error.value='';notice.value=''})
@@ -168,6 +179,13 @@ watch(identity,()=>{devices.value=[];void refresh()})
         <label>{{copy.lang}}
           <select :value="language" @change="setLanguage(($event.target as HTMLSelectElement).value as 'ru'|'en')">
             <option value="ru">RU</option><option value="en">EN</option>
+          </select></label>
+        <label>{{copy.startup}}
+          <select :value="selectedHome" @change="updateHome(($event.target as HTMLSelectElement).value)">
+            <option value="/camera">{{copy.startupCamera}}</option>
+            <option value="/assignments">{{copy.startupAssignments}}</option>
+            <option value="/browser">{{copy.startupBrowser}}</option>
+            <option value="/photos">{{copy.startupPhotos}}</option>
           </select></label>
       </div>
     </section>
