@@ -47,9 +47,12 @@ async function createAccount(page:Page):Promise<string>{
       ' visible_error='+visible,{cause:e})
   }finally{page.off('response',observe)}
   await page.goto('/contacts')
-  const id=await page.locator('.collab-panel code').first().textContent()
-  expect(id?.trim()).toMatch(/^[a-f0-9-]{36}$/)
-  return id!.trim()
+  // The shell renders before the nonblocking identity/collaboration bootstrap.
+  // Wait for the real account ID instead of reading the initial empty node.
+  const accountCode=page.locator('.collab-panel code').first()
+  await expect.poll(async()=>((await accountCode.textContent())??'').trim(),
+    {timeout:20000}).toMatch(/^[a-f0-9-]{36}$/)
+  return ((await accountCode.textContent())??'').trim()
 }
 
 async function syncContacts(page:Page,other:string):Promise<void>{
