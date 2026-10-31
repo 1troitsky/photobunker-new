@@ -25,6 +25,12 @@ final class IdentityController extends Controller
         if (! in_array($r->method(),['GET','HEAD'],true)) {
             $origin = $r->headers->get('Origin');
             $expected = rtrim(config('app.url'),'/');
+            if((!is_string($origin)||!hash_equals($expected,$origin))&&
+                config('app.env')==='testing'&&env('PB_IDENTITY_ORIGIN_DIAGNOSTIC')==='1'){
+                // CI-only metadata; never log cookies, request bodies or credentials.
+                error_log('PB2_ORIGIN_DIAG expected='.$expected.
+                    ' received='.(is_string($origin)?$origin:'<absent>'));
+            }
             abort_unless(is_string($origin) && hash_equals($expected, $origin),403);
         }
     }
