@@ -35,7 +35,8 @@ async function createAccount(page:Page):Promise<string>{
   page.on('response',observe)
   await page.goto('/account/create')
   await page.getByRole('button',{name:/Generate Recovery Key|Создать ключ восстановления/i}).click()
-  await expect(page.locator('#identity-key')).toHaveValue(/^PB2\./)
+  // Do not let a failing Playwright assertion print the generated recovery key.
+  expect((await page.locator('#identity-key').inputValue()).startsWith('PB2.')).toBe(true)
   await page.locator('input[type=checkbox]').check()
   await page.getByRole('button',{name:/Confirm and create|Подтвердить и создать/i}).click()
   try{
@@ -88,7 +89,7 @@ test('two browsers: grant invite, genuine camera photo and recipient E2EE decryp
     await owner.goto('/assignments/new')
     await owner.getByRole('textbox',{name:/^Title$|^Название$/i})
       .fill('Shared browser E2EE assignment')
-    await owner.getByRole('textbox',{name:/Instructions|Инструкции/i})
+    await owner.getByRole('textbox',{name:/^Instructions$|^Инструкции$/i})
       .fill('Keep original private; only encrypted thumbnail may be shared.')
     await owner.getByRole('button',{name:/^Save$|^Сохранить$/i}).click()
     await expect(owner).toHaveURL(/\/assignments\/[a-f0-9-]{36}$/)
