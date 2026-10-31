@@ -1,5 +1,6 @@
 import {identity,removeRevokedDeviceAppPin} from '../../identity'
-import {inspectPhotoStoreCounts,scanLocalOwnership,type LocalOwnershipInventory} from '../../local-storage'
+import {inspectPhotoStoreCounts,scanLocalOwnership,removeRevokedDeviceClock,
+  type LocalOwnershipInventory} from '../../local-storage'
 import {inspectAssignmentPending} from '../../assignments'
 import {inspectCollaborationPending} from '../../collaboration'
 import {inspectGrantStoreCounts} from '../../photo-grants'
@@ -24,13 +25,16 @@ export async function retainedEncryptedData(accountId:string,deviceId:string):Pr
     sharePending:grant.grantPending,encryptedGrantSecrets:grant.encryptedGrants,
     ownership}
 }
-/** Cleanup is STRICTLY limited to the revoked device's local PIN verifiers.
- * No photo, identity signing/wrapping keys, encrypted queue, cloud or recovery
- * material is deleted. A crash between the two calls is safe to retry.
+/** Cleanup is STRICTLY limited to device-local PIN verifiers and the device's
+ * derived trusted-time cache. No photo, signing/wrapping keys, encrypted
+ * queue, cloud or recovery material is deleted. A crash between the two calls is safe to retry.
  */
 export async function cleanupRevokedDeviceVerifiers(accountId:string,deviceId:string):Promise<void>{
   if(identity.value?.accountId===accountId&&identity.value.deviceId===deviceId)
     throw Error('cleanup.active_device')
   await removeRevokedDeviceAppPin(accountId,deviceId)
   await removeRevokedDeviceActionPins(accountId,deviceId)
+  // The sole additional deletable record is this DEVICE's derived clock.
+  // Never broaden this call to photo or other account-scoped stores.
+  await removeRevokedDeviceClock(accountId,deviceId)
 }
