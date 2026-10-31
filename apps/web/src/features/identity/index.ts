@@ -36,3 +36,5 @@ export {signOwnRevocationIntent,submitSignedRevocationIntent} from './infrastruc
 export {suspendDeviceForPendingRevocation} from './infrastructure/identity'
 
 export {removeRevokedDeviceAppPin} from './infrastructure/app-lock'
+
+export {signRecoveredCloudAsset} from './infrastructure/identity'

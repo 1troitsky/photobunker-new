@@ -75,6 +75,7 @@ final class PhotoSyncController extends Controller
           ])->all();
         return $this->sync->json(['photoId'=>$photo->id,'expiresAt'=>(int)$photo->expires_at,
           'metadataAssetId'=>$photo->metadata_asset_id,'metadataRevision'=>(int)$photo->metadata_revision,
+          'originDeviceId'=>$photo->device_id,
           'assets'=>$assets]);
     }
     public function read(Request $r,string $photoId,string $assetId){
