@@ -18,10 +18,12 @@ async function createAccount(page:Page):Promise<string>{
     if(url.pathname.startsWith('/identity/v2/')&&response.status()>=400){
       // Playwright's synchronous headers() intentionally omits security headers.
       // The async allHeaders() exposes Origin without logging secrets/credentials.
-      void response.request().allHeaders().then(headers=>{
-        const from=headers['origin']??'<absent>'
+      void Promise.all([response.request().allHeaders(),response.allHeaders()]).then(([requestHeaders,responseHeaders])=>{
+        const from=requestHeaders['origin']??'<absent>'
+        // A response MIME type and server software name are public metadata.
         failures.push(url.pathname.split('/').slice(0,5).join('/')+':'+response.status()+
-          ' origin='+from)
+          ' origin='+from+' responseType='+String(responseHeaders['content-type']??'none')+
+          ' server='+String(responseHeaders['server']??'none'))
       }).catch(()=>failures.push(url.pathname+':'+response.status()))
     }
   }
