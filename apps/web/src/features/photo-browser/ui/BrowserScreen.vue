@@ -7,6 +7,7 @@ import {onPhotoSync} from '../../photo-sync'
 import {language,AppIcon} from '../../ui-preview'
 import {loadLocalBrowser} from '../application/browse'
 import {exportOwnerBrowserZip} from '../infrastructure/export-owner'
+import {selectedVisiblePhotos,togglePhotoSelection,MAX_ZIP_SELECTION} from '../domain/selection'
 import {browserFolders,visibleBrowserPhotos,type BrowserPhoto,type BrowserAssignment,
   type BrowserDisplay,type BrowserSort} from '../domain/model'
 
@@ -14,6 +15,7 @@ const router=useRouter()
 const photos=ref<BrowserPhoto[]>([]),assignments=ref<BrowserAssignment[]>([])
 const activeFolder=ref('all'),search=ref(''),display=ref<BrowserDisplay>('grid')
 const sort=ref<BrowserSort>('newest'),loading=ref(false),error=ref('')
+const choosing=ref(false),selectedIds=ref<Set<string>>(new Set())
 const now=ref(Date.now())
 const exporting=ref(false),exportDone=ref(0),exportError=ref(''),exportNotice=ref('')
 let exportController:AbortController|null=null
@@ -34,6 +36,7 @@ const txt=computed(()=>ru.value?{
   exportZip:'Сохранить ZIP',exportWarning:'ZIP с текущими изображениями будет сохранён в загрузки устройства. Приватные метаданные и EXIF не включаются.',
   exportLimit:'ZIP — не более 10 локальных фото за раз (до 16 МБ).',
   exportWorking:'Подготавливаем защищённый экспорт…',exportSent:'Запрошено скачивание ZIP.',exportFailed:'Экспорт прерван или недоступен.',
+  choose:'Выбрать фото',finishChoosing:'Готово',selected:'Выбрано',clearSelection:'Снять выделение',selectionLimit:'Максимум 10 фотографий',
 }:{
   title:'Photo Browser',subtitle:'Private photos on this device',
   note:'Local browsing and export of current owner renditions. Shared collections and recipient access are not yet enabled.',
@@ -48,11 +51,22 @@ const txt=computed(()=>ru.value?{
   exportZip:'Save ZIP',exportWarning:'The current images will be downloaded to this device. Private metadata and EXIF are excluded.',
   exportLimit:'Up to 10 local photos per ZIP (16 MB maximum).',
   exportWorking:'Preparing private export…',exportSent:'ZIP download requested.',exportFailed:'Export cancelled or unavailable.',
+  choose:'Select photos',finishChoosing:'Done',selected:'Selected',clearSelection:'Clear selection',selectionLimit:'Maximum 10 photos',
 })
 const validPhotos=computed(()=>photos.value.filter(p=>p.expiresAt>now.value))
 const folders=computed(()=>browserFolders(assignments.value,validPhotos.value))
 const visible=computed(()=>visibleBrowserPhotos(validPhotos.value,activeFolder.value,
   search.value,sort.value,now.value))
+const selectedPhotos=computed(()=>selectedVisiblePhotos(visible.value,selectedIds.value))
+function toggleChoosing(){
+  if(exporting.value)return
+  choosing.value=!choosing.value
+  selectedIds.value=new Set()
+}
+function toggleSelected(id:string){
+  if(exporting.value)return
+  selectedIds.value=togglePhotoSelection(selectedIds.value,id,visible.value)
+}
 const folderTitle=computed(()=>{
   const f=folders.value.find(x=>x.id===activeFolder.value)
   return !f||f.kind==='all'?txt.value.all:f.kind==='personal'?txt.value.personal:
@@ -74,7 +88,7 @@ function clear(){
   exporting.value=false;exportError.value='';exportNotice.value='';exportDone.value=0
   generation++
   photos.value=[];assignments.value=[];loading.value=false;error.value=''
-  activeFolder.value='all'
+  activeFolder.value='all';selectedIds.value=new Set();choosing.value=false
 }
 const release=onIdentityCleanup(clear)
 async function refresh(){
@@ -100,14 +114,14 @@ async function openPhoto(id:string){
 }
 
 async function downloadZip(){
-  if(exporting.value||visible.value.length<1||visible.value.length>10||!identity.value)return
+  if(exporting.value||!choosing.value||selectedPhotos.value.length<1||!identity.value)return
   exportController?.abort()
   const controller=new AbortController(),active=identity.value
   exportController=controller
   exporting.value=true;exportError.value='';exportNotice.value='';exportDone.value=0
   try{
     // Explicit owner-only export, from the current encrypted PB2 vault.
-    await exportOwnerBrowserZip([...visible.value],controller.signal,(done)=>{
+    await exportOwnerBrowserZip([...selectedPhotos.value],controller.signal,(done)=>{
       if(exportController===controller)exportDone.value=done
     })
     if(exportController===controller&&identity.value?.accountId===active.accountId&&
@@ -121,6 +135,12 @@ async function downloadZip(){
   }
 }
 
+watch([activeFolder,search,sort],()=>{ selectedIds.value=new Set() })
+watch(visible,rows=>{
+  const allowed=new Set(rows.map(row=>row.id))
+  const next=new Set([...selectedIds.value].filter(id=>allowed.has(id)))
+  if(next.size!==selectedIds.value.size)selectedIds.value=next
+})
 function wake(){if(!document.hidden)void refresh()}
 onMounted(()=>{
   stopped=false
@@ -183,10 +203,17 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
           </div>
         </div>
         <div class="pb-browser-export">
-          <button type="button" :disabled="exporting||loading||visible.length<1||visible.length>10"
-            @click="downloadZip">{{ exporting?txt.exportWorking:txt.exportZip }}</button>
+          <button type="button" :disabled="exporting||loading||!identity"
+            :aria-pressed="choosing" @click="toggleChoosing">{{ choosing?txt.finishChoosing:txt.choose }}</button>
+          <template v-if="choosing">
+            <button type="button" :disabled="exporting||selectedIds.size===0"
+              @click="selectedIds=new Set()">{{txt.clearSelection}}</button>
+            <span role="status">{{txt.selected}}: {{selectedPhotos.length}} / {{MAX_ZIP_SELECTION}}</span>
+            <button type="button" :disabled="exporting||loading||selectedPhotos.length<1"
+              @click="downloadZip">{{ exporting?txt.exportWorking:txt.exportZip }}</button>
+          </template>
           <small>{{ txt.exportWarning }} {{ txt.exportLimit }}</small>
-          <span v-if="exporting" role="status">{{ exportDone }} / {{ visible.length }}</span>
+          <span v-if="exporting" role="status">{{ exportDone }} / {{ selectedPhotos.length }}</span>
           <p v-if="exportError" role="alert">{{ exportError }}</p>
           <p v-if="exportNotice" role="status">{{ exportNotice }}</p>
         </div>
@@ -198,10 +225,13 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
         <div v-else :class="['pb-browser-photos',display]" role="list">
           <button v-for="photo in visible" :key="photo.id" role="listitem" type="button"
             :aria-label="txt.open+' '+(photo.nameId??photo.title??txt.file)"
-            class="pb-browser-photo" @click="openPhoto(photo.id)">
+            class="pb-browser-photo" :class="{ 'is-selected': choosing&&selectedIds.has(photo.id) }"
+            :aria-pressed="choosing?selectedIds.has(photo.id):undefined"
+            @click="choosing?toggleSelected(photo.id):openPhoto(photo.id)">
             <span class="pb-browser-image"><GalleryThumbnail :photo-id="photo.id"
               :label="photo.title||photo.nameId||txt.file"/></span>
             <span class="pb-browser-caption">
+              <span v-if="choosing" class="pb-browser-selection">{{ selectedIds.has(photo.id)?'✓':'○' }}</span>
               <strong>{{ photo.title||photo.nameId||txt.file }}</strong>
               <small>{{ photo.nameId||date(photo.capturedAt) }}</small>
               <small>{{ stateLabel(photo.sync) }}</small>
@@ -240,7 +270,8 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
 .pb-browser-photos.list{display:flex;flex-direction:column;gap:8px}
 .pb-browser-photo{text-align:left;display:flex;flex-direction:column;min-width:0;overflow:hidden;
   padding:0;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text)}
-.pb-browser-photo:hover{border-color:var(--accent)}
+.pb-browser-photo:hover,.pb-browser-photo.is-selected{border-color:var(--accent)}
+.pb-browser-selection{font-size:18px;color:var(--accent);line-height:1}
 .pb-browser-image{display:block;width:100%;aspect-ratio:4/3;overflow:hidden}
 .pb-browser-caption{display:flex;flex-direction:column;gap:3px;padding:12px;min-width:0;width:100%}
 .pb-browser-caption strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
