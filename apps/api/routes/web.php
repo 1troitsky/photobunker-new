@@ -58,6 +58,8 @@ Route::prefix('photos/v1')->middleware('throttle:100,1,photos')->group(function 
     Route::get('/{photoId}/review', [\App\Http\Controllers\AssignmentPhotoReviewController::class,'show']);
     Route::put('/{photoId}/review', [\App\Http\Controllers\AssignmentPhotoReviewController::class,'mutate']);
     Route::get('/{photoId}/receipt', [PhotoSyncController::class,'receipt']);
+    Route::put('/{photoId}/recovery-checks/{assetId}',
+        [\\App\\Http\\Controllers\\PhotoRecoveryCheckController::class,'store']);
     Route::get('/{photoId}/manifests', [PhotoSyncController::class,'manifests']);
     Route::get('/{photoId}/objects/{assetId}', [PhotoSyncController::class,'read']);
     Route::delete('/{photoId}',function(\Illuminate\Http\Request $r,string $photoId,Lifecycle $life,\App\Photo\PhotoSync $sync) {
