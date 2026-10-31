@@ -196,6 +196,7 @@ jobs:
           APP_URL: http://127.0.0.1:8099
           SESSION_DRIVER: file
           SESSION_SECURE_COOKIE: 'false'
+          PHOTO_RECIPIENT_THUMBNAIL_PREVIEW: 'true'
           PHP_CLI_SERVER_WORKERS: '4'
         run: |
           set -euo pipefail
