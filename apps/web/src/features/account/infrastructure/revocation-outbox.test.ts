@@ -1,11 +1,12 @@
 import 'fake-indexeddb/auto'
 import {beforeEach,describe,expect,it,vi} from 'vitest'
-const {session,submit,verify,forgot}=vi.hoisted(()=>({
+const {session,submit,verify,forgot,suspend}=vi.hoisted(()=>({
   session:{value:{accountId:'00000000-0000-4000-8000-000000000001',
     deviceId:'00000000-0000-4000-8000-000000000002',offline:false}},
   submit:vi.fn(),
   verify:vi.fn(async()=>{}),
   forgot:vi.fn(),
+  suspend:vi.fn(async()=>{}),
 }))
 vi.mock('../../identity',()=>({
   identity:session,
@@ -15,6 +16,7 @@ vi.mock('../../identity',()=>({
   }),
   submitSignedRevocationIntent:submit,
   forgetRuntime:forgot,
+  suspendDeviceForPendingRevocation:suspend,
 }))
 vi.mock('./device-pin',()=>({verifyDevicePin:verify}))
 import {stageRevocationIntent,pendingDeviceRevocations,deliverPendingRevocations} from './revocation-outbox'
@@ -35,7 +37,7 @@ async function hash(row:{accountId:string;deviceId:string;intent:string;operatio
     .map(value=>value.toString(16).padStart(2,'0')).join('')
 }
 beforeEach(async()=>{
-  submit.mockReset();forgot.mockReset();verify.mockClear()
+  submit.mockReset();forgot.mockReset();verify.mockClear();suspend.mockClear()
   session.value={accountId:'00000000-0000-4000-8000-000000000001',
     deviceId:'00000000-0000-4000-8000-000000000002',offline:false}
   await clearDB()
@@ -48,6 +50,7 @@ describe('G5 immutable device revocation outbox',()=>{
     const row=await stageRevocationIntent('emergency','12345678',true)
     expect(row.state).toBe('pending')
     expect(submit).not.toHaveBeenCalled()
+    expect(suspend).toHaveBeenCalledOnce()
     expect(await pendingDeviceRevocations()).toHaveLength(1)
     await expect(stageRevocationIntent('local-delete','12345678',true))
       .rejects.toThrow('revoke.already_pending')
