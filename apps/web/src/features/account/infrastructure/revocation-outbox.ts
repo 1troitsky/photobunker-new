@@ -1,4 +1,5 @@
-import {forgetRuntime,identity,signOwnRevocationIntent,submitSignedRevocationIntent} from '../../identity'
+import {forgetRuntime,identity,signOwnRevocationIntent,submitSignedRevocationIntent,
+  suspendDeviceForPendingRevocation} from '../../identity'
 import {verifyDevicePin,type DevicePinKind} from './device-pin'
 
 export type SignedDeviceRevocation=Readonly<{
@@ -104,8 +105,9 @@ export async function stageRevocationIntent(kind:DevicePinKind,pin:string,
     deviceId:current.deviceId,scope:current.accountId+'/'+current.deviceId,
     envelope,state:'pending',receipt:null,createdAt:Date.now()}
   await save(row)
-  // There is deliberately no network call during stage: the caller must first
-  // leave protected UI, lock the device, then request delivery.
+  // Pending intent is durable before the local device is suspended. No remote
+  // ACK exists yet; the background replay will submit it using the same sign.
+  await suspendDeviceForPendingRevocation(row.accountId,row.deviceId)
   return row
 }
 /** Idempotent replay. No claimed ACK on timeout/offline or corrupt receipt. */
