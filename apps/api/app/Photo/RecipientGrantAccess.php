@@ -10,35 +10,20 @@ use Illuminate\Support\Facades\DB;
  * A Team membership, invitation alone or client-side UI state is NEVER permission.
  */
 final class RecipientGrantAccess {
+    public function __construct(private readonly RecipientGrantPolicy $policy){}
     public function resolved(string $grantId,string $photoId,string $assetId,string $recipient):array {
         P::uuid($grantId);P::uuid($photoId);P::uuid($assetId);
         $grant=DB::table('assignment_grants_v1')->where('id',$grantId)
             ->where('recipient_account_id',$recipient)->where('state','accepted')
             ->whereNull('revoked_at')->whereNotNull('accepted_at')->first();
-        abort_unless($grant&&in_array($grant->role,['viewer','curator','contributor'],true),404);
+        abort_unless($grant,404);
+        $this->policy->assertActive($grant);
         $owner=$grant->owner_account_id;
-        abort_unless(DB::table('identity_accounts')->where('id',$owner)
-            ->where('status','ready')->exists(),404);
-        $blocked=DB::table('contact_blocks_v1')
-            ->where(fn($q)=>$q->where('account_id',$owner)->where('blocked_account_id',$recipient))
-            ->orWhere(fn($q)=>$q->where('account_id',$recipient)->where('blocked_account_id',$owner))
-            ->exists();
-        abort_if($blocked,404);
-        [$left,$right]=strcmp($owner,$recipient)<0?[$owner,$recipient]:[$recipient,$owner];
-        abort_unless(DB::table('contact_links_v1')->where('left_account_id',$left)
-            ->where('right_account_id',$right)->where('state','accepted')->exists(),404);
-        $assignment=DB::table('assignments')->where('id',$grant->assignment_id)
-            ->where('account_id',$owner)->first();
-        abort_unless($assignment&&$assignment->status!=='completed',404);
         $photo=DB::table('photo_records')->where('id',$photoId)
             ->where('account_id',$owner)->where('state','active')
             ->where('expires_at','>',PhotoSync::nowMs())->first();
         abort_unless($photo,404);
-        $capture=DB::table('assignment_photo_bindings_v1')->where('photo_id',$photoId)
-            ->where('assignment_id',$grant->assignment_id)
-            ->where('author_account_id',$owner)
-            ->where('expires_at','>',PhotoSync::nowMs())->first();
-        abort_unless($capture&&(int)$capture->expires_at===(int)$photo->expires_at,404);
+        $this->policy->assertPhotoBinding($grant,$photoId,(int)$photo->expires_at);
         $asset=DB::table('photo_objects')->where('id',$assetId)->where('photo_id',$photoId)
             ->where('kind','thumbnail')->where('state','active')->first();
         abort_unless($asset,404);
