@@ -124,10 +124,22 @@ test('two browsers: grant invite, genuine camera photo and recipient E2EE decryp
     await expect(incoming).toContainText(/Invitation accepted|Приглашение принято/i,{timeout:45000})
 
     await owner.goto('/camera?assignment='+assignmentId)
+    const camera=owner.getByTestId('production-camera')
+    await expect(camera.locator('select').first()).toHaveValue(assignmentId,{timeout:30000})
     await owner.getByRole('button',{name:/Enable camera|Включить камеру/i}).click()
+    await expect(owner.getByRole('button',{name:/Take photo|Снять фото/i})).toBeEnabled()
+    await expect.poll(async()=>camera.locator('video').evaluate(v=>
+      (v as HTMLVideoElement).videoWidth),{timeout:15000}).toBeGreaterThan(0)
+    await owner.getByRole('button',{name:/Revalidate server time|Проверить время сервера/i}).click()
+    await expect(camera.locator('.status-pill')).toContainText('UTC ✓',{timeout:15000})
     await owner.getByRole('button',{name:/Take photo|Снять фото/i}).click()
-    await expect(owner.getByText(/Encrypted on this device|Сохранено зашифрованно/i))
-      .toBeVisible({timeout:45000})
+    // Read only nonsecret camera feedback; don't log frame bytes or keys.
+    await expect.poll(async()=>{
+      const saved=(await camera.locator('.camera-feedback[role=status]').allTextContents()).join(' ')
+      if(/Encrypted on this device|Сохранено зашифрованно/i.test(saved))return 'saved'
+      const alert=(await camera.locator('.camera-feedback[role=alert]').allTextContents()).join(' ')
+      return alert?'camera error: '+alert:'pending'
+    },{timeout:30000,intervals:[300,800,1300]}).toBe('saved')
     await owner.goto('/photos')
     await owner.getByRole('button',{name:/Sync now|Синхронизировать/i}).click()
     await expect(owner.locator('.gallery-state').first())
