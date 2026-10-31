@@ -5,9 +5,10 @@ const {active,app,action}=vi.hoisted(()=>({
 }))
 vi.mock('../../identity',()=>({identity:active,removeRevokedDeviceAppPin:app}))
 vi.mock('./device-pin',()=>({removeRevokedDeviceActionPins:action}))
-vi.mock('../../local-storage',()=>({inspectPhotoStoreCounts:async()=>({
-  photoCipherAssets:8,photoJournals:2,photoOutbox:3,
-})}))
+vi.mock('../../local-storage',()=>({
+  inspectPhotoStoreCounts:async()=>({photoCipherAssets:8,photoJournals:2,photoOutbox:3}),
+  scanLocalOwnership:async()=>({disposition:'hold_ciphertext',summary:{total:8,held:8}}),
+}))
 vi.mock('../../assignments',()=>({inspectAssignmentPending:async()=>4}))
 vi.mock('../../collaboration',()=>({inspectCollaborationPending:async()=>5}))
 vi.mock('../../photo-grants',()=>({inspectGrantStoreCounts:async()=>({
@@ -37,6 +38,7 @@ describe('G5 credential-only cleanup boundary',()=>{
       photoCipherAssets:8,photoJournals:2,photoPending:3,
       assignmentPending:4,teamPending:5,sharePending:6,
       encryptedGrantSecrets:7,
+      ownership:{disposition:'hold_ciphertext',summary:{total:8,held:8}},
     })
   })
 })
