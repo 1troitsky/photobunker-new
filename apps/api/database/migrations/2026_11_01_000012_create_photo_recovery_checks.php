@@ -15,7 +15,7 @@ return new class extends Migration {
             $table->foreignUuid('origin_device_id')->constrained('identity_devices');
             $table->foreignUuid('verifier_device_id')->constrained('identity_devices');
             $table->char('cipher_sha256',64);
-            $table->char('plain_sha256',64);
+            $table->string('decryption',20);
             $table->char('payload_hash',64);
             $table->char('signature_hash',64);
             $table->timestampTz('verified_at');
