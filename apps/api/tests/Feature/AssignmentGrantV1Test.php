@@ -330,13 +330,83 @@ final class AssignmentGrantV1Test extends TestCase {
             'account_id'=>$this->accounts['guest'],
             'blocked_account_id'=>$this->accounts['owner'],'created_at'=>now(),
         ]);
-        $this->getJson($list)->assertOk()->assertJsonCount(0,'photos');
+        $this->getJson($list)->assertNotFound();
         DB::table('contact_blocks_v1')->delete();
         DB::table('assignments')->where('id',$this->assignment)->update(['status'=>'completed']);
-        $this->getJson($list)->assertOk()->assertJsonCount(0,'photos');
+        $this->getJson($list)->assertNotFound();
         DB::table('assignments')->where('id',$this->assignment)->update(['status'=>'in_progress']);
         $this->selectActor('owner');$this->send($this->action('revoke',$grant,2))->assertOk();
         $this->selectActor('guest');$this->getJson($list)->assertNotFound();
+    }
+
+    public function test_single_grant_acl_denies_publish_list_and_manifest_after_contact_removed():void{
+        $this->acceptedContact();$grant=(string)Str::uuid();
+        $this->send($this->action('invite',$grant))->assertOk();
+        $this->selectActor('guest');
+        $this->send($this->action('accept',$grant,1))->assertOk();
+        $this->selectActor('owner');
+        [$photo,$asset,$expires,$digest]=$this->thumbnailFixture();
+        $path="/photos/v1/shared/grants/$grant/photos/$photo/assets/$asset";
+        $list="/photos/v1/shared/grants/$grant/photos";
+        $statement=$this->shareStatement($grant,$photo,$asset,$expires,$digest);
+        $this->putJson($path,$statement)->assertOk();
+        config()->set('photo_sync.recipient_thumbnail_reads_enabled',true);
+        $this->selectActor('guest');
+        $this->getJson($path)->assertOk();
+        $this->getJson($list)->assertOk()->assertJsonCount(1,'photos');
+        DB::table('contact_links_v1')->delete();
+        $this->getJson($path)->assertNotFound();
+        $this->getJson($list)->assertNotFound();
+        $this->selectActor('owner');
+        $this->putJson($path,$statement)->assertNotFound();
+        $this->assertDatabaseCount('photo_recipient_keys_v1',1);
+    }
+
+    public function test_unverified_assignment_photo_binding_cannot_be_published_or_read():void{
+        $this->acceptedContact();$grant=(string)Str::uuid();
+        $this->send($this->action('invite',$grant))->assertOk();
+        $this->selectActor('guest');
+        $this->send($this->action('accept',$grant,1))->assertOk();
+        $this->selectActor('owner');
+        [$photo,$asset,$expires,$digest]=$this->thumbnailFixture();
+        $path="/photos/v1/shared/grants/$grant/photos/$photo/assets/$asset";
+        $list="/photos/v1/shared/grants/$grant/photos";
+        $statement=$this->shareStatement($grant,$photo,$asset,$expires,$digest);
+        // Binding is an independent proof of the assignment, and must agree
+        // with the photo's expiry even if the cryptographic statement is valid.
+        DB::table('assignment_photo_bindings_v1')->where('photo_id',$photo)
+            ->update(['expires_at'=>$expires-1000]);
+        $this->putJson($path,$statement)->assertNotFound();
+        DB::table('assignment_photo_bindings_v1')->where('photo_id',$photo)
+            ->update(['expires_at'=>$expires]);
+        $this->putJson($path,$statement)->assertOk();
+        config()->set('photo_sync.recipient_thumbnail_reads_enabled',true);
+        DB::table('assignment_photo_bindings_v1')->where('photo_id',$photo)
+            ->update(['expires_at'=>$expires-1000]);
+        $this->selectActor('guest');
+        $this->getJson($path)->assertNotFound();
+        $this->getJson($list)->assertOk()->assertJsonCount(0,'photos');
+        // Sharing an assignment never exposes its original.
+        $this->getJson("/photos/v1/$photo/manifests")->assertNotFound();
+    }
+
+    public function test_assignment_completion_closes_publishing_and_recipient_surfaces():void{
+        $this->acceptedContact();$grant=(string)Str::uuid();
+        $this->send($this->action('invite',$grant))->assertOk();
+        $this->selectActor('guest');
+        $this->send($this->action('accept',$grant,1))->assertOk();
+        $this->selectActor('owner');
+        [$photo,$asset,$expires,$digest]=$this->thumbnailFixture();
+        $path="/photos/v1/shared/grants/$grant/photos/$photo/assets/$asset";
+        $list="/photos/v1/shared/grants/$grant/photos";
+        $statement=$this->shareStatement($grant,$photo,$asset,$expires,$digest);
+        $this->putJson($path,$statement)->assertOk();
+        DB::table('assignments')->where('id',$this->assignment)->update(['status'=>'completed']);
+        $this->putJson($path,$statement)->assertNotFound();
+        config()->set('photo_sync.recipient_thumbnail_reads_enabled',true);
+        $this->selectActor('guest');
+        $this->getJson($path)->assertNotFound();
+        $this->getJson($list)->assertNotFound();
     }
 
 }
