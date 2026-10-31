@@ -411,6 +411,32 @@ export async function submitSignedRevocationIntent(
   return call('/device-revocations/'+input.operationId,'PUT',input)
 }
 
+/** G5: signed statement that THIS enrolled device performed the local check.
+ * The backend separately compares with the original photo origin device and
+ * with the immutable active object digest. This attestation does not prove
+ * OS-level recoverability or authorize any destructive operation.
+ */
+export async function signRecoveredCloudAsset(input:{
+  photoId:string;assetId:string;cipherSha256:string;plainSha256:string;
+  originDeviceId:string;verifiedDeviceId:string;operationId:string
+}):Promise<string>{
+  assertAppUnlocked()
+  const active=state.value,epoch=currentGeneration()
+  if(!active||active.offline)throw Error('recovery.identity_offline')
+  if(input.verifiedDeviceId!==active.deviceId||
+    input.originDeviceId===active.deviceId||
+    !/^[a-f0-9]{64}$/.test(input.cipherSha256)||
+    !/^[a-f0-9]{64}$/.test(input.plainSha256))
+    throw Error('recovery.invalid_attestation')
+  const canonical=JSON.stringify(Object.fromEntries(
+    Object.entries(input).sort(([a],[b])=>a<b?-1:a>b?1:0)))
+  const signature=await sign(active.device.deviceKey,
+    'photobunker.recovery-check.v1\\n'+canonical)
+  assertEpoch(epoch);assertAppUnlocked()
+  if(state.value!==active)throw Error('recovery.identity_changed')
+  return signature
+}
+
 export async function signPhotoSyncContract(contract:string):Promise<string>{
   const active=state.value,epoch=currentGeneration()
   if(!active||active.offline)throw new Error('sync.identity_offline')
