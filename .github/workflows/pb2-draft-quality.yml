@@ -244,7 +244,7 @@ jobs:
           cd ../..
           # Print only the test-only origin addresses if the browser case
           # fails; never print the complete Laravel log or request payloads.
-          trap 'grep -F "PB2_ORIGIN_DIAG" "$RUNNER_TEMP/pb2-e2ee-server.log" || true; kill "$backend_pid" 2>/dev/null || true' EXIT
+          trap 'if [ -f /tmp/pb2-origin-diagnostic.log ]; then cat /tmp/pb2-origin-diagnostic.log; fi; kill "$backend_pid" 2>/dev/null || true' EXIT
           for attempt in $(seq 1 40); do
             if curl --silent --fail http://127.0.0.1:8099/identity/v2/csrf >/dev/null; then break; fi
             sleep 1
