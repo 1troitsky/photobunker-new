@@ -3,7 +3,7 @@ import {openLocalPhotoVault,type CloudAsset} from '../../local-storage'
 
 export type CloudRecoveryCheck=Readonly<{
   operationId:string;photoId:string;assetId:string;originDeviceId:string;
-  verifiedDeviceId:string;cipherSha256:string;plainSha256:string;
+  verifiedDeviceId:string;cipherSha256:string;decryption:'aead-verified';
   payloadHash:string;state:'device-attested';verifiedAt:string
 }>
 type ManifestReply=Readonly<{
@@ -69,7 +69,7 @@ export async function attestRemotePhotoRecovery(photoId:string):Promise<CloudRec
   // no fallback to local ciphertext. Never use local gallery cache.
   const critical=manifest.assets.filter(x=>['master','original','edit','metadata'].includes(x.kind))
   const vault=openLocalPhotoVault()
-  const verified:{asset:CloudAsset;plainSha256:string}[]=[]
+  const verified:CloudAsset[]=[]
   for(const asset of critical){
     assertActive(account,device)
     const result=await photoRequest('/'+photoId+'/objects/'+asset.assetId)
@@ -77,9 +77,9 @@ export async function attestRemotePhotoRecovery(photoId:string):Promise<CloudRec
     const bytes=await result.blob()
     const opened=await vault.verifyRemoteRecoveryAsset(photoId,asset,bytes)
     assertActive(account,device)
-    if(opened.plainBytes!==asset.manifest.plainBytes||!sha.test(opened.plaintextSha256))
+    if(opened.plainBytes!==asset.manifest.plainBytes)
       throw Error('recovery.invalid_plaintext')
-    verified.push({asset,plainSha256:opened.plaintextSha256})
+    verified.push(asset)
   }
   // Only after ALL critical objects have decrypted can any claim be signed.
   // Never claim a whole photo recovered if one object was corrupted/missing.
@@ -89,10 +89,10 @@ export async function attestRemotePhotoRecovery(photoId:string):Promise<CloudRec
   if(!Array.isArray(existing.checks)||existing.checks.length>32)
     throw Error('recovery.receipts_invalid')
   const checks:CloudRecoveryCheck[]=[]
-  for(const {asset,plainSha256} of verified){
+  for(const asset of verified){
     assertActive(account,device)
     const fields={
-      photoId,assetId:asset.assetId,cipherSha256:asset.sha256,plainSha256,
+      photoId,assetId:asset.assetId,cipherSha256:asset.sha256,decryption:'aead-verified' as const,
       originDeviceId:manifest.originDeviceId,verifiedDeviceId:device,
       operationId:crypto.randomUUID(),
     }
@@ -101,12 +101,12 @@ export async function attestRemotePhotoRecovery(photoId:string):Promise<CloudRec
     if(previously.length===1){
       const receipt=previously[0]!
       const oldFields={photoId,assetId:asset.assetId,cipherSha256:asset.sha256,
-        plainSha256,originDeviceId:manifest.originDeviceId,verifiedDeviceId:device,
+        decryption:'aead-verified',originDeviceId:manifest.originDeviceId,verifiedDeviceId:device,
         operationId:receipt.operationId}
       const expected=await payloadDigest(oldFields)
       if(receipt.photoId!==photoId||receipt.originDeviceId!==manifest.originDeviceId||
         receipt.verifiedDeviceId!==device||receipt.cipherSha256!==asset.sha256||
-        receipt.plainSha256!==plainSha256||receipt.payloadHash!==expected||
+        receipt.decryption!=='aead-verified'||receipt.payloadHash!==expected||
         receipt.state!=='device-attested'||!UUID.test(receipt.operationId))
         throw Error('recovery.stale_or_mismatched_receipt')
       checks.push(receipt)
@@ -123,7 +123,7 @@ export async function attestRemotePhotoRecovery(photoId:string):Promise<CloudRec
       answer.photoId!==photoId||answer.assetId!==asset.assetId||
       answer.originDeviceId!==manifest.originDeviceId||
       answer.verifiedDeviceId!==device||
-      answer.cipherSha256!==asset.sha256||answer.plainSha256!==plainSha256||
+      answer.cipherSha256!==asset.sha256||answer.decryption!=='aead-verified'||
       answer.payloadHash!==expected||answer.state!=='device-attested'||
       !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(answer.verifiedAt))
       throw Error('recovery.invalid_server_receipt')
