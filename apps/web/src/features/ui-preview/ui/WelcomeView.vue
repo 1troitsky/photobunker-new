@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import {onMounted, ref} from 'vue'
+import {revokedDeviceStatuses} from '../../account'
 import AppIcon from './AppIcon.vue'
 import { language, setLanguage, setTheme, text, theme } from './copy'
 
 const slide = ref(0)
+const hasDeviceRevocation=ref(false)
+onMounted(()=>{void revokedDeviceStatuses().then(rows=>{hasDeviceRevocation.value=rows.length>0}).catch(()=>{})})
 const benefitIcons = ['camera', 'shield', 'users', 'info', 'key'] as const
 function choose(index: number) {
   slide.value = (index + text.value.benefits.length) % text.value.benefits.length
@@ -79,6 +82,9 @@ function touchEnd(event: TouchEvent) {
           <AppIcon name="arrow" />
         </RouterLink>
       </nav>
+      <RouterLink v-if="hasDeviceRevocation" to="/device-revocation/status" class="welcome-disclaimer">
+        {{language==='ru'?'Проверить отзыв доступа устройства':'Check device revocation status'}}
+      </RouterLink>
       <section
         class="welcome-why"
         aria-labelledby="welcome-why-heading"
