@@ -162,3 +162,19 @@ export async function inspectPhotoStoreCounts(account:string){
   return{photoJournals,photoCipherAssets,
     photoOutbox:rows.filter(row=>!['acknowledged','cancelled'].includes(row.state)).length}
 }
+
+/** Delete ONLY the revoked device's derived trusted-time snapshot after a
+ * separately verified server ACK. Never deletes ciphertext, journals, keys,
+ * name leases or any other device's clock. Idempotent after a crash.
+ */
+export async function removeRevokedDeviceClock(accountId:string,deviceId:string):Promise<void>{
+  if(!accountId||!deviceId)throw Error('storage.device_scope_required')
+  const key=accountId+'/'+deviceId
+  await db.transaction('rw',db.clock,async()=>{
+    const row=await db.clock.get(key)
+    if(!row)return
+    if(row.accountId!==accountId||row.deviceId!==deviceId)
+      throw Error('storage.device_clock_scope_conflict')
+    await db.clock.delete(key)
+  })
+}
