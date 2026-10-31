@@ -16,14 +16,14 @@ const copy=computed(()=>ru.value?{
   unlock:'Разблокировать',loading:'Проверяем PIN…',
   unavailable:'PIN-хранилище повреждено или недоступно. Автоматический обход запрещён.',
   failed:'Неверный PIN, задержка после ошибок или ошибка хранения. Доступ не предоставлен.',
-  recovery:'Восстановление через Recovery Key создаёт новое доверенное устройство. Локальные фото и ключи не удаляются.',
+  recovery:'Recovery Key позволяет открыть новый доступ, но несинхронизированные фото могут остаться недоступными. Старые локальные файлы автоматически не удаляются.',
   recover:'Восстановить по ключу',
 }:{
   title:'PhotoBunker locked',hint:'Enter the device PIN. This is not your account Recovery Key.',
   unlock:'Unlock',loading:'Verifying PIN…',
   unavailable:'PIN storage is corrupt or unavailable. Automatic bypass is forbidden.',
   failed:'Wrong PIN, retry cooldown or storage failure. Access remains blocked.',
-  recovery:'Recovery Key restoration enrolls a new trusted device. Existing local photos and keys are not erased.',
+  recovery:'Recovery Key can enroll a new device, but unsynced photos may remain inaccessible. Existing local files are not automatically erased.',
   recover:'Restore with Recovery Key',
 })
 async function unlock(){
