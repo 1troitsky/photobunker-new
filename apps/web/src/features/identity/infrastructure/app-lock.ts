@@ -181,3 +181,23 @@ if(typeof document!=='undefined'){
     if(document.hidden&&state.value.configured&&!state.value.locked)lockApp()
   })
 }
+
+/** Post-server-ACK cleanup of *only* the revoked device's App PIN verifier.
+ * Does not touch account/device keys, recovery envelope or photo ciphertext.
+ * Idempotent: an absent record counts as already cleaned.
+ */
+export async function removeRevokedDeviceAppPin(accountId:string,deviceId:string):Promise<void>{
+  const scope=scopeKey(accountId,deviceId)
+  if(state.value.scope===scope&&!state.value.locked)
+    throw Error('pin.active_device_cleanup_forbidden')
+  const connection=await db()
+  try{
+    await new Promise<void>((resolve,reject)=>{
+      const tx=connection.transaction('pins','readwrite')
+      tx.objectStore('pins').delete(scope)
+      tx.oncomplete=()=>resolve()
+      tx.onabort=()=>reject(tx.error??Error('pin.cleanup_failed'))
+      tx.onerror=()=>{/* onabort reports failure */}
+    })
+  }finally{connection.close()}
+}
