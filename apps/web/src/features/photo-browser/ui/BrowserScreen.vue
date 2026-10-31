@@ -244,27 +244,25 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
           </section>
         </div>
         <div v-else :class="['pb-browser-photos',display]" role="list">
-          <button v-for="photo in visible" :key="photo.id" role="listitem" type="button"
-            :aria-label="txt.open+' '+(photo.nameId??photo.title??txt.file)"
-            class="pb-browser-photo" :class="{ 'is-selected': choosing&&selectedIds.has(photo.id) }"
-            :aria-pressed="choosing?selectedIds.has(photo.id):undefined"
-            @click="choosing?toggleSelected(photo.id):openPhoto(photo.id)">
-            <span class="pb-browser-image"><GalleryThumbnail :photo-id="photo.id"
-              :label="photo.title||photo.nameId||txt.file"/></span>
-            <span class="pb-browser-caption">
-              <span v-if="choosing" class="pb-browser-selection">{{ selectedIds.has(photo.id)?'✓':'○' }}</span>
-              <strong>{{ photo.title||photo.nameId||txt.file }}</strong>
-              <small>{{ photo.nameId||date(photo.capturedAt) }}</small>
-              <small>{{ stateLabel(photo.sync) }}</small>
-
-            </span>
-          </button>
-          <div v-if="!choosing" class="pb-browser-card-toolbar">
-            <button v-for="photo in visible" :key="photo.id" type="button"
-              class="subtle-button pb-card-shortcut" @click="openCard(photo.id)">
-              {{txt.card}} — {{photo.title||photo.nameId||txt.file}}
+          <article v-for="photo in visible" :key="photo.id" class="pb-browser-item" role="listitem">
+            <button type="button"
+              :aria-label="(choosing?txt.choose:txt.open)+' '+(photo.nameId??photo.title??txt.file)"
+              class="pb-browser-photo" :class="{ 'is-selected': choosing&&selectedIds.has(photo.id) }"
+              :aria-pressed="choosing?selectedIds.has(photo.id):undefined"
+              @click="choosing?toggleSelected(photo.id):openPhoto(photo.id)">
+              <span class="pb-browser-image"><GalleryThumbnail :photo-id="photo.id"
+                :label="photo.title||photo.nameId||txt.file"/></span>
+              <span class="pb-browser-caption">
+                <span v-if="choosing" class="pb-browser-selection">{{ selectedIds.has(photo.id)?'✓':'○' }}</span>
+                <strong>{{ photo.title||photo.nameId||txt.file }}</strong>
+                <small>{{ photo.nameId||date(photo.capturedAt) }}</small>
+                <small>{{ stateLabel(photo.sync) }}</small>
+              </span>
             </button>
-          </div>
+            <button v-if="!choosing" class="pb-card-shortcut" type="button" @click="openCard(photo.id)">
+              {{txt.card}}
+            </button>
+          </article>
         </div>
       </div>
     </div>
@@ -301,8 +299,11 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
 .pb-tree-photo{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--border);padding:8px 0}
 .pb-tree-photo button{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;min-height:40px;padding:7px 9px;overflow-wrap:anywhere}
 .pb-tree-photo button:nth-child(2){flex:1;text-align:left}
-.pb-browser-card-toolbar{display:flex;flex-wrap:wrap;gap:6px;grid-column:1/-1}
-.pb-card-shortcut{font-size:12px;min-height:36px;max-width:100%;overflow-wrap:anywhere}
+.pb-browser-item{display:flex;flex-direction:column;min-width:0}
+.pb-browser-item .pb-browser-photo{flex:1}
+.pb-card-shortcut{font-size:12px;min-height:40px;text-align:center;color:var(--accent);background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-top:4px}
+.pb-browser-photos.list .pb-browser-item{flex-direction:row;gap:8px}
+.pb-browser-photos.list .pb-card-shortcut{margin-top:0}
 .pb-browser-photos.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:14px}
 .pb-browser-photos.list{display:flex;flex-direction:column;gap:8px}
 .pb-browser-photo{text-align:left;display:flex;flex-direction:column;min-width:0;overflow:hidden;
