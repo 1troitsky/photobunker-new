@@ -111,6 +111,23 @@ function signG1(string $message,$key):string {
     }
     return P::encode(implode('',$ints));
 }
+/** Real signed assignment invitation, acceptance and revocation over HTTP. */
+function grantCommandG1(string $kind,string $grant,string $assignment,string $target,
+    int $generation, $signer):array{
+    $op=(string)Str::uuid();$invite=$kind==='invite';
+    $body=[
+        'v'=>1,'opId'=>$op,'kind'=>$kind,'grantId'=>$grant,
+        'assignmentId'=>$assignment,'targetId'=>$invite?$target:null,
+        'role'=>$invite?'viewer':null,'expectedGeneration'=>$generation,
+        'expiresAt'=>$invite?now()->getTimestampMs()+3600000:null,
+        'codeHash'=>$invite?hash('sha256',random_bytes(32)):null,
+        'sealedKey'=>$invite?['v'=>1,'iv'=>P::encode(random_bytes(12)),
+            'ciphertext'=>P::encode(random_bytes(48))]:null,
+    ];
+    $raw=json_encode($body,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+    return ['/assignments/v1/grants/operations/'.$op,
+        ['contract'=>$raw,'signature'=>signG1("photobunker.assignment-grant.v1\n".$raw,$signer)]];
+}
 function assetG1(string $account,string $photo,int $expires,string $kind,int $size):array {
     $id=(string)Str::uuid();
     $bytes=random_bytes($size);
@@ -130,7 +147,7 @@ function assetG1(string $account,string $photo,int $expires,string $kind,int $si
       'sha256'=>hash('sha256',$bytes),'manifest'=>$manifest],$bytes];
 }
 
-$ids=[];$keys=[];
+$ids=[];$keys=[];$assignmentIds=[];$grantIds=[];$guestCookie=null;
 try {
     $csrf=statusG1(requestG1('GET','/identity/v2/csrf'),200,'csrf');
     $token=$csrf['csrfToken']??'';
@@ -207,6 +224,128 @@ try {
     expectG1($read[0]===200,'ciphertext HTTP GET denied');
     expectG1(hash_equals(hash('sha256',$masterBytes),hash('sha256',$read[2])),
         'HTTP body ciphertext digest mismatch');
+
+    // G2: real two-account HTTP sessions + live Postgres + Garage object bytes.
+    // Assignment/contact/binding are isolated database fixtures: identity,
+    // signed invitations and signed photo access use the production endpoints.
+    $assignment=(string)Str::uuid();$assignmentIds[]=$assignment;
+    DB::table('assignments')->insert([
+        'id'=>$assignment,'account_id'=>$account,'status'=>'in_progress',
+        'revision'=>2,'policy_revision'=>1,'mode'=>3,'retention_days'=>1,
+        'cipher_envelope'=>'{}','last_operation_id'=>(string)Str::uuid(),
+        'created_at'=>now(),'updated_at'=>now(),
+    ]);
+    DB::table('assignment_photo_bindings_v1')->insert([
+        'photo_id'=>$photo,'assignment_id'=>$assignment,
+        'author_account_id'=>$account,'assignment_revision'=>2,'policy_revision'=>1,
+        'mode'=>3,'retention_days'=>1,'captured_at'=>$expires-86400000,
+        'expires_at'=>$expires,'created_at'=>now(),'updated_at'=>now(),
+    ]);
+    $ownerCookie=$cookie;$ownerToken=$token;
+    $guestCookie=tempnam(sys_get_temp_dir(),'pb2-ci-guest-');
+    expectG1($guestCookie!==false,'guest cookie jar');
+    $cookie=$guestCookie;$token='';
+    $guestCsrf=statusG1(requestG1('GET','/identity/v2/csrf'),200,'guest csrf');
+    $token=$guestCsrf['csrfToken'];
+    [$guestAccountPrivate,$guestAccountSpki]=pubPair();
+    [$guestDevicePrivate,$guestDeviceSpki]=pubPair();
+    $guestOperation=(string)Str::uuid();
+    $guestPrepared=statusG1(requestG1('POST','/identity/v2/prepare',[
+        'operationId'=>$guestOperation,'reservationProof'=>P::encode(random_bytes(32)),
+    ]),200,'guest prepare');
+    $guest=$guestPrepared['accountId'];$ids[]=$guest;
+    $guestDevice=(string)Str::uuid();$guestLocator=P::encode(random_bytes(16));
+    $guestEnvelope=['v'=>2,'alg'=>'A256GCM','accountId'=>$guest,
+        'locator'=>$guestLocator,'keyId'=>P::encode(random_bytes(16)),
+        'purpose'=>'recovery','revision'=>1,'iv'=>P::encode(random_bytes(12)),
+        'ciphertext'=>P::encode(random_bytes(48))];
+    $guestPayload=['accountId'=>$guest,'accountSpki'=>$guestAccountSpki,
+        'deviceId'=>$guestDevice,'deviceSpki'=>$guestDeviceSpki,
+        'envelopeHash'=>hash('sha256',P::envelope($guestEnvelope,$guest,$guestLocator,'recovery',1)),
+        'locator'=>$guestLocator,'operationId'=>$guestOperation,'purpose'=>'register'];
+    $guestChallenge=statusG1(requestG1('POST','/identity/v2/challenges',
+        ['payload'=>$guestPayload]),200,'guest challenge');
+    statusG1(requestG1('POST','/identity/v2/proof',[
+        'challengeId'=>$guestChallenge['id'],
+        'signature'=>signG1($guestChallenge['message'],$guestAccountPrivate),
+        'deviceSignature'=>signG1($guestChallenge['message'],$guestDevicePrivate),
+        'envelope'=>$guestEnvelope,
+    ]),200,'guest identity proof');
+    $token=statusG1(requestG1('GET','/identity/v2/csrf'),200,'guest post-proof csrf')['csrfToken'];
+    expectG1(statusG1(requestG1('GET','/identity/v2/session'),200,'guest session')['accountId']===$guest,
+        'guest session not distinct from owner');
+
+    [$left,$right]=strcmp($account,$guest)<0?[$account,$guest]:[$guest,$account];
+    DB::table('contact_links_v1')->insert([
+        'left_account_id'=>$left,'right_account_id'=>$right,
+        'requester_id'=>$account,'state'=>'accepted',
+        'created_at'=>now(),'updated_at'=>now(),
+    ]);
+    $cookie=$ownerCookie;$token=$ownerToken;
+    $grant=(string)Str::uuid();$grantIds[]=$grant;
+    [$invitePath,$inviteBody]=grantCommandG1('invite',$grant,$assignment,$guest,0,$devicePrivate);
+    statusG1(requestG1('PUT',$invitePath,$inviteBody),200,'owner signed invitation');
+    $cookie=$guestCookie;
+    $guestCsrf=statusG1(requestG1('GET','/identity/v2/csrf'),200,'guest csrf after invite');
+    $token=$guestCsrf['csrfToken'];
+    [$acceptPath,$acceptBody]=grantCommandG1('accept',$grant,$assignment,$guest,1,$guestDevicePrivate);
+    statusG1(requestG1('PUT',$acceptPath,$acceptBody),200,'recipient accepts invitation');
+
+    $cookie=$ownerCookie;$token=$ownerToken;
+    $sharePath="/photos/v1/shared/grants/$grant/photos/$photo/assets/".$thumbnail['assetId'];
+    $context=['grantId'=>$grant,'generation'=>2,'assignmentId'=>$assignment,
+        'ownerAccountId'=>$account,'recipientAccountId'=>$guest,
+        'photoId'=>$photo,'assetId'=>$thumbnail['assetId'],'kind'=>'thumbnail',
+        'revision'=>1,'expiresAt'=>$expires,
+        'cipherDigest'=>$thumbnail['manifest']['cipherDigest']];
+    $statement=['v'=>1,'operationId'=>(string)Str::uuid(),
+        'grantId'=>$grant,'generation'=>2,'assignmentId'=>$assignment,
+        'ownerAccountId'=>$account,'recipientAccountId'=>$guest,'photoId'=>$photo,
+        'assetId'=>$thumbnail['assetId'],'kind'=>'thumbnail','assetRevision'=>1,
+        'expiresAt'=>$expires,'cipherDigest'=>$context['cipherDigest'],
+        'envelope'=>['v'=>1,'context'=>$context,
+            'iv'=>P::encode(random_bytes(12)),
+            'ciphertext'=>P::encode(random_bytes(48))]];
+    $wire=json_encode($statement,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+    $publication=['contract'=>$wire,
+        'signature'=>signG1("photobunker.photo-recipient.v1\n".$wire,$devicePrivate),
+        'deviceId'=>$device,'deviceSpki'=>$deviceSpki,
+        'rootSignature'=>signG1("photobunker.photo-recipient-root.v1\n".
+            $device."\n".$deviceSpki."\n".$wire,$accountPrivate)];
+    statusG1(requestG1('PUT',$sharePath,$publication),200,'signed thumbnail publish');
+    statusG1(requestG1('PUT',$sharePath,$publication),200,'signed publish lost ACK');
+
+    $cookie=$guestCookie;$token=$guestCsrf['csrfToken'];
+    $listPath="/photos/v1/shared/grants/$grant/photos";
+    $received=statusG1(requestG1('GET',$listPath),200,'recipient grant photo list');
+    expectG1(count($received['photos']??[])===1 &&
+        $received['photos'][0]['assetId']===$thumbnail['assetId'],
+        'wrong recipient list');
+    $manifest=statusG1(requestG1('GET',$sharePath),200,'recipient encrypted thumbnail manifest');
+    expectG1($manifest['manifest']['accountId']===$account,
+        'recipient asset AAD is not owner scoped');
+    $receivedBody=requestG1('GET',$sharePath.'/ciphertext');
+    expectG1($receivedBody[0]===200&&
+        hash_equals(hash('sha256',$thumbnailBytes),hash('sha256',$receivedBody[2])),
+        'recipient received different encrypted S3 bytes');
+    statusG1(requestG1('GET',$masterPath),404,'guest cannot access original');
+    DB::table('contact_blocks_v1')->insert([
+        'account_id'=>$guest,'blocked_account_id'=>$account,'created_at'=>now(),
+    ]);
+    statusG1(requestG1('GET',$sharePath),404,'blocked recipient manifest');
+    statusG1(requestG1('GET',$sharePath.'/ciphertext'),404,'blocked recipient ciphertext');
+    statusG1(requestG1('GET',$listPath),404,'blocked recipient list');
+    DB::table('contact_blocks_v1')->where('account_id',$guest)
+        ->where('blocked_account_id',$account)->delete();
+    $cookie=$ownerCookie;$token=$ownerToken;
+    [$revokePath,$revokeBody]=grantCommandG1('revoke',$grant,$assignment,$guest,2,$devicePrivate);
+    statusG1(requestG1('PUT',$revokePath,$revokeBody),200,'owner revokes recipient');
+    $cookie=$guestCookie;$token=$guestCsrf['csrfToken'];
+    statusG1(requestG1('GET',$sharePath.'/ciphertext'),404,'recipient after revoke');
+    statusG1(requestG1('GET',$listPath),404,'recipient list after revoke');
+    $cookie=$ownerCookie;$token=$ownerToken;
+    fwrite(STDOUT,"G2_HTTP_TWO_ACCOUNT_ACL_S3_PASS\n");
+
     DB::table('photo_records')->where('id',$photo)
        ->update(['expires_at'=>now()->subMinute()->getTimestampMs()]);
     statusG1(requestG1('GET','/photos/v1/'.$photo.'/receipt'),410,'expired receipt');
@@ -223,6 +362,25 @@ try {
       if(Storage::disk('photo-ciphertext')->exists($key))
          Storage::disk('photo-ciphertext')->delete($key);
     }
+    // Delete dependent grants and assignments before the registered identities.
+    foreach($grantIds as $grant){
+      DB::table('photo_recipient_keys_v1')->where('grant_id',$grant)->delete();
+      DB::table('assignment_grants_v1')->where('id',$grant)->delete();
+    }
+    foreach($assignmentIds as $id){
+      DB::table('assignment_photo_bindings_v1')->where('assignment_id',$id)->delete();
+      DB::table('assignment_history')->where('assignment_id',$id)->delete();
+      DB::table('assignment_capture_policies_v1')->where('assignment_id',$id)->delete();
+      DB::table('assignments')->where('id',$id)->delete();
+    }
+    foreach($ids as $id){
+      DB::table('assignment_grant_operations_v1')->where('actor_account_id',$id)->delete();
+      DB::table('contact_links_v1')->where('left_account_id',$id)
+        ->orWhere('right_account_id',$id)->delete();
+      DB::table('contact_blocks_v1')->where('account_id',$id)
+        ->orWhere('blocked_account_id',$id)->delete();
+    }
+    if(is_string($guestCookie)&&is_file($guestCookie))unlink($guestCookie);
     // Drop only our isolated CI identities, never modify real user data.
     foreach($ids as $id){
       DB::table('photo_records')->where('account_id',$id)->delete();
