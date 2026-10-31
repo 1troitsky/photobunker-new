@@ -26,6 +26,7 @@ Route::prefix('identity/v2')->middleware('throttle:40,1,identity')->group(functi
     Route::post('/rotations/status', [IdentityController::class,'rotationStatus']);
     Route::get('/devices', [IdentityController::class,'devices']);
     Route::delete('/devices/{id}', [IdentityController::class,'revoke']);
+    Route::put('/device-revocations/{operationId}', [\\App\\Http\\Controllers\\DeviceRevocationIntentController::class,'commit']);
 });
 
 
