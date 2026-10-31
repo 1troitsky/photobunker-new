@@ -40,6 +40,22 @@ final class PhotoRecoveryCheckController extends Controller
             ->where('status','ready')->exists(),401);
         return [$account,$identity];
     }
+    /** Read only current verifier's receipts for still-active cloud objects. */
+    public function index(Request $request,string $photoId):JsonResponse {
+        P::uuid($photoId);
+        [$account,$device]=$this->actor($request);
+        $photo=DB::table('photo_records')->where('id',$photoId)
+            ->where('account_id',$account)->where('state','active')->first();
+        abort_unless($photo,404);
+        $objects=DB::table('photo_objects')->where('photo_id',$photoId)
+            ->where('state','active')->pluck('id');
+        $rows=DB::table('photo_recovery_checks')->where('account_id',$account)
+            ->where('photo_id',$photoId)->where('verifier_device_id',$device->id)
+            ->whereIn('asset_id',$objects)->orderBy('asset_id')->limit(32)->get();
+        return response()->json(['checks'=>$rows->map(fn($row)=>
+            $this->receipt($row)->getData(true))->all()])
+            ->header('Cache-Control','no-store');
+    }
     public function store(Request $request,string $photoId,string $assetId):JsonResponse {
         $origin=$request->headers->get('Origin');
         abort_unless(is_string($origin)&&hash_equals(rtrim(config('app.url'),'/'),$origin),403);
