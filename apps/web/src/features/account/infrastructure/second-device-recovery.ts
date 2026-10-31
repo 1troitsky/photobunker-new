@@ -104,7 +104,7 @@ export async function attestRemotePhotoRecovery(photoId:string):Promise<CloudRec
       answer.verifiedDeviceId!==device||
       answer.cipherSha256!==asset.sha256||answer.plainSha256!==plainSha256||
       answer.payloadHash!==expected||answer.state!=='device-attested'||
-      !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\\.\d{3}Z$/.test(answer.verifiedAt))
+      !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(answer.verifiedAt))
       throw Error('recovery.invalid_server_receipt')
     checks.push(answer)
   }
