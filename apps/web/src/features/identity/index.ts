@@ -32,3 +32,5 @@ export type {AccountDeviceRecord} from './infrastructure/identity'
 export {appLockState,configureAppPin,lockApp,unlockAppPin} from './infrastructure/app-lock'
 
 export {signOwnRevocationIntent,submitSignedRevocationIntent} from './infrastructure/identity'
+
+export {suspendDeviceForPendingRevocation} from './infrastructure/identity'
