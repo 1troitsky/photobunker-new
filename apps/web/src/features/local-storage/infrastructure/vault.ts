@@ -844,7 +844,7 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
    * verified byte must come from the supplied remote response, not local cache.
    */
   async verifyRemoteRecoveryAsset(photoId:string,asset:CloudAsset,ciphertext:Blob):
-    Promise<{plainBytes:number;plaintextSha256:string}>{
+    Promise<{plainBytes:number}>{
     this.check();await this.clockReady();identifier(photoId)
     invalid(asset.manifest.accountId===this.scope.accountId&&
       asset.manifest.photoId===photoId&&asset.manifest.assetId===asset.assetId&&
@@ -861,9 +861,8 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     manifestValid(manifest,{scope:this.scope,photoId,assetId:asset.assetId})
     const key=await this.grant.open(asset.assetId,String(manifest.expiresAt),manifest.wrappedDEK)
     const clear=await decryptAsset(manifest,ciphertext,key,this.scope,()=>{this.check();this.time.now()})
-    const plaintextSha256=await sha(new Uint8Array(await clear.arrayBuffer()))
     this.check()
-    return {plainBytes:clear.size,plaintextSha256}
+    return {plainBytes:clear.size}
   }
   /** Confirmed thumbnail ciphertext may be evicted; unsynced upload assets never are. */
   async cacheThumbnail(photoId:string):Promise<void>{
