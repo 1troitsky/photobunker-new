@@ -1,4 +1,5 @@
 import type { Challenge } from './crypto'
+import {assertAppUnlocked} from './app-lock'
 import { canonical, digest, hex, verifyChallenge } from './crypto'
 
 let generation = 0
@@ -80,6 +81,7 @@ export async function photoRequest(
 ):Promise<Response>{
   const sharedPage=/^\/shared\/grants\/[a-f0-9-]{36}\/photos(?:\?after=[A-Za-z0-9_-]{40,768}&limit=(?:[1-9]|[1-4][0-9]|50))?$/.test(path)
   if(!sharedPage&&!/^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*(?:\?after=[0-9a-f-]{36}&limit=(?:[1-9]|[1-4][0-9]|50))?$/.test(path))throw new IdentityError('sync.invalid_path',400)
+  assertAppUnlocked()
   const epoch=currentGeneration(),controller=new AbortController()
   controllers.add(controller)
   try{
@@ -94,6 +96,7 @@ export async function photoRequest(
       headers,body:data,
     })
     assertGeneration(epoch)
+    assertAppUnlocked()
     return response
   }finally{controllers.delete(controller)}
 }
@@ -105,6 +108,7 @@ export async function assignmentRequest(
 ):Promise<Response>{
   if(!/^\/(?:list|grants|grants\/operations\/[a-f0-9-]{36}|[a-f0-9-]{36}(?:\/(?:history|progress))?)$/.test(path))
     throw new IdentityError('assignment.invalid_path',400)
+  assertAppUnlocked()
   const epoch=currentGeneration(),controller=new AbortController()
   controllers.add(controller)
   try{
@@ -119,6 +123,7 @@ export async function assignmentRequest(
       body,signal:controller.signal,
     })
     assertGeneration(epoch)
+    assertAppUnlocked()
     return response
   }finally{controllers.delete(controller)}
 }
@@ -127,6 +132,7 @@ export async function assignmentRequest(
 export async function collaborationRequest(path:string,method:'GET'|'PUT'='GET',body?:string):Promise<Response>{
   if(!/^\/(?:snapshot|operations\/[a-f0-9-]{36})$/.test(path))
     throw new IdentityError('team.invalid_path',400)
+  assertAppUnlocked()
   const epoch=currentGeneration(),controller=new AbortController()
   controllers.add(controller)
   try{
@@ -140,6 +146,7 @@ export async function collaborationRequest(path:string,method:'GET'|'PUT'='GET',
       method,credentials:'same-origin',cache:'no-store',headers,body,signal:controller.signal,
     })
     assertGeneration(epoch)
+    assertAppUnlocked()
     return response
   }finally{controllers.delete(controller)}
 }
