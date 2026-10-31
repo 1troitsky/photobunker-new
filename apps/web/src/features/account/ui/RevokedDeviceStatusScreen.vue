@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import {computed,onMounted,ref} from 'vue'
 import {language} from '../../ui-preview'
-import {revokedDeviceStatuses,retainedEncryptedData,deliverPendingRevocations} from '../index'
+import {revokedDeviceStatuses,deliverPendingRevocations} from '../index'
 import type {RevokedDeviceStatus} from '../infrastructure/revocation-outbox'
-import type {RetainedDataReport} from '../infrastructure/device-cleanup'
 
 const ru=computed(()=>language.value==='ru')
 const copy=computed(()=>ru.value?{
@@ -13,8 +12,7 @@ const copy=computed(()=>ru.value?{
  data:'Зашифрованные данные сохранены. Это не полное удаление устройства.',
  noIntent:'Нет зарегистрированных намерений об отзыве',
  unreadable:'Не удалось безопасно прочитать журнал.',report:'Остатки зашифрованного хранилища',
- assets:'Зашифрованные файлы',journals:'Незавершённые записи',
- queues:'Незавершённые задачи',warning:'Ни облачные фотографии, ни ключи восстановления, ни локальные копии не уничтожены.',
+warning:'Ни облачные фотографии, ни ключи восстановления, ни локальные копии не уничтожены.',
 }:{
  title:'Device access revocation',back:'Return',refresh:'Check again',
  pending:'Waiting for server confirmation',revoked:'Device access revoked by server',
@@ -22,11 +20,9 @@ const copy=computed(()=>ru.value?{
  data:'Encrypted data is retained. This is not a full device wipe.',
  noIntent:'No device-revocation intents recorded',
  unreadable:'Could not safely read the local journal.',report:'Remaining encrypted storage',
- assets:'Encrypted assets',journals:'Unfinished writes',
- queues:'Pending operations',warning:'Cloud photos, recovery keys and local copies have not been destroyed.',
+warning:'Cloud photos, recovery keys and local copies have not been destroyed.',
 })
 const items=ref<RevokedDeviceStatus[]>([])
-const reports=ref<Record<string,RetainedDataReport>>({})
 const busy=ref(false),failed=ref(false)
 async function reload(){
   if(busy.value)return
@@ -34,10 +30,7 @@ async function reload(){
   try{
     await deliverPendingRevocations()
     const rows=await revokedDeviceStatuses()
-    const next:Record<string,RetainedDataReport>={}
-    for(const row of rows)next[row.operationId]=await retainedEncryptedData(row.accountId,row.deviceId)
     items.value=rows
-    reports.value=next
   }catch{failed.value=true}finally{busy.value=false}
 }
 onMounted(()=>{void reload()})
@@ -56,17 +49,7 @@ const pending=(item:RevokedDeviceStatus)=>item.serverState==='pending'
       <p><strong>{{pending(item)?copy.pending:copy.revoked}}</strong></p>
       <p>{{item.localCredentialCleanup==='completed'?copy.clean:copy.cleanPending}}</p>
       <p>{{copy.data}}</p>
-      <template v-if="reports[item.operationId]">
-        <h3>{{copy.report}}</h3>
-        <dl>
-          <div><dt>{{copy.assets}}</dt><dd>{{reports[item.operationId]?.photoCipherAssets}}</dd></div>
-          <div><dt>{{copy.journals}}</dt><dd>{{reports[item.operationId]?.photoJournals}}</dd></div>
-          <div><dt>{{copy.queues}}</dt><dd>{{(reports[item.operationId]?.photoPending??0)+
-            (reports[item.operationId]?.assignmentPending??0)+
-            (reports[item.operationId]?.teamPending??0)+
-            (reports[item.operationId]?.sharePending??0)}}</dd></div>
-        </dl>
-      </template>
+
     </section>
   </main>
 </template>
