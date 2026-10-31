@@ -1,8 +1,9 @@
 import 'fake-indexeddb/auto'
 import {beforeEach,describe,expect,it,vi} from 'vitest'
-import {shallowRef} from 'vue'
-const session=shallowRef<{accountId:string;deviceId:string}|null>(null)
-const gate=shallowRef({ready:true,locked:false})
+const {session,gate}=vi.hoisted(()=>({
+  session:{value:null as {accountId:string;deviceId:string}|null},
+  gate:{value:{ready:true,locked:false}},
+}))
 vi.mock('../../identity',()=>({identity:session,appLockState:gate}))
 import {configureDevicePin,devicePinConfigured,verifyDevicePin} from './device-pin'
 let counter=0
