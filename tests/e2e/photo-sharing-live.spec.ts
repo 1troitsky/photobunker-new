@@ -148,12 +148,13 @@ test('two browsers: grant invite, genuine camera photo and recipient E2EE decryp
     },{timeout:30000,intervals:[300,800,1300]}).toBe('saved')
     // First use real SPA navigation: this must not reset the encrypted vault.
     await camera.locator('a[href="/photos"]').click()
-    const photos=owner.getByTestId('local-photo-list')
+    // /photos mounts the real GalleryScreen; LocalPhotosScreen is a legacy-unused view.
+    const photos=owner.getByTestId('encrypted-gallery')
     const localPhotoState=async()=>{
-      if(await photos.locator('.secure-photo-row').count())return 'visible'
+      if(await photos.locator('.gallery-item').count())return 'visible'
       const alert=(await photos.getByRole('alert').allTextContents()).join(' ').slice(0,180)
       if(alert)return 'alert: '+alert
-      const gate=(await photos.locator('.secure-empty').allTextContents()).join(' ').slice(0,140)
+      const gate=(await photos.locator('.gallery-empty').allTextContents()).join(' ').slice(0,140)
       if(gate)return 'gate: '+gate
       const statuses=(await photos.getByRole('status').allTextContents()).join(' ').slice(0,140)
       return 'pending: '+statuses
@@ -163,7 +164,7 @@ test('two browsers: grant invite, genuine camera photo and recipient E2EE decryp
     await owner.reload()
     await expect.poll(localPhotoState,{timeout:20000}).toBe('visible')
     await owner.getByRole('button',{name:/Sync now|Синхронизировать/i}).click()
-    await expect(photos.locator('.secure-photo-row .secure-local-label').first())
+    await expect(photos.locator('.gallery-item .gallery-state').first())
       .toContainText(/Cloud verified|В облаке/i,{timeout:90000})
 
     // Explicit owner approval wraps that photo's existing thumbnail DEK.
