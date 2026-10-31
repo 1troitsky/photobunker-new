@@ -147,8 +147,19 @@ test('two browsers: grant invite, genuine camera photo and recipient E2EE decryp
       return alert?'camera error: '+alert:'pending'
     },{timeout:30000,intervals:[300,800,1300]}).toBe('saved')
     await owner.goto('/photos')
+    const photos=owner.getByTestId('local-photo-list')
+    // Catch local-vault, metadata or session persistence defects before
+    // waiting for the unrelated cloud upload receipt.
+    await expect.poll(async()=>{
+      if(await photos.locator('.secure-photo-row').count())return 'visible'
+      const error=(await photos.getByRole('alert').allTextContents()).join(' ').slice(0,180)
+      if(error)return 'alert: '+error
+      const empty=(await photos.locator('.secure-empty h2').allTextContents()).join(' ').slice(0,110)
+      if(empty)return 'empty: '+empty
+      return 'loading'
+    },{timeout:15000}).toBe('visible')
     await owner.getByRole('button',{name:/Sync now|Синхронизировать/i}).click()
-    await expect(owner.locator('.secure-photo-row .secure-local-label').first())
+    await expect(photos.locator('.secure-photo-row .secure-local-label').first())
       .toContainText(/Cloud verified|В облаке/i,{timeout:90000})
 
     // Explicit owner approval wraps that photo's existing thumbnail DEK.
