@@ -39,6 +39,8 @@ export default defineConfig({
     proxy: identityProxy ? {
       '/identity/v2': { target: identityProxy },
       '/photos/v1': { target: identityProxy },
+      '/assignments/v1': { target: identityProxy },
+      '/collaboration/v1': { target: identityProxy },
     } : undefined,
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
