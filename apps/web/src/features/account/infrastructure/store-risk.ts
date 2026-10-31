@@ -1,42 +1,26 @@
-import {db as photos} from '../../local-storage/infrastructure/database'
-import {assignmentDb} from '../../assignments/infrastructure/database'
-import {collaborationDb} from '../../collaboration/infrastructure/database'
-import {grantDb} from '../../photo-grants/infrastructure/database'
+import {inspectPhotoStoreCounts} from '../../local-storage'
+import {inspectAssignmentPending} from '../../assignments'
+import {inspectCollaborationPending} from '../../collaboration'
+import {inspectGrantStoreCounts} from '../../photo-grants'
 import {identity} from '../../identity'
+import type {StoreRisk} from '../domain/store-risk'
 
-export type StoreRisk=Readonly<{
-  photoJournals:number;photoCipherAssets:number;photoOutbox:number;
-  assignmentPending:number;collaborationPending:number;grantPending:number;
-  encryptedGrants:number;unconfirmedTotal:number
-}>
-/** Read only. Enumerates every currently known PB2 feature outbox, including
- * failed/conflicted ops, without touching ciphertext or changing a queue.
- * A clean count does not prove that cloud recovery is possible.
+export type {StoreRisk} from '../domain/store-risk'
+
+/** Read-only, public-boundary-only aggregate. Throws closed when one store
+ * cannot be inspected; missing counts are never interpreted as zero.
  */
 export async function inspectStoreRisk():Promise<StoreRisk>{
   const current=identity.value
   if(!current)throw Error('safety.account_locked')
   const account=current.accountId,device=current.deviceId
-  const assertScope=()=>{
-    if(identity.value?.accountId!==account||identity.value?.deviceId!==device)
-      throw Error('safety.identity_changed')
-  }
-  const [journals,assets,outbox,assignments,collaboration,grants,shares,secrets]=await Promise.all([
-    photos.journal.where('accountId').equals(account).count(),
-    photos.assets.where('accountId').equals(account).count(),
-    photos.outbox.where('accountId').equals(account).toArray(),
-    assignmentDb.operations.where('accountId').equals(account).toArray(),
-    collaborationDb.operations.where('accountId').equals(account).toArray(),
-    grantDb.operations.where('[accountId+deviceId]').equals([account,device]).toArray(),
-    grantDb.thumbnailShares.where('[accountId+deviceId]').equals([account,device]).toArray(),
-    grantDb.secrets.where('[accountId+deviceId]').equals([account,device]).count(),
+  const [photo,assignmentPending,collaborationPending,grant]=await Promise.all([
+    inspectPhotoStoreCounts(account),inspectAssignmentPending(account),
+    inspectCollaborationPending(account),inspectGrantStoreCounts(account,device),
   ])
-  assertScope()
-  const photoOutbox=outbox.filter(row=>!['acknowledged','cancelled'].includes(row.state)).length
-  const assignmentPending=assignments.filter(row=>!['acknowledged','discarded'].includes(row.state)).length
-  const collaborationPending=collaboration.filter(row=>row.state!=='acknowledged').length
-  const grantPending=grants.length+shares.filter(row=>row.state!=='acknowledged').length
-  return{photoJournals:journals,photoCipherAssets:assets,photoOutbox,
-    assignmentPending,collaborationPending,grantPending,encryptedGrants:secrets,
-    unconfirmedTotal:journals+photoOutbox+assignmentPending+collaborationPending+grantPending}
+  if(identity.value?.accountId!==account||identity.value?.deviceId!==device)
+    throw Error('safety.identity_changed')
+  return{...photo,assignmentPending,collaborationPending,...grant,
+    unconfirmedTotal:photo.photoJournals+photo.photoOutbox+assignmentPending+
+      collaborationPending+grant.grantPending}
 }
