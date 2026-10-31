@@ -50,6 +50,20 @@ export async function logout():Promise<void>{
   await call('/session','DELETE').catch(()=>{})
 }
 export function forgetRuntime():void{dispose();resetCsrf()}
+/** Durable local sign-out after an explicit staged self-revoke.
+ * Background session bootstrap checks the existing signedOut marker and must
+ * not silently reactivate a device while its server ACK is still pending.
+ */
+export async function suspendDeviceForPendingRevocation(accountId:string,deviceId:string):Promise<void>{
+  const current=state.value
+  if(!current||current.accountId!==accountId||current.deviceId!==deviceId)
+    throw Error('revoke.account_changed')
+  await markSignedOut(accountId,deviceId,true)
+  if(state.value!==current)throw Error('revoke.account_changed')
+  dispose()
+  resetCsrf()
+  identityChannel?.postMessage({event:'identity-session-changed'})
+}
 export async function availableDevices():Promise<LocalDevice[]> {return listDevices()}
 export type AccountDeviceRecord=Readonly<{
   id:string;createdAt:string;revokedAt:string|null
