@@ -232,19 +232,15 @@ jobs:
           SESSION_SECURE_COOKIE: 'false'
           PHP_CLI_SERVER_WORKERS: '4'
           PHOTO_RECIPIENT_THUMBNAIL_PREVIEW: 'true'
-          PB_IDENTITY_ORIGIN_DIAGNOSTIC: '1'
           PHOTOBUNKER_IDENTITY_PROXY: http://127.0.0.1:8101
           PB_PHOTO_SHARE_LIVE_ORIGIN: http://127.0.0.1:4173
         run: |
           set -euo pipefail
           cd apps/api
-          php -r 'require "vendor/autoload.php"; $app=require "bootstrap/app.php"; $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap(); echo "CI Laravel env=".config("app.env")." expectedOrigin=".config("app.url").PHP_EOL;'
           php artisan serve --host=127.0.0.1 --port=8101 > "$RUNNER_TEMP/pb2-e2ee-server.log" 2>&1 &
           backend_pid=$!
           cd ../..
-          # Print only the test-only origin addresses if the browser case
-          # fails; never print the complete Laravel log or request payloads.
-          trap 'if [ -f /tmp/pb2-origin-diagnostic.log ]; then cat /tmp/pb2-origin-diagnostic.log; fi; pkill -P "$backend_pid" 2>/dev/null || true; kill "$backend_pid" 2>/dev/null || true' EXIT
+          trap 'pkill -P "$backend_pid" 2>/dev/null || true; kill "$backend_pid" 2>/dev/null || true' EXIT
           for attempt in $(seq 1 40); do
             if curl --silent --fail http://127.0.0.1:8101/identity/v2/csrf >/dev/null; then break; fi
             sleep 1
@@ -258,8 +254,8 @@ jobs:
             -H 'Content-Type: application/json' --data '{}' \
             http://127.0.0.1:8101/identity/v2/prepare)"
           echo "CI same-origin preflight response: $status"
-          if [ "$status" = 403 ]; then
-            echo 'Origin preflight denied by Laravel; check APP_URL vs preview origin'
+          if [ "$status" != 419 ]; then
+            echo 'Identity preflight must reject tokenless POST with CSRF 419 (and not Origin 403)'
             exit 1
           fi
           pnpm exec playwright test tests/e2e/photo-sharing-live.spec.ts
