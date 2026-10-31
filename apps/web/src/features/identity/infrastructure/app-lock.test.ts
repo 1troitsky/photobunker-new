@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto'
-import {afterAll,beforeEach,describe,expect,it,vi} from 'vitest'
+import {afterAll,beforeEach,describe,expect,it} from 'vitest'
 import {appLockState,assertAppUnlocked,configureAppPin,lockApp,
   onAppLockInvalidate,prepareAppLock,resetAppLock,unlockAppPin} from './app-lock'
 
