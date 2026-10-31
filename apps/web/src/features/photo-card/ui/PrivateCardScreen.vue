@@ -16,7 +16,7 @@ let generation=0,clock:number|undefined
 const txt=computed(()=>ru.value?{
   title:'Карточка фотографии',private:'Только для владельца · локально',
   note:'Приватная карточка. Можно подготовить передачу зашифрованной миниатюры приглашённому участнику; просмотр получателем пока закрыт.',
-  back:'К фотографии',gallery:'Галерея',loading:'Чтение зашифрованных метаданных…',
+  back:'К фотографии',gallery:'Галерея',browser:'Фото-браузер',loading:'Чтение зашифрованных метаданных…',
   locked:'Аккаунт заблокирован или снимок недоступен.',
   expired:'Срок хранения снимка истёк.',noName:'Имя ожидается',captured:'Снято',
   expires:'Удаляется',size:'Размер',format:'Формат',mode:'Режим',assignment:'Задание',
@@ -29,7 +29,7 @@ const txt=computed(()=>ru.value?{
 }:{
   title:'Photo Card',private:'Owner only · local',
   note:'Private card. You can prepare an encrypted thumbnail for an invited participant; recipient reads remain disabled.',
-  back:'Back to photo',gallery:'Gallery',loading:'Reading encrypted metadata…',
+  back:'Back to photo',gallery:'Gallery',browser:'Photo Browser',loading:'Reading encrypted metadata…',
   locked:'Account locked or photograph unavailable.',
   expired:'This photo has expired.',noName:'Name pending',captured:'Captured',
   expires:'Expires',size:'Dimensions',format:'Format',mode:'Mode',assignment:'Assignment',
@@ -98,6 +98,7 @@ watch([photoId,()=>identity.value?.accountId,()=>identity.value?.deviceId],()=>{
     <nav class="private-card-nav">
       <RouterLink :to="'/photos/'+encodeURIComponent(photoId)" class="subtle-button">{{ txt.back }}</RouterLink>
       <RouterLink to="/photos" class="subtle-button">{{ txt.gallery }}</RouterLink>
+      <RouterLink to="/browser" class="subtle-button">{{ txt.browser }}</RouterLink>
     </nav>
     <header><span>{{ txt.private }}</span><h1>{{ txt.title }}</h1><p>{{ txt.note }}</p></header>
     <p v-if="loading" role="status">{{ txt.loading }}</p>
