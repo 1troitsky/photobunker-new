@@ -172,7 +172,8 @@ try {
     $expires=now()->addDay()->getTimestampMs();
     [$master,$masterBytes]=assetG1($account,$photo,$expires,'master',4096);
     [$meta,$metaBytes]=assetG1($account,$photo,$expires,'metadata',128);
-    $assets=[$master,$meta];
+    [$thumbnail,$thumbnailBytes]=assetG1($account,$photo,$expires,'thumbnail',512);
+    $assets=[$master,$meta,$thumbnail];
     usort($assets,fn($a,$b)=>strcmp($a['assetId'],$b['assetId']));
     foreach($assets as $asset)$keys[]=app(PhotoSync::class)->objectKey($account,$photo,$asset['assetId']);
     $contract=json_encode([
@@ -192,6 +193,8 @@ try {
     $metaPath='/photos/v1/'.$photo.'/objects/'.$meta['assetId'];
     statusG1(requestG1('PUT',$metaPath,$metaBytes),200,'metadata PUT');
     statusG1(requestG1('PUT',$metaPath,$metaBytes),200,'metadata PUT idempotent retry');
+    $thumbnailPath='/photos/v1/'.$photo.'/objects/'.$thumbnail['assetId'];
+    statusG1(requestG1('PUT',$thumbnailPath,$thumbnailBytes),200,'thumbnail PUT');
     expectG1(DB::table('photo_records')->where('id',$photo)->count()===1,
         'parallel PUT created duplicate photo');
     $final=statusG1(requestG1('POST','/photos/v1/'.$photo.'/finalize',
