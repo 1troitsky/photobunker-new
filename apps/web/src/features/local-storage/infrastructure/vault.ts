@@ -839,6 +839,32 @@ export class LocalPhotoVault implements PhotoRepository, EncryptedBlobStore, Pho
     const key=await this.grant.open(asset.assetId,String(manifest.expiresAt),manifest.wrappedDEK)
     return decryptAsset(manifest,ciphertext,key,this.scope,()=>{this.check();this.time.now()})
   }
+  /** G5 independent second-device HTTPS recovery verification.
+   * Unlike importCloud, this NEVER persists ciphertext or plaintext. Every
+   * verified byte must come from the supplied remote response, not local cache.
+   */
+  async verifyRemoteRecoveryAsset(photoId:string,asset:CloudAsset,ciphertext:Blob):
+    Promise<{plainBytes:number;plaintextSha256:string}>{
+    this.check();await this.clockReady();identifier(photoId)
+    invalid(asset.manifest.accountId===this.scope.accountId&&
+      asset.manifest.photoId===photoId&&asset.manifest.assetId===asset.assetId&&
+      asset.manifest.kind===asset.kind&&asset.manifest.cipherBytes===asset.bytes,
+      'recovery.remote_scope')
+    invalid(asset.kind==='master'||asset.kind==='original'||asset.kind==='edit'||
+      asset.kind==='metadata','recovery.not_critical_asset')
+    invalid(asset.manifest.expiresAt>this.time.now(),'recovery.expired')
+    invalid(ciphertext.size===asset.bytes,'recovery.ciphertext_truncated')
+    const digest=await sha(new Uint8Array(await ciphertext.arrayBuffer()))
+    invalid(digest===asset.sha256,'recovery.ciphertext_digest')
+    const path=assetKey(this.scope,photoId,asset.assetId)+'/'+crypto.randomUUID()
+    const manifest:CipherManifest={...asset.manifest,backend:'idb-blob',storageKey:path}
+    manifestValid(manifest,{scope:this.scope,photoId,assetId:asset.assetId})
+    const key=await this.grant.open(asset.assetId,String(manifest.expiresAt),manifest.wrappedDEK)
+    const clear=await decryptAsset(manifest,ciphertext,key,this.scope,()=>{this.check();this.time.now()})
+    const plaintextSha256=await sha(new Uint8Array(await clear.arrayBuffer()))
+    this.check()
+    return {plainBytes:clear.size,plaintextSha256}
+  }
   /** Confirmed thumbnail ciphertext may be evicted; unsynced upload assets never are. */
   async cacheThumbnail(photoId:string):Promise<void>{
     const photo=await this.current(photoId)
