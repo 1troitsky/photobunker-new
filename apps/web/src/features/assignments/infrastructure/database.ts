@@ -25,3 +25,8 @@ class AssignmentDatabase extends Dexie{
 export const assignmentDb=new AssignmentDatabase()
 export const assignmentKey=(account:string,id:string)=>account+'/'+id
 export const operationKey=(account:string,id:string)=>account+'/'+id
+
+export async function inspectAssignmentPending(account:string):Promise<number>{
+  const rows=await assignmentDb.operations.where('accountId').equals(account).toArray()
+  return rows.filter(row=>!['acknowledged','discarded'].includes(row.state)).length
+}
