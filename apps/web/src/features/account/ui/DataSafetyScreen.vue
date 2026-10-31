@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
-import {identity,onIdentityCleanup} from '../../identity'
+import {identity,onIdentityCleanup,appLockState,configureAppPin,lockApp} from '../../identity'
 import {language} from '../../ui-preview'
 import {inspectDeviceDataSafety} from '../application/data-safety'
 import type {SafetyDecision} from '../domain/data-safety'
@@ -14,7 +14,10 @@ const copy=computed(()=>ru.value?{
   outbox:'Незавершённых операций',inFlight:'Синхронизация / повтор',
   warning:'Удаление устройства и экстренная очистка недоступны. Даже синхронизированное фото нельзя считать восстановимым без проверки на другом устройстве.',
   appPin:'PIN блокировки приложения',deletePin:'PIN локального удаления',emergencyPin:'Экстренный PIN',
-  inactive:'Не настроен · требует интеграции с Identity',back:'Назад в профиль',
+  inactive:'Недоступен до отдельной проверки безопасности',back:'Назад в профиль',
+  enabled:'PIN настроен',configure:'Настроить PIN',lockNow:'Заблокировать сейчас',
+  pinHint:'6–8 цифр. PIN не заменяет ключ восстановления. Не сохраняется в открытом виде.',
+  pinMismatch:'PIN не совпадают.',pinFailed:'Настройка PIN не удалась — проверьте хранилище.',
   issues:'Причины запрета удаления',
   time_untrusted:'Недостоверное время',offline:'Нет связи с сервером',
   local_copies_unconfirmed:'Есть фотографии без подтверждённой синхронизации',
@@ -29,7 +32,10 @@ const copy=computed(()=>ru.value?{
   outbox:'Pending operations',inFlight:'Syncing / retry',
   warning:'Device erasure and emergency wipe are disabled. A synced photo is not proven recoverable until it has been restored on another trusted device.',
   appPin:'App lock PIN',deletePin:'Local deletion PIN',emergencyPin:'Emergency PIN',
-  inactive:'Not configured · requires Identity integration',back:'Back to profile',
+  inactive:'Unavailable pending separate security acceptance',back:'Back to profile',
+  enabled:'PIN configured',configure:'Configure PIN',lockNow:'Lock now',
+  pinHint:'6–8 digits. PIN does not replace the Recovery Key. Never stored in plaintext.',
+  pinMismatch:'PIN entries do not match.',pinFailed:'PIN setup failed — inspect device storage.',
   issues:'Reasons deletion is blocked',
   time_untrusted:'Untrusted time',offline:'Server unavailable',
   local_copies_unconfirmed:'Photos without confirmed cloud sync',
@@ -38,8 +44,18 @@ const copy=computed(()=>ru.value?{
   device_erase_not_implemented:'Safe device-erasure workflow is not implemented',
 })
 const report=ref<SafetyDecision|null>(null),busy=ref(false),failed=ref(false)
+const pin=ref(''),pinConfirm=ref(''),pinError=ref(''),pinBusy=ref(false)
+async function setPin(){
+  pinError.value=''
+  if(pin.value!==pinConfirm.value){pinError.value=copy.value.pinMismatch;return}
+  pinBusy.value=true
+  try{await configureAppPin(pin.value);pin.value='';pinConfirm.value=''}
+  catch{pinError.value=copy.value.pinFailed}
+  finally{pinBusy.value=false}
+}
 let epoch=0,stopped=false
-function clear(){epoch++;report.value=null;busy.value=false;failed.value=false}
+function clear(){epoch++;report.value=null;busy.value=false;failed.value=false
+  pin.value='';pinConfirm.value='';pinError.value=''}
 const unsubscribe=onIdentityCleanup(clear)
 async function inspect(){
   const ticket=++epoch,account=identity.value
@@ -65,7 +81,19 @@ const issueLabel=(code:string)=>copy.value[code as keyof typeof copy.value]??cod
     <nav><RouterLink to="/profile">{{copy.back}}</RouterLink></nav>
     <h1>{{copy.title}}</h1><p>{{copy.intro}}</p>
     <div class="pb-data-safety-panel">
-      <h2>{{copy.appPin}}</h2><p>{{copy.inactive}}</p>
+      <h2>{{copy.appPin}}</h2>
+      <p>{{copy.pinHint}}</p>
+      <p v-if="appLockState.configured">{{copy.enabled}}</p>
+      <button v-if="appLockState.configured" type="button" @click="lockApp">{{copy.lockNow}}</button>
+      <form v-else-if="identity && appLockState.ready" class="pb-pin-settings" @submit.prevent="setPin">
+        <label>PIN <input v-model="pin" type="password" inputmode="numeric" pattern="[0-9]{6,8}"
+          minlength="6" maxlength="8" autocomplete="new-password" required></label>
+        <label>PIN × 2 <input v-model="pinConfirm" type="password" inputmode="numeric"
+          pattern="[0-9]{6,8}" minlength="6" maxlength="8" autocomplete="new-password" required></label>
+        <button type="submit" :disabled="pinBusy||!pin||pin!==pinConfirm">{{copy.configure}}</button>
+        <p v-if="pinError" role="alert">{{pinError}}</p>
+      </form>
+      <p v-else>{{copy.inactive}}</p>
       <h2>{{copy.deletePin}}</h2><p>{{copy.inactive}}</p>
       <h2>{{copy.emergencyPin}}</h2><p>{{copy.inactive}}</p>
     </div>
@@ -91,6 +119,8 @@ const issueLabel=(code:string)=>copy.value[code as keyof typeof copy.value]??cod
 .pb-data-safety h1{font-size:24px;margin:0}
 .pb-data-safety h2{font-size:17px;margin:0}
 .pb-data-safety p{color:var(--secondary);font-size:13px;line-height:1.55;margin:0}
+.pb-pin-settings{display:grid;gap:10px}.pb-pin-settings label{display:grid;gap:5px}
+.pb-pin-settings input{min-height:44px;border:1px solid var(--border);border-radius:10px;background:var(--panel);color:var(--text);padding:10px}
 .pb-data-safety-panel{display:grid;gap:10px;border:1px solid var(--border);background:var(--surface);border-radius:12px;padding:16px}
 .pb-data-safety button{min-height:44px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);padding:10px}
 .pb-data-safety-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0}

@@ -1,4 +1,5 @@
 import { computed, shallowRef } from 'vue'
+import {assertAppUnlocked,prepareAppLock,resetAppLock,onAppLockInvalidate} from './app-lock'
 import { call, challenge, currentGeneration, envelopeHash, invalidateRequests, resetCsrf } from '../infrastructure/api'
 import { b64, createPB2, digest, exportECDHPublic, freshPackage, hex, importSigner, newPairingKey,
   openDevice, openPairing, openRecovery, parsePB2, random, sealDevice, sealPairing,
@@ -22,6 +23,7 @@ export function registerDecryptedObjectUrl(url:string):void{objectUrls.add(url)}
 export function revokeDecryptedObjectUrl(url:string):void{objectUrls.delete(url);URL.revokeObjectURL(url)}
 function assertEpoch(epoch:number):void{if(epoch!==currentGeneration())throw new DOMException('Account changed','AbortError')}
 function dispose(){
+  resetAppLock()
   invalidateRequests()
   pairing=undefined
   state.value=null
@@ -30,6 +32,13 @@ function dispose(){
   for(const fn of disposers)try{fn()}catch{ /* cleanup must continue */ }
 }
 export function onIdentityCleanup(fn:()=>void):()=>void {disposers.add(fn);return()=>disposers.delete(fn)}
+function revokeActiveCapabilities(){
+  invalidateRequests()
+  for(const url of objectUrls)URL.revokeObjectURL(url)
+  objectUrls.clear()
+  for(const fn of disposers)try{fn()}catch{/* continue revocation */}
+}
+onAppLockInvalidate(revokeActiveCapabilities)
 export async function logout():Promise<void>{
   const current=state.value
   if(current)await markSignedOut(current.accountId,current.deviceId,true)
@@ -47,6 +56,7 @@ export type AccountDeviceRecord=Readonly<{
 }>
 /** Fetch server-authoritative device revocation status, never local guesses. */
 export async function accountDeviceRecords():Promise<AccountDeviceRecord[]>{
+  assertAppUnlocked()
   const active=state.value,epoch=currentGeneration()
   if(!active||active.offline)throw Error('identity.requires_online')
   const response=await call<{devices:{
@@ -95,6 +105,7 @@ async function prove(purpose:string,payload:Record<string,string>,
 }
 async function activated(device:LocalDevice,pkg:PackageV2,offline=false):Promise<void>{
   dispose()
+  await prepareAppLock(device.accountId,device.deviceId)
   state.value={accountId:device.accountId,deviceId:device.deviceId,pkg,device,offline}
   identityChannel?.postMessage({event:'identity-session-changed'})
 }
@@ -202,6 +213,7 @@ export async function switchAccount(accountId:string,deviceId:string):Promise<vo
   await loginWithDevice(device)
 }
 export async function rotateRecoveryKey(encoded:string):Promise<void>{
+  assertAppUnlocked()
   const epoch=currentGeneration()
   const current=state.value
   if(!current || current.offline)throw new Error('identity.requires_online')
@@ -274,9 +286,11 @@ export async function beginPairing(accountId:string):Promise<{id:string;fingerpr
   return {id:pairing.id,fingerprint:pairing.fingerprint}
 }
 export async function pairingRequests():Promise<{id:string;device_id:string;device_spki:string;ecdh_spki:string;fingerprint:string}[]>{
+  assertAppUnlocked()
   return (await call<{pairings:{id:string;device_id:string;device_spki:string;ecdh_spki:string;fingerprint:string}[]}>('/pairings')).pairings
 }
 export async function approvePairing(request:{id:string;device_id:string;device_spki:string;ecdh_spki:string;fingerprint:string},confirm:string):Promise<void>{
+  assertAppUnlocked()
   const current=state.value
   if(!current || current.offline || current.deviceId===request.device_id)throw new Error('identity.not_trusted_approver')
   const calculated=hex(await digest(new TextEncoder().encode(
@@ -319,6 +333,7 @@ export async function finishPairing():Promise<void>{
   await activated(p.device,pkg)
 }
 export async function revokeDevice(id:string):Promise<void>{
+  assertAppUnlocked()
   const current=state.value
   if(!current||current.offline)throw new Error('identity.requires_online')
   await call('/devices/'+id,'DELETE')
@@ -351,26 +366,31 @@ export async function backgroundSessionCheck():Promise<void>{
 export async function signPhotoSyncContract(contract:string):Promise<string>{
   const active=state.value,epoch=currentGeneration()
   if(!active||active.offline)throw new Error('sync.identity_offline')
+  assertAppUnlocked()
   if(contract.length>200000)throw new Error('sync.contract_too_large')
   const signature=await sign(active.device.deviceKey,"photobunker.photo-sync.v1\n"+contract)
   assertEpoch(epoch)
   if(active!==state.value)throw new Error('sync.account_changed')
+  assertAppUnlocked()
   return signature
 }
 export async function signMetadataContract(message:string):Promise<string>{
   const active=state.value,epoch=currentGeneration()
   if(!active||active.offline)throw new Error('sync.identity_offline')
+  assertAppUnlocked()
   if(message.length>200000)throw new Error('sync.contract_too_large')
   const signed=await sign(active.device.deviceKey,message)
   assertEpoch(epoch)
   if(active!==state.value)throw new Error('sync.account_changed')
+  assertAppUnlocked()
   return signed
 }
 export function acquireStorageKeys() {
+  assertAppUnlocked()
   const active=state.value, epoch=currentGeneration()
   if(!active)throw new Error('storage.account_locked')
   const scope={accountId:active.accountId,deviceId:active.deviceId,generation:epoch}
-  const check=()=>{assertEpoch(epoch);if(state.value!==active)throw new Error('storage.account_changed')}
+  const check=()=>{assertAppUnlocked();assertEpoch(epoch);if(state.value!==active)throw new Error('storage.account_changed')}
   const create=async (assetId:string,expiresAt:string)=>{
     check()
     const wrapped=await wrapAssetDEK(active.pkg,assetId,expiresAt)
@@ -398,6 +418,7 @@ export function acquireStorageKeys() {
 
 /** Public account identity pinned by the invitation secret, never by a photo manifest. */
 export function currentAccountSpki():string{
+  assertAppUnlocked()
   const active=state.value
   if(!active)throw Error('identity.account_locked')
   return active.pkg.accountSpki
@@ -408,6 +429,7 @@ export function currentAccountSpki():string{
 export async function signOwnerDeviceProof(contract:string):Promise<{
   deviceId:string;deviceSpki:string;rootSignature:string
 }>{
+  assertAppUnlocked()
   const active=state.value,epoch=currentGeneration()
   if(!active||active.offline)throw Error('identity.account_locked')
   if(contract.length<200||contract.length>8000)throw Error('grant.contract_invalid')
@@ -416,6 +438,7 @@ export async function signOwnerDeviceProof(contract:string):Promise<{
   const rootSignature=await sign(await importSigner(active.pkg.accountPkcs8),message)
   assertEpoch(epoch)
   if(state.value!==active)throw Error('identity.account_changed')
+  assertAppUnlocked()
   return {deviceId:active.device.deviceId,deviceSpki:active.device.deviceSpki,rootSignature}
 }
 
@@ -447,10 +470,11 @@ export async function verifyOwnerThumbnailStatement(statement:string,signature:s
 export async function withCurrentOwnerAssetDEK<T>(assetId:string,expiry:number,
   wrapped:{iv:string;ciphertext:string},
   operation:(bytes:Uint8Array<ArrayBuffer>)=>Promise<T>):Promise<T>{
+  assertAppUnlocked()
   const active=state.value,epoch=currentGeneration()
   if(!active)throw Error('identity.account_locked')
   if(!Number.isSafeInteger(expiry)||expiry<=Date.now())throw Error('identity.asset_expired')
-  const check=()=>{assertEpoch(epoch);if(state.value!==active)
+  const check=()=>{assertAppUnlocked();assertEpoch(epoch);if(state.value!==active)
     throw Error('identity.account_changed')}
   check()
   const result=await withTransientOwnerDEK(active.pkg,assetId,String(expiry),
@@ -465,6 +489,7 @@ export async function withCurrentOwnerAssetDEK<T>(assetId:string,expiry:number,
 }
 
 export async function fetchAuthenticatedServerTime():Promise<number>{
+  assertAppUnlocked()
   const active=state.value,epoch=currentGeneration()
   if(!active || active.offline)throw new Error('time.not_authenticated')
   const result=await call<{serverUtc:string}>('/time')
@@ -474,6 +499,7 @@ export async function fetchAuthenticatedServerTime():Promise<number>{
     throw new Error('time.invalid_server_sample')
   const ms=Date.parse(result.serverUtc)
   if(!Number.isSafeInteger(ms)||ms<=0)throw new Error('time.invalid_server_sample')
+  assertAppUnlocked()
   return ms
 }
 
