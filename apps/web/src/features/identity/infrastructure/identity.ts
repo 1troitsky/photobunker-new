@@ -431,7 +431,7 @@ export async function signRecoveredCloudAsset(input:{
   const canonical=JSON.stringify(Object.fromEntries(
     Object.entries(input).sort(([a],[b])=>a<b?-1:a>b?1:0)))
   const signature=await sign(active.device.deviceKey,
-    'photobunker.recovery-check.v1\\n'+canonical)
+    'photobunker.recovery-check.v1\n'+canonical)
   assertEpoch(epoch);assertAppUnlocked()
   if(state.value!==active)throw Error('recovery.identity_changed')
   return signature
