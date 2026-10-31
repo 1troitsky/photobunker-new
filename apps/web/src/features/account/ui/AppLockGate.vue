@@ -1,21 +1,30 @@
 <script setup lang="ts">
 import {computed,ref} from 'vue'
-import {appLockState,unlockAppPin} from '../../identity'
+import {useRouter} from 'vue-router'
+import {appLockState,unlockAppPin,forgetRuntime} from '../../identity'
 import {language} from '../../ui-preview'
 const ru=computed(()=>language.value==='ru')
-const pin=ref(''),busy=ref(false),error=ref('')
+const pin=ref(''),busy=ref(false),error=ref(''),router=useRouter()
+async function recover(){
+  if(busy.value)return
+  forgetRuntime()
+  pin.value=''
+  await router.replace('/account/restore')
+}
 const copy=computed(()=>ru.value?{
   title:'PhotoBunker заблокирован',hint:'Введите PIN устройства. Это не ключ восстановления аккаунта.',
   unlock:'Разблокировать',loading:'Проверяем PIN…',
   unavailable:'PIN-хранилище повреждено или недоступно. Автоматический обход запрещён.',
   failed:'Неверный PIN, задержка после ошибок или ошибка хранения. Доступ не предоставлен.',
-  recovery:'Ключ восстановления — отдельный механизм. Переключение аккаунта и восстановление требуют отдельного безопасного сценария.',
+  recovery:'Восстановление через Recovery Key создаёт новое доверенное устройство. Локальные фото и ключи не удаляются.',
+  recover:'Восстановить по ключу',
 }:{
   title:'PhotoBunker locked',hint:'Enter the device PIN. This is not your account Recovery Key.',
   unlock:'Unlock',loading:'Verifying PIN…',
   unavailable:'PIN storage is corrupt or unavailable. Automatic bypass is forbidden.',
   failed:'Wrong PIN, retry cooldown or storage failure. Access remains blocked.',
-  recovery:'Recovery Key is separate. Account switching and recovery require an independent safe workflow.',
+  recovery:'Recovery Key restoration enrolls a new trusted device. Existing local photos and keys are not erased.',
+  recover:'Restore with Recovery Key',
 })
 async function unlock(){
   if(busy.value||!appLockState.value.ready)return
@@ -39,6 +48,7 @@ async function unlock(){
       </template>
       <p v-if="error" role="alert">{{error}}</p>
       <p class="pb-lock-note">{{copy.recovery}}</p>
+      <button type="button" :disabled="busy" @click="recover">{{copy.recover}}</button>
     </form>
   </main>
 </template>
