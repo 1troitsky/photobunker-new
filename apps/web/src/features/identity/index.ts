@@ -34,3 +34,5 @@ export {appLockState,configureAppPin,lockApp,unlockAppPin} from './infrastructur
 export {signOwnRevocationIntent,submitSignedRevocationIntent} from './infrastructure/identity'
 
 export {suspendDeviceForPendingRevocation} from './infrastructure/identity'
+
+export {removeRevokedDeviceAppPin} from './infrastructure/app-lock'
