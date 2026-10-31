@@ -46,7 +46,7 @@ final class PhotoRecoveryCheckController extends Controller
         [$account,$device]=$this->actor($request);
         $photo=DB::table('photo_records')->where('id',$photoId)
             ->where('account_id',$account)->where('state','active')->first();
-        abort_unless($photo,404);
+        abort_unless($photo&&(int)$photo->expires_at>=(int)floor(microtime(true)*1000),404);
         $objects=DB::table('photo_objects')->where('photo_id',$photoId)
             ->where('state','active')->pluck('id');
         $rows=DB::table('photo_recovery_checks')->where('account_id',$account)
@@ -66,9 +66,11 @@ final class PhotoRecoveryCheckController extends Controller
         $photo=DB::table('photo_records')->where('id',$photoId)
             ->where('account_id',$account)->where('state','active')->first();
         abort_unless($photo&&(int)$photo->expires_at>=(int)floor(microtime(true)*1000),404);
-        $objects=DB::table('photo_objects')->where('photo_id',$photoId)
-            ->where('state','active')->whereIn('kind',['master','original','edit','metadata'])
-            ->limit(64)->get(['id','sha256']);
+        $query=DB::table('photo_objects')->where('photo_id',$photoId)
+            ->where('state','active')->whereIn('kind',['master','original','edit','metadata']);
+        $total=$query->count();
+        abort_unless($total>0&&$total<=64,409);
+        $objects=$query->get(['id','sha256']);
         $active=$objects->keyBy('id');
         $checks=DB::table('photo_recovery_checks as check')
             ->join('identity_devices as verifier','verifier.id','=','check.verifier_device_id')
