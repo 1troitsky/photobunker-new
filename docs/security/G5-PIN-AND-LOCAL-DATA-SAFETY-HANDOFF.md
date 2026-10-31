@@ -98,3 +98,23 @@ For safety, this PR exposes the protocol to application code and background repl
 ### Verification requirements
 
 Run all tests and an HTTPS/CSRF/real-session two-device browser flow. In particular: revoke one device then verify other device remains authorized; same-operation retransmission after lost ACK; changed intent/signature/operation/account rejected; first request without session rejected; signing after PIN lock denied; stale/corrupt IDB entries and parallel tabs; browser reload after staged offline revoke must not reopen the device; no loss of only unsynced ciphertext. Never claim signed client intent equals a server ACK.
+
+## G5 follow-up: crash-safe post-ACK local credential cleanup (Draft)
+
+The device revocation queue now has a separate **post-server-ACK cleanup phase**, saved in the *same durable operation row*: `state='acknowledged'` and `cleanupState='pending'|'completed'`. The code will not execute cleanup for any pending, unacknowledged, mismatched or otherwise corrupted receipt. It reconfirms exact operation/device/account/intent and canonical SHA-256 payload hash before invoking cleanup. Any failed IndexedDB transaction leaves `cleanupState='pending'`; startup, reconnect and manual status refresh retry that exact operation idempotently.
+
+The ONLY files or records currently removed are the revoked device's **three local PIN verifier records**: one App Lock and two separately scoped action PIN records. Each verifier deletion is a device-account-specific IndexedDB read-write transaction; already-absent records are safe to retry. An active same-device Identity/App Lock state fails closed. Another trusted device's PINs are not targeted. The current account's crypto package, device signing/wrapping keys, encrypted photographs, personal metadata, assignments, review outbox, share envelopes, recipient grant ciphertext and cloud copies remain untouched.
+
+A signed-out status page `/device-revocation/status` shows server-pending versus server-revoked and PIN-cleanup-pending versus PIN-cleanup-completed. Because it is accessible after logout, it intentionally **does not show photo or queue counts, device identifiers, signatures, or cryptographic material**. An internal read-only retained-data inventory is available separately for security diagnostics. The status page does not authorize another revocation or any new deletion intent.
+
+**Important security fix:** `offlineUnlock()` no longer resets a persistent signed-out marker. A device that locally signed out because of an emergency intent, or intentionally logged out, cannot silently bypass sign-out by using its still-persisted local device envelope while offline. Only a successful server-authenticated login can clear that state. This is a permission boundary, not secure hardware key erasure.
+
+### Next hard gates before any actual photo/key destruction
+
+- Real independent second-device recovery proof for selected ciphertext and all relevant PB2 grant/sync stores; unverified = fail-closed.
+- Exact device/account-owned scope model: currently multiple encrypted stores and OPFS blobs are **account** scoped, not device scoped. Never delete an account-wide store to simulate a device wipe.
+- Durable tombstone/erase planner distinguishing safe derived caches, unique unsynced originals, and immutable remote assets with rollback/fault injection.
+- Real browser + PHP + PostgreSQL/Garage E2EE tests including pending server revoke while offline, crash between two PIN deletions, and concurrent second tab.
+- On iOS, browser storage clearing, browser key persistence, and OPFS eviction behavior are not guarantees of forensic secure erasure. The UI must never claim such a guarantee.
+
+**Current implemented scope: verified-receipt-gated device PIN verifier cleanup and persistent lockout only. This is NOT a full local wipe or emergency shred.**
