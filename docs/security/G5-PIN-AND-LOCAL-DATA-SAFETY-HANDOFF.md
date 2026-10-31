@@ -146,3 +146,9 @@ The logged-in Data Safety read-only report now includes shared/unattributed reco
 5. Obtain independent security review and explicit owner acceptance before enabling real Emergency/local wipe UI.
 
 **Delivered now: read-only ownership audit plus deletion of one safe, derived, device-specific clock row after confirmed revoke — NOT encrypted-photo/key destruction.**
+
+### Audited limits for this slice
+
+The scanner enumerates indexed storage metadata in all nine known photo IndexedDB tables, including *keys only* for fallback blobs to avoid loading encrypted media into memory. **It does not recursively enumerate OPFS directory entries or discover OPFS files not referenced from any IndexedDB manifest/journal**; that missing evidence is an explicit blocker (`opfs_unindexed_paths_not_enumerated`). Full local erasure requires a separate OPFS traversal and real browser fault testing.
+
+The derived trusted-clock eligibility now requires `targetDeviceId===record.deviceId`; a trusted clock belonging to any other device remains held by policy even though its ownership is known. The actual cleanup method deletes only the exact composite `accountId+'/'+deviceId` row, rechecking both fields inside a Dexie transaction. This avoids cross-device data loss during a revoke.
