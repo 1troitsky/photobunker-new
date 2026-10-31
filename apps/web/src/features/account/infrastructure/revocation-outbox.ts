@@ -1,6 +1,7 @@
 import {forgetRuntime,identity,signOwnRevocationIntent,submitSignedRevocationIntent,
   suspendDeviceForPendingRevocation} from '../../identity'
 import {verifyDevicePin,type DevicePinKind} from './device-pin'
+import {cleanupRevokedDeviceVerifiers} from './device-cleanup'
 
 export type SignedDeviceRevocation=Readonly<{
   accountId:string;deviceId:string;operationId:string;
@@ -13,7 +14,8 @@ export type RevocationReceipt=Readonly<{
 export type RevocationRow=Readonly<{
   operationId:string;accountId:string;deviceId:string;scope:string;
   envelope:SignedDeviceRevocation;state:'pending'|'acknowledged';
-  receipt:RevocationReceipt|null;createdAt:number
+  receipt:RevocationReceipt|null;createdAt:number;
+  cleanupState?:'pending'|'completed'
 }>
 const DB='pb2-revocation-outbox-v1'
 async function database():Promise<IDBDatabase>{
@@ -68,12 +70,56 @@ async function acknowledge(input:RevocationRow,receipt:RevocationReceipt):Promis
         previous.accountId!==input.accountId||previous.deviceId!==input.deviceId){
         reject(Error('revoke.intent_changed'));return
       }
-      const update=store.put({...previous,state:'acknowledged',receipt})
+      const update=store.put({...previous,state:'acknowledged',receipt,cleanupState:'pending'})
       update.onsuccess=()=>done()
       update.onerror=()=>reject(update.error)
     }
     request.onerror=()=>reject(request.error)
   })
+}
+/** Reconciliation runs only after the exact server receipt has already
+ * been committed. Every cleanup step is idempotent and account/device scoped.
+ * Browser crashes leave cleanupState=pending so the next launch resumes.
+ */
+export async function reconcileRevokedDeviceCleanup():Promise<{
+  completed:number;pending:number
+}>{
+  const eligible=await transaction<RevocationRow[]>('readonly',(store,done,reject)=>{
+    const request=store.getAll()
+    request.onsuccess=()=>done((request.result as RevocationRow[])
+      .filter(row=>row.state==='acknowledged'&&row.cleanupState!=='completed'))
+    request.onerror=()=>reject(request.error)
+  })
+  let completed=0
+  for(const row of eligible){
+    try{
+      if(!row.receipt||row.receipt.state!=='revoked'||
+        row.receipt.accountId!==row.accountId||row.receipt.deviceId!==row.deviceId||
+        row.receipt.operationId!==row.operationId||
+        row.receipt.intent!==row.envelope.intent||
+        row.receipt.payloadHash!==await payloadHash(row.envelope))
+        throw Error('cleanup.invalid_receipt')
+      await cleanupRevokedDeviceVerifiers(row.accountId,row.deviceId)
+      await transaction<void>('readwrite',(store,done,reject)=>{
+        const request=store.get(row.operationId)
+        request.onsuccess=()=>{
+          const latest=request.result as RevocationRow|undefined
+          if(!latest||latest.state!=='acknowledged'||
+            latest.receipt?.payloadHash!==row.receipt?.payloadHash){
+            reject(Error('cleanup.ack_changed'));return
+          }
+          const update=store.put({...latest,cleanupState:'completed'})
+          update.onsuccess=()=>done()
+          update.onerror=()=>reject(update.error)
+        }
+        request.onerror=()=>reject(request.error)
+      })
+      completed++
+    }catch{
+      // No false cleanup result; the ACK record stays for replay.
+    }
+  }
+  return{completed,pending:eligible.length-completed}
 }
 async function payloadHash(envelope:SignedDeviceRevocation):Promise<string>{
   const {accountId,deviceId,intent,operationId}=envelope
@@ -136,6 +182,8 @@ export async function deliverPendingRevocations():Promise<{
       // Deliberately do not fabricate a successful remote revocation.
     }
   }
+  // Cleanup never touches ciphertext, device keys or recovery material.
+  await reconcileRevokedDeviceCleanup()
   return {acknowledged,pending:(await pendingDeviceRevocations()).length}
 }
 
