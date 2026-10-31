@@ -14,13 +14,6 @@ function backendProxy(target:string):ProxyOptions{
     proxy.on('proxyReq',(outgoing,incoming)=>{
       const origin=incoming.headers.origin
       if(typeof origin==='string')outgoing.setHeader('Origin',origin)
-      if(process.env.PB_IDENTITY_ORIGIN_DIAGNOSTIC==='1'&&
-          incoming.url?.startsWith('/identity/v2/prepare')){
-        // Temporary isolated CI metadata, not credentials or request bodies.
-        console.error('PB2_PREVIEW_PROXY origin='+String(origin??'<absent>')+
-          ' forwarded='+String(outgoing.getHeader('Origin')??'<absent>')+
-          ' host='+String(outgoing.getHeader('Host')??'<absent>'))
-      }
     })
   }}
 }
