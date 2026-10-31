@@ -53,6 +53,26 @@ export async function pendingDeviceRevocations():Promise<RevocationRow[]>{
     request.onerror=()=>reject(request.error)
   })
 }
+export type RevokedDeviceStatus=Readonly<{
+  operationId:string;accountId:string;deviceId:string;
+  intent:'local-delete'|'emergency';serverState:'pending'|'revoked';
+  localCredentialCleanup:'pending'|'completed';
+  encryptedDataRetained:true
+}>
+/** Status contains no PIN, signature, private keys or ciphertext. */
+export async function revokedDeviceStatuses():Promise<RevokedDeviceStatus[]>{
+  return transaction('readonly',(store,done,reject)=>{
+    const request=store.getAll()
+    request.onsuccess=()=>done((request.result as RevocationRow[]).map(row=>({
+      operationId:row.operationId,accountId:row.accountId,deviceId:row.deviceId,
+      intent:row.envelope.intent,serverState:row.state==='acknowledged'?'revoked':'pending',
+      localCredentialCleanup:row.cleanupState==='completed'?'completed':'pending',
+      encryptedDataRetained:true as const,
+    })))
+    request.onerror=()=>reject(request.error)
+  })
+}
+
 async function save(row:RevocationRow):Promise<void>{
   await transaction<void>('readwrite',(store,done,reject)=>{
     const request=store.add(row)
