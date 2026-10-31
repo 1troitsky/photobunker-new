@@ -22,7 +22,7 @@ final class PhotoRecoveryCheckController extends Controller
             'originDeviceId'=>$row->origin_device_id,
             'verifiedDeviceId'=>$row->verifier_device_id,
             'cipherSha256'=>$row->cipher_sha256,
-            'plainSha256'=>$row->plain_sha256,
+            'decryption'=>$row->decryption,
             'payloadHash'=>$row->payload_hash,
             'state'=>'device-attested',
             'verifiedAt'=>\Carbon\Carbon::parse($row->verified_at)->utc()->format('Y-m-d\TH:i:s.v\Z'),
@@ -63,15 +63,15 @@ final class PhotoRecoveryCheckController extends Controller
         [$account,$device]=$this->actor($request);
         $input=$request->json()->all();
         abort_unless(is_array($input),422);
-        P::exact($input,['assetId','cipherSha256','operationId','originDeviceId',
-            'photoId','plainSha256','signature','verifiedDeviceId']);
+        P::exact($input,['assetId','cipherSha256','decryption','operationId','originDeviceId',
+            'photoId','signature','verifiedDeviceId']);
         foreach(['photoId','assetId','originDeviceId','verifiedDeviceId','operationId'] as $field){
             abort_unless(is_string($input[$field]),422);P::uuid($input[$field]);
         }
-        foreach(['cipherSha256','plainSha256'] as $field)
+        foreach(['cipherSha256'] as $field)
             abort_unless(is_string($input[$field])&&
                 preg_match('/^[a-f0-9]{64}$/D',$input[$field])===1,422);
-        abort_unless(is_string($input['signature']),422);
+        abort_unless($input['decryption']==='aead-verified'&&is_string($input['signature']),422);
         abort_unless($photoId===$input['photoId']&&$assetId===$input['assetId']&&
             $input['verifiedDeviceId']===$device->id&&
             $input['originDeviceId']!==$device->id,422);
@@ -105,7 +105,7 @@ final class PhotoRecoveryCheckController extends Controller
                 'operation_id'=>$body['operationId'],'account_id'=>$account,
                 'photo_id'=>$photo->id,'asset_id'=>$object->id,
                 'origin_device_id'=>$photo->device_id,'verifier_device_id'=>$device->id,
-                'cipher_sha256'=>$object->sha256,'plain_sha256'=>$body['plainSha256'],
+                'cipher_sha256'=>$object->sha256,'decryption'=>$body['decryption'],
                 'payload_hash'=>$payloadHash,'signature_hash'=>$signatureHash,
                 'verified_at'=>$now,'created_at'=>$now,'updated_at'=>$now,
             ]);
