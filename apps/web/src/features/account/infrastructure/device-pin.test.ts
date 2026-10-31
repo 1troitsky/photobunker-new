@@ -5,7 +5,8 @@ const {session,gate}=vi.hoisted(()=>({
   gate:{value:{ready:true,locked:false}},
 }))
 vi.mock('../../identity',()=>({identity:session,appLockState:gate}))
-import {configureDevicePin,devicePinConfigured,verifyDevicePin} from './device-pin'
+import {configureDevicePin,devicePinConfigured,verifyDevicePin,
+  removeRevokedDeviceActionPins} from './device-pin'
 let counter=0
 beforeEach(()=>{counter++;session.value={accountId:'acct'+counter,deviceId:'device'+counter};gate.value={ready:true,locked:false}})
 describe('separate PB2 destructive-action PIN verifiers (no delete authority)',()=>{
@@ -26,6 +27,21 @@ describe('separate PB2 destructive-action PIN verifiers (no delete authority)',(
     gate.value={ready:true,locked:false}
     session.value={accountId:'another',deviceId:'device'}
     expect(await devicePinConfigured('local-delete')).toBe(false)
+  })
+  it('post-ACK verifier cleanup does not remove another trusted device PIN',async()=>{
+    const target=session.value!
+    await configureDevicePin('local-delete','12345678')
+    await configureDevicePin('emergency','87654321')
+    await expect(removeRevokedDeviceActionPins(target.accountId,target.deviceId))
+      .rejects.toThrow('pin.active_device_cleanup_forbidden')
+    session.value={accountId:target.accountId,deviceId:target.deviceId+'-other'}
+    await configureDevicePin('local-delete','11112222')
+    await removeRevokedDeviceActionPins(target.accountId,target.deviceId)
+    await removeRevokedDeviceActionPins(target.accountId,target.deviceId)
+    expect(await devicePinConfigured('local-delete')).toBe(true)
+    session.value=target
+    expect(await devicePinConfigured('local-delete')).toBe(false)
+    expect(await devicePinConfigured('emergency')).toBe(false)
   })
   it('requires eight digits and does not authorize any erase action',async()=>{
     await expect(configureDevicePin('emergency','1234')).rejects.toThrow('pin.length')
