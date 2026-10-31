@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Identity\Protocol as P;
 use App\Photo\PhotoSync;
 use App\Photo\RecipientGrantAccess;
+use App\Photo\RecipientGrantPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Crypt;
@@ -13,7 +14,8 @@ use Illuminate\Support\Facades\Storage;
 /** Only one explicitly approved ciphertext thumbnail per grant/photo/asset. */
 final class PhotoRecipientController extends Controller {
     public function __construct(private readonly PhotoSync $sync,
-        private readonly RecipientGrantAccess $access){}
+        private readonly RecipientGrantAccess $access,
+        private readonly RecipientGrantPolicy $policy){}
 
     public function publish(Request $request,string $grantId,string $photoId,string $assetId){
         $this->sync->origin($request);[$account,$device]=$this->sync->actor($request);
@@ -77,23 +79,10 @@ final class PhotoRecipientController extends Controller {
                 $grant->assignment_id===$c['assignmentId']&&
                 $grant->state==='accepted'&&$grant->revoked_at===null&&$grant->accepted_at!==null&&
                 (int)$grant->generation===$c['generation'],404);
-            // Publish only while the relationship is currently valid. An accepted
-            // invitation is not sufficient after a contact block/removal.
-            $owner=$grant->owner_account_id;$recipient=$grant->recipient_account_id;
-            $blocked=DB::table('contact_blocks_v1')->where(fn($q)=>$q
-                ->where('account_id',$owner)->where('blocked_account_id',$recipient))
-                ->orWhere(fn($q)=>$q->where('account_id',$recipient)
-                    ->where('blocked_account_id',$owner))->exists();
-            abort_if($blocked,404);
-            [$left,$right]=strcmp($owner,$recipient)<0?[$owner,$recipient]:[$recipient,$owner];
-            abort_unless(DB::table('contact_links_v1')->where('left_account_id',$left)
-                ->where('right_account_id',$right)->where('state','accepted')->exists(),404);
+            $this->policy->assertActive($grant);
             $p=$this->sync->requirePhoto($photoId,$account->id,true);
             abort_unless((int)$p->expires_at===$c['expiresAt'],404);
-            $binding=DB::table('assignment_photo_bindings_v1')->where('photo_id',$photoId)
-                ->where('assignment_id',$grant->assignment_id)
-                ->where('author_account_id',$account->id)->first();
-            abort_unless($binding,404);
+            $this->policy->assertPhotoBinding($grant,$photoId,(int)$p->expires_at);
             $asset=DB::table('photo_objects')->where('id',$assetId)->where('photo_id',$photoId)
                 ->where('kind','thumbnail')->where('state','active')->first();
             abort_unless($asset&&(int)$asset->revision===$c['assetRevision'],404);
@@ -137,6 +126,9 @@ final class PhotoRecipientController extends Controller {
             ->where('recipient_account_id',$actor->id)->where('state','accepted')
             ->whereNotNull('accepted_at')->whereNull('revoked_at')->first();
         abort_unless($grant,404);
+        // Same live policy applies even to an empty or paginated list. Do
+        // not turn revoked/blocked relationships into a successful empty feed.
+        $this->policy->assertActive($grant);
         $after=$r->query('after','');
         abort_unless(is_string($after),422);
         $last='';
