@@ -26,3 +26,8 @@ class CollaborationDatabase extends Dexie{
 }
 export const collaborationDb=new CollaborationDatabase()
 export const k=(account:string,id:string)=>account+'/'+id
+
+export async function inspectCollaborationPending(account:string):Promise<number>{
+  const rows=await collaborationDb.operations.where('accountId').equals(account).toArray()
+  return rows.filter(row=>row.state!=='acknowledged').length
+}
