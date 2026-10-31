@@ -50,6 +50,20 @@ export async function logout():Promise<void>{
   await call('/session','DELETE').catch(()=>{})
 }
 export function forgetRuntime():void{dispose();resetCsrf()}
+/** Durable local sign-out after an explicit staged self-revoke.
+ * Background session bootstrap checks the existing signedOut marker and must
+ * not silently reactivate a device while its server ACK is still pending.
+ */
+export async function suspendDeviceForPendingRevocation(accountId:string,deviceId:string):Promise<void>{
+  const current=state.value
+  if(!current||current.accountId!==accountId||current.deviceId!==deviceId)
+    throw Error('revoke.account_changed')
+  await markSignedOut(accountId,deviceId,true)
+  if(state.value!==current)throw Error('revoke.account_changed')
+  dispose()
+  resetCsrf()
+  identityChannel?.postMessage({event:'identity-session-changed'})
+}
 export async function availableDevices():Promise<LocalDevice[]> {return listDevices()}
 export type AccountDeviceRecord=Readonly<{
   id:string;createdAt:string;revokedAt:string|null
@@ -363,6 +377,37 @@ export async function backgroundSessionCheck():Promise<void>{
 
 /** Narrow PB2 crypto capability for the encrypted-photo module. Never exposes AKEK/package. */
 /** Only current authenticated device may authorize a ciphertext sync contract. */
+/** Prepare a one-device, immutable signed revocation intent while the local
+ * Identity and App Lock are authorized. No remote effect until submitted.
+ */
+export async function signOwnRevocationIntent(operationId:string,
+  intent:'local-delete'|'emergency'):Promise<{
+    accountId:string;deviceId:string;operationId:string;intent:'local-delete'|'emergency';signature:string
+  }>{
+  assertAppUnlocked()
+  const current=state.value,epoch=currentGeneration()
+  if(!current)throw Error('revoke.account_locked')
+  if(!/^[0-9a-f-]{36}$/.test(operationId)||!['local-delete','emergency'].includes(intent))
+    throw Error('revoke.invalid_intent')
+  const payload={accountId:current.accountId,deviceId:current.deviceId,intent,operationId}
+  const message='photobunker.device-revocation.v1\n'+
+    JSON.stringify(Object.fromEntries(Object.entries(payload).sort(([a],[b])=>a.localeCompare(b))))
+  const signature=await sign(current.device.deviceKey,message)
+  assertEpoch(epoch);assertAppUnlocked()
+  if(state.value!==current)throw Error('revoke.account_changed')
+  return {...payload,signature}
+}
+
+/** Replays a signed, durable envelope. The server checks identical operation
+ * signatures on replay after the first successful self-revoke.
+ */
+export async function submitSignedRevocationIntent(
+  input:{accountId:string;deviceId:string;operationId:string;intent:'local-delete'|'emergency';signature:string},
+):Promise<{operationId:string;accountId:string;deviceId:string;intent:'local-delete'|'emergency';
+  payloadHash:string;state:'revoked';committedAt:string}>{
+  return call('/device-revocations/'+input.operationId,'PUT',input)
+}
+
 export async function signPhotoSyncContract(contract:string):Promise<string>{
   const active=state.value,epoch=currentGeneration()
   if(!active||active.offline)throw new Error('sync.identity_offline')

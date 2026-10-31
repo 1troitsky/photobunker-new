@@ -39,7 +39,7 @@ async function token(epoch:number):Promise<string>{
     return csrf
   } finally{controllers.delete(controller)}
 }
-export async function call<T>(path:string,method:'GET'|'POST'|'DELETE'='GET',body?:unknown):Promise<T>{
+export async function call<T>(path:string,method:'GET'|'POST'|'PUT'|'DELETE'='GET',body?:unknown):Promise<T>{
   if (!/^\/[a-zA-Z0-9/_-]+$/.test(path)) throw new IdentityError('identity.invalid_path',400)
   const epoch=currentGeneration()
   const controller=new AbortController()
@@ -52,6 +52,7 @@ export async function call<T>(path:string,method:'GET'|'POST'|'DELETE'='GET',bod
       method,credentials:'same-origin',cache:'no-store',signal:controller.signal,
       headers,body:body===undefined?undefined:JSON.stringify(body),
     })
+    if(response.status===419)resetCsrf()
     if(!response.ok)throw new IdentityError('identity.http_error',response.status)
     const value=await response.json() as T
     assertGeneration(epoch)
