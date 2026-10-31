@@ -108,8 +108,9 @@ test('two browsers: grant invite, genuine camera photo and recipient E2EE decryp
     await expect(outgoing).toContainText(/Invitation accepted|Приглашение принято/i,{timeout:30000})
     await outgoing.getByRole('combobox',{name:/Select a photo|Выберите снимок/i}).selectOption({index:1})
     await outgoing.getByRole('button',{name:/Prepare encrypted thumbnail|Подготовить миниатюру/i}).click()
-    await expect(owner.locator('.grant-operation').filter({hasText:recipientId}).first())
-      .toContainText(/Server confirmed|Подтверждено сервером/i,{timeout:60000})
+    await expect(owner.locator('.grant-operation').filter({
+      hasText:/Server confirmed|Подтверждено сервером/i,
+    })).toHaveCount(1,{timeout:60000})
 
     // Recipient sees only encrypted thumbnail; genuine WebCrypto decrypts
     // through invitation-pinned owner identity and per-asset DEK.
