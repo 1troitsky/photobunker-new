@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Identity\Protocol as P;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -407,6 +408,44 @@ final class AssignmentGrantV1Test extends TestCase {
         $this->selectActor('guest');
         $this->getJson($path)->assertNotFound();
         $this->getJson($list)->assertNotFound();
+    }
+
+    public function test_distinct_recipient_gets_only_authorized_ciphertext_bytes_and_loses_access_on_block():void{
+        $this->acceptedContact();$grant=(string)Str::uuid();
+        $this->send($this->action('invite',$grant))->assertOk();
+        $this->selectActor('guest');
+        $this->send($this->action('accept',$grant,1))->assertOk();
+        $this->selectActor('owner');
+        [$photo,$asset,$expires,$digest]=$this->thumbnailFixture();
+        $path="/photos/v1/shared/grants/$grant/photos/$photo/assets/$asset";
+        $statement=$this->shareStatement($grant,$photo,$asset,$expires,$digest);
+        $this->putJson($path,$statement)->assertOk();
+
+        Storage::fake('photo-ciphertext');
+        $cipher=random_bytes(48);
+        $object=DB::table('photo_objects')->where('id',$asset)->first();
+        Storage::disk('photo-ciphertext')->put($object->object_key,$cipher);
+        DB::table('photo_objects')->where('id',$asset)->update([
+            'sha256'=>hash('sha256',$cipher),
+        ]);
+        config()->set('photo_sync.recipient_thumbnail_reads_enabled',true);
+        $this->selectActor('outsider');
+        $this->get($path.'/ciphertext')->assertNotFound();
+        $this->selectActor('guest');
+        $response=$this->get($path.'/ciphertext')
+            ->assertOk()->assertHeader('X-Cipher-SHA256',hash('sha256',$cipher))
+            ->assertHeader('Cache-Control','no-store, private');
+        $this->assertSame($cipher,$response->streamedContent());
+        $this->get("/photos/v1/$photo/objects/$asset")->assertNotFound();
+
+        DB::table('contact_blocks_v1')->insert([
+            'account_id'=>$this->accounts['guest'],
+            'blocked_account_id'=>$this->accounts['owner'],
+            'created_at'=>now(),
+        ]);
+        $this->get($path.'/ciphertext')->assertNotFound();
+        $this->getJson($path)->assertNotFound();
+        $this->getJson("/photos/v1/shared/grants/$grant/photos")->assertNotFound();
     }
 
 }
