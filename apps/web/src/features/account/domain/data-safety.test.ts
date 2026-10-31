@@ -40,6 +40,27 @@ describe('G5 device-data safety gate',()=>{
     expect(result.blockingReasons).toContain('photo_journal_incomplete')
     expect(result.blockingReasons).toContain('operations_pending')
   })
+  it('refuses deletion when remote upload has ACK but account ciphertext remains shared',()=>{
+    const result=assessLocalDeletion([],[],true,true,false,{
+      photoJournals:0,photoCipherAssets:3,photoOutbox:0,
+      assignmentPending:0,collaborationPending:0,grantPending:0,
+      encryptedGrants:0,unconfirmedTotal:0,
+      ownership:{total:4,accountShared:3,deviceScoped:1,
+        unattributed:0,held:3,postRevokeDerived:1,pending:0},
+      orphanArtifacts:0,
+    })
+    expect(result.permitted).toBe(false)
+    expect(result.blockingReasons).toContain('account_shared_ciphertext')
+  })
+  it('reports orphan ciphertext separately, never assumes it is safe cache',()=>{
+    const result=assessLocalDeletion([],[],true,true,false,{
+      photoJournals:0,photoCipherAssets:0,photoOutbox:0,
+      assignmentPending:0,collaborationPending:0,grantPending:0,
+      encryptedGrants:0,unconfirmedTotal:0,orphanArtifacts:2,
+    })
+    expect(result.blockingReasons).toContain('unattributed_local_artifacts')
+    expect(result.permitted).toBe(false)
+  })
   it('does not ignore independent assignment/team/grant queues',()=>{
     const result=assessLocalDeletion([],[],true,true,false,{
       photoJournals:0,photoCipherAssets:0,photoOutbox:0,

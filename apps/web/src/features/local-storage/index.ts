@@ -17,3 +17,10 @@ export {decryptRecipientThumbnail} from './infrastructure/recipient-thumbnail'
 export {encryptAsset} from './infrastructure/cipher'
 
 export {inspectPhotoStoreCounts} from './infrastructure/database'
+
+export {scanLocalOwnership} from './infrastructure/ownership'
+export type {LocalOwnershipInventory} from './infrastructure/ownership'
+export {classifyLocalRecord,summarizeOwnership} from './domain/ownership'
+export type {LocalOwnershipRow,OwnershipClassification,OwnershipSummary} from './domain/ownership'
+
+export {removeRevokedDeviceClock} from './infrastructure/database'

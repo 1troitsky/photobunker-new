@@ -118,3 +118,37 @@ A signed-out status page `/device-revocation/status` shows server-pending versus
 - On iOS, browser storage clearing, browser key persistence, and OPFS eviction behavior are not guarantees of forensic secure erasure. The UI must never claim such a guarantee.
 
 **Current implemented scope: verified-receipt-gated device PIN verifier cleanup and persistent lockout only. This is NOT a full local wipe or emergency shred.**
+
+## G5 ownership audit — 2026-11-01: account-shared ciphertext vs device-scoped derived data
+
+The existing PB2 photo vault has **nine distinct IndexedDB tables**, and its OPFS/IndexedDB ciphertext paths are referenced from account-level manifests. There is no evidence that an asset, photo or staging file belongs exclusively to a particular local device solely because a journal has a creator `deviceId`. In particular, a server upload receipt **does not** prove that the original/edited image and its keys were successfully restored and decrypted on a second trusted device.
+
+This change introduces `local-storage/domain/ownership.ts` with conservative pure classification and `local-storage/infrastructure/ownership.ts` with a read-only scan of **photos, assets, blobFallback (key-only, no Blob loading), outbox, journal, tombstones, nameLeases, thumbnailCache and clock**. The result counts account-shared, device-scoped, unattributed and pending records and detects orphan asset references, orphan IDB blobs and journal paths lacking committed references. It never authorizes destruction. In particular:
+
+| Local data | Ownership | Automatic deletion allowed |
+| --- | --- | --- |
+| Photos, encrypted asset manifests, OPFS/IDB blobs, outbox, tombstones, cached thumbnails | Account/shared or unproven | **NO** |
+| Staging/crash journals carrying a device ID | Producer can be known, file ownership unproven | **NO** |
+| Device-scoped name leases, even if apparently acknowledged | Could contain sole offline reservation | **NO** |
+| Device-scoped encrypted trusted-clock snapshot | Derived local-only state | Only **after matching server-revoke ACK**, idempotently |
+| Identity device signing/encryption keys, recovery envelopes | Independently security-sensitive; outside photo DB | **NO** |
+
+The current server-revoke post-ACK cleanup now additionally deletes **only the exact account/device trusted-clock row**, never a whole database or sibling device record. Existing PIN-verifier cleanup continues in the same resumable journal. If a crash occurs after PIN deletion but before trusted-clock removal, the next post-ACK reconciliation repeats idempotently. Account-wide encrypted photographs, unsynced originals, device signing keys and pending feature queues remain untouched.
+
+The logged-in Data Safety read-only report now includes shared/unattributed record counts and raises blockers for account-shared ciphertext or orphan artifacts. A broad wipe cannot be inferred from `photoOutbox===0`, even if there is a valid server ACK. Since the account inventory is a multi-table snapshot and may race with writes from other tabs, **no user deletion action may use it as an authorization token**. The signed-out revocation-status page intentionally does not reveal the counts.
+
+### Remaining blockers for full local destruction
+
+1. Define cryptographic local ownership across *all* PB2 modules and OPFS; the device-ID in a staging journal is not sufficient.
+2. Build a separately authenticated, exact-selection export/recoverability attestation by a second trusted device that successfully decrypts each eligible original and edited version.
+3. Create an exhaustive crash-safe planner that does not erase the sole local copy and that checks the real scope inside the same storage transaction.
+4. Verify multi-tab foreground camera/photo sync suspension, OPFS failure, WebCrypto leftovers, recovery-key and per-device lifecycle in production browsers.
+5. Obtain independent security review and explicit owner acceptance before enabling real Emergency/local wipe UI.
+
+**Delivered now: read-only ownership audit plus deletion of one safe, derived, device-specific clock row after confirmed revoke — NOT encrypted-photo/key destruction.**
+
+### Audited limits for this slice
+
+The scanner enumerates indexed storage metadata in all nine known photo IndexedDB tables, including *keys only* for fallback blobs to avoid loading encrypted media into memory. **It does not recursively enumerate OPFS directory entries or discover OPFS files not referenced from any IndexedDB manifest/journal**; that missing evidence is an explicit blocker (`opfs_unindexed_paths_not_enumerated`). Full local erasure requires a separate OPFS traversal and real browser fault testing.
+
+The derived trusted-clock eligibility now requires `targetDeviceId===record.deviceId`; a trusted clock belonging to any other device remains held by policy even though its ownership is known. The actual cleanup method deletes only the exact composite `accountId+'/'+deviceId` row, rechecking both fields inside a Dexie transaction. This avoids cross-device data loss during a revoke.

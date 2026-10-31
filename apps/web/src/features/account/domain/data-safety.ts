@@ -30,6 +30,9 @@ export function assessLocalDeletion(
   if(inFlightCount||outboxCount||storeRisk?.unconfirmedTotal)blockingReasons.push('operations_pending')
   if(storeRisk?.photoJournals)blockingReasons.push('photo_journal_incomplete')
   if(!storeRisk)blockingReasons.push('stores_not_inspected')
+  if(storeRisk?.ownership?.accountShared)blockingReasons.push('account_shared_ciphertext')
+  if(storeRisk?.ownership?.unattributed||storeRisk?.orphanArtifacts)
+    blockingReasons.push('unattributed_local_artifacts')
   if(!serverRecoveryVerified)blockingReasons.push('remote_recovery_not_proven')
   blockingReasons.push('device_erase_not_implemented')
   return{permitted:false,photoCount:active.length,unconfirmedCount,
