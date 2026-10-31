@@ -417,7 +417,7 @@ export async function submitSignedRevocationIntent(
  * OS-level recoverability or authorize any destructive operation.
  */
 export async function signRecoveredCloudAsset(input:{
-  photoId:string;assetId:string;cipherSha256:string;plainSha256:string;
+  photoId:string;assetId:string;cipherSha256:string;decryption:'aead-verified';
   originDeviceId:string;verifiedDeviceId:string;operationId:string
 }):Promise<string>{
   assertAppUnlocked()
@@ -426,7 +426,7 @@ export async function signRecoveredCloudAsset(input:{
   if(input.verifiedDeviceId!==active.deviceId||
     input.originDeviceId===active.deviceId||
     !/^[a-f0-9]{64}$/.test(input.cipherSha256)||
-    !/^[a-f0-9]{64}$/.test(input.plainSha256))
+    input.decryption!=='aead-verified')
     throw Error('recovery.invalid_attestation')
   const canonical=JSON.stringify(Object.fromEntries(
     Object.entries(input).sort(([a],[b])=>a<b?-1:a>b?1:0)))
