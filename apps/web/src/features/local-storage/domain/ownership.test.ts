@@ -21,9 +21,16 @@ describe('G5 local ownership / destructive allowlist',()=>{
     expect(classifyLocalRecord(row('name-lease',{deviceId:device})).eligibility).toBe('hold')
   })
   it('only treats a nonpending device clock as derived, not as recovered ciphertext',()=>{
-    expect(classifyLocalRecord(row('trusted-clock',{deviceId:device})).eligibility).toBe('post-revoke-derived')
-    expect(classifyLocalRecord(row('trusted-clock',{deviceId:device,pending:true})).eligibility).toBe('hold')
+    expect(classifyLocalRecord(row('trusted-clock',{deviceId:device,targetDeviceId:device})).eligibility).toBe('post-revoke-derived')
+    expect(classifyLocalRecord(row('trusted-clock',{deviceId:device,targetDeviceId:device,pending:true})).eligibility).toBe('hold')
     expect(classifyLocalRecord(row('trusted-clock')).eligibility).toBe('hold')
+  })
+  it('never marks another trusted device clock as eligible',()=>{
+    const foreign=classifyLocalRecord(row('trusted-clock',{
+      deviceId:'other-device',targetDeviceId:device,
+    }))
+    expect(foreign.scope).toBe('device-scoped')
+    expect(foreign.eligibility).toBe('hold')
   })
   it('treats unknown owner and any pending record as held',()=>{
     expect(classifyLocalRecord(row('asset',{accountId:''})).eligibility).toBe('hold')
