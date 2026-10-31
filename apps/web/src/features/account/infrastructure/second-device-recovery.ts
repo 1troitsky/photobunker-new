@@ -131,3 +131,37 @@ export async function attestRemotePhotoRecovery(photoId:string):Promise<CloudRec
   }
   return checks
 }
+
+export type CloudRecoveryCoverage=Readonly<{
+  photoId:string;originDeviceId:string;criticalAssets:number;
+  devices:ReadonlyArray<Readonly<{
+    deviceId:string;verifiedAssets:number;complete:boolean
+  }>>;state:'device-attestation-only'
+}>
+/** Check exact-version evidence from current enrolled independent devices.
+ * Observational only. NEVER a safe-to-delete grant.
+ */
+export async function inspectRemoteRecoveryCoverage(photoId:string):Promise<CloudRecoveryCoverage>{
+  const current=identity.value
+  if(!current||current.offline||!UUID.test(photoId))
+    throw Error('recovery.requires_online_identity')
+  const response=await photoRequest('/'+photoId+'/recovery-checks/summary')
+  if(!response.ok)throw Error('recovery.coverage_http_'+response.status)
+  const summary=await response.json() as CloudRecoveryCoverage
+  assertActive(current.accountId,current.deviceId)
+  if(summary.photoId!==photoId||!UUID.test(summary.originDeviceId)||
+    summary.state!=='device-attestation-only'||
+    !Number.isSafeInteger(summary.criticalAssets)||summary.criticalAssets<1||
+    summary.criticalAssets>64||!Array.isArray(summary.devices)||summary.devices.length>200)
+    throw Error('recovery.coverage_invalid')
+  const seen=new Set<string>()
+  for(const device of summary.devices){
+    if(!UUID.test(device.deviceId)||device.deviceId===summary.originDeviceId||
+      seen.has(device.deviceId)||!Number.isSafeInteger(device.verifiedAssets)||
+      device.verifiedAssets<1||device.verifiedAssets>summary.criticalAssets||
+      device.complete!==(device.verifiedAssets===summary.criticalAssets))
+      throw Error('recovery.coverage_invalid')
+    seen.add(device.deviceId)
+  }
+  return summary
+}
