@@ -15,8 +15,13 @@ async function createAccount(page:Page):Promise<string>{
   const failures:string[]=[]
   const observe=(response:import('@playwright/test').Response)=>{
     const url=new URL(response.url())
-    if(url.pathname.startsWith('/identity/v2/')&&response.status()>=400)
-      failures.push(url.pathname.split('/').slice(0,5).join('/')+':'+response.status())
+    if(url.pathname.startsWith('/identity/v2/')&&response.status()>=400){
+      // Only disclose request origin/status; never capture cookies, signatures,
+      // recovery keys, invitation codes, request bodies or response contents.
+      const from=response.request().headers()['origin']??'<absent>'
+      failures.push(url.pathname.split('/').slice(0,5).join('/')+':'+response.status()+
+        ' origin='+from)
+    }
   }
   page.on('response',observe)
   await page.goto('/account/create')
