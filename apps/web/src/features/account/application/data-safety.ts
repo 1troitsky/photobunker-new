@@ -1,7 +1,7 @@
 import {identity} from '../../identity'
 import {openLocalPhotoVault} from '../../local-storage'
 import {assessLocalDeletion,localSafetyRows,type SafetyDecision} from '../domain/data-safety'
-import {inspectStoreRisk} from '../infrastructure/store-risk'
+import {inspectStoreRisk} from '../index'
 
 /**
  * Read-only, scoped assessment. No local erase, revoke, key invalidation or
