@@ -128,7 +128,8 @@ final class PhotoRecoveryCheckTest extends TestCase
         $fixture=$this->prepare();$input=$this->input($fixture);
         $this->put($input)->assertUnauthorized();
         $this->session($fixture);
-        $this->putJson('/photos/v1/'.$input['photoId'].'/recovery-checks/'.$input['assetId'],
+        $this->withHeader('Origin','https://evil.example')
+            ->putJson('/photos/v1/'.$input['photoId'].'/recovery-checks/'.$input['assetId'],
             $input)->assertForbidden();
         $this->assertDatabaseCount('photo_recovery_checks',0);
     }
