@@ -16,11 +16,13 @@ async function createAccount(page:Page):Promise<string>{
   const observe=(response:import('@playwright/test').Response)=>{
     const url=new URL(response.url())
     if(url.pathname.startsWith('/identity/v2/')&&response.status()>=400){
-      // Only disclose request origin/status; never capture cookies, signatures,
-      // recovery keys, invitation codes, request bodies or response contents.
-      const from=response.request().headers()['origin']??'<absent>'
-      failures.push(url.pathname.split('/').slice(0,5).join('/')+':'+response.status()+
-        ' origin='+from)
+      // Playwright's synchronous headers() intentionally omits security headers.
+      // The async allHeaders() exposes Origin without logging secrets/credentials.
+      void response.request().allHeaders().then(headers=>{
+        const from=headers['origin']??'<absent>'
+        failures.push(url.pathname.split('/').slice(0,5).join('/')+':'+response.status()+
+          ' origin='+from)
+      }).catch(()=>failures.push(url.pathname+':'+response.status()))
     }
   }
   page.on('response',observe)
