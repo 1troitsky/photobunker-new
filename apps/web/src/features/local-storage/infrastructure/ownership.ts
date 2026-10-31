@@ -39,7 +39,7 @@ export async function scanLocalOwnership(accountId:string,deviceId:string):Promi
   const rows:LocalOwnershipRow[]=[]
   function add(kind:LocalRecordKind,account:string,device:string|undefined,
     referenced:boolean,pending:boolean):void{
-    rows.push({kind,accountId:account,deviceId:device,referenced,pending})
+    rows.push({kind,accountId:account,deviceId:device,targetDeviceId:deviceId,referenced,pending})
   }
   for(const row of photos)add('photo',row.accountId,undefined,true,row.state==='delete_pending')
   for(const row of assets)add('asset',row.accountId,undefined,livePhotoIds.has(row.photoId),false)
