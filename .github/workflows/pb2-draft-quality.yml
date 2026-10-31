@@ -98,7 +98,7 @@ jobs:
   live-storage:
     name: PostgreSQL + Garage S3 integration (isolated)
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 35
     services:
       postgres:
         image: postgres:18
@@ -209,6 +209,44 @@ jobs:
           done
           curl --silent --fail http://127.0.0.1:8099/identity/v2/csrf >/dev/null
           php tests/integration/http-laravel-garage-smoke.php
+      # Same disposable PostgreSQL/Garage services also run two genuine
+      # browser-local identities. Avoid mock API routes or test-only login.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install real browser dependencies and production UI
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+          pnpm build
+      - name: Two Chromium identities, real Laravel/Garage and E2EE decryption
+        shell: bash
+        env:
+          APP_URL: http://127.0.0.1:4173
+          APP_ENV: testing
+          SESSION_DRIVER: file
+          SESSION_SECURE_COOKIE: 'false'
+          PHP_CLI_SERVER_WORKERS: '4'
+          PHOTO_RECIPIENT_THUMBNAIL_PREVIEW: 'true'
+          PHOTOBUNKER_IDENTITY_PROXY: http://127.0.0.1:8099
+          PB_PHOTO_SHARE_LIVE_ORIGIN: http://127.0.0.1:4173
+        run: |
+          set -euo pipefail
+          cd apps/api
+          php artisan serve --host=127.0.0.1 --port=8099 > "$RUNNER_TEMP/pb2-e2ee-server.log" 2>&1 &
+          backend_pid=$!
+          cd ../..
+          trap 'kill "$backend_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 40); do
+            if curl --silent --fail http://127.0.0.1:8099/identity/v2/csrf >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --silent --fail http://127.0.0.1:8099/identity/v2/csrf >/dev/null
+          pnpm exec playwright test tests/e2e/photo-sharing-live.spec.ts
       - name: Stop isolated Garage
         if: always()
         run: docker rm -f pb2-g1-garage >/dev/null 2>&1 || true
