@@ -27,7 +27,7 @@ function touchEnd(event: TouchEvent) {
     <header class="welcome-topbar">
       <RouterLink
         class="welcome-enter-preview"
-        to="/photos"
+        to="/"
       >{{ text.preview }} <AppIcon name="arrow" /></RouterLink>
       <button
         class="language-button"
