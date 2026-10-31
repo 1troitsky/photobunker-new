@@ -56,3 +56,26 @@ The **Local-delete PIN** and **Emergency PIN** remain genuinely unavailable, not
 - Prove lock instantly clears current previews and stale asset grants even during an IndexedDB write or WebCrypto call; verify no unsynced asset is deleted.
 - Threat-review low-entropy PIN verifier, atomic cross-tab attempt records and ability to bypass JS-side controls by tampering with web bundles/IndexedDB.
 - If any bypass or plaintext residue is found, leave G5 App Lock **disabled for production** until hardening is complete.
+
+## 2026-10-31: independent destructive-PIN preparation and cross-store risk visibility
+
+The next stacked G5 slice adds two **independent, device/account scoped** verifier records, `local-delete` and `emergency`. They are not derived from App Lock and never share a verifier, salt or stored credential. Each uses an eight-digit PIN, fresh 128-bit salt, PBKDF2-SHA256 350,000 rounds, serial IndexedDB read-write attempt updates, bounded cooldown after repeated failures, wall-clock rollback rejection, and a scoped Identity/App Lock check. Neither verifier returns a durable privilege token; successful verification only resolves the immediate call, **never erases any data**.
+
+The settings screen offers an explicit *credential preparation* step, and states clearly that both **delete and emergency actions are unavailable**. This is not a production emergency wipe button or a remotely durable signed emergency intent.
+
+The risk inventory now inspects, without mutation:
+- locally persisted photo ciphertext records and unfinished photo staging journals;
+- photo outbox entries, including conflicts and retries;
+- assignment, collaboration and grant queues (including recipient thumbnail shares);
+- encrypted grant secret count.
+It is scoped to current Identity account and device, detects account switching after async reads, and contributes each pending category to a fail-closed report. It cannot prove other devices' restore capabilities; a healthy outbox is not evidence that the last copy can be erased. **No deletion authority is returned by this feature.**
+
+### Explicitly deferred until API + independent review
+
+1. A new server-signed and idempotent `device-revoke-intent` protocol with its own database record, sequence/nonce and replay protection. Reuse neither insecure general-purpose login nor a browser-local acknowledgment.
+2. Complete inventory of feature journals, offline pending operations, recovery envelopes, account-side metadata and device-origin OPFS copies before defining the exact erase target.
+3. A durable state machine `requested → locally locked → remote pending → server acknowledged → local cleanup completed` with crash replay and a signed server ACK; offline mode remains **pending**.
+4. Two-stage user authorization and separate consent for destroying *unsynced* local ciphertext. No UI can claim backups are recoverable without a different trusted device actually decrypting them.
+5. Atomic key-grant revocation and OPFS/IndexedDB deletion for **this device only**, preserving other trusted devices and remote ciphertext until independently authorized. This requires explicit negative tests and owner acceptance.
+
+This package delivers preparation plus inventory, **not a completed Local Delete/Emergency implementation**. Never enable UI destructive actions based solely on an eight-digit verifier or a `permitted:false` inventory.

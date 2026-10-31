@@ -1,6 +1,7 @@
 import {identity} from '../../identity'
 import {openLocalPhotoVault} from '../../local-storage'
 import {assessLocalDeletion,localSafetyRows,type SafetyDecision} from '../domain/data-safety'
+import {inspectStoreRisk} from '../index'
 
 /**
  * Read-only, scoped assessment. No local erase, revoke, key invalidation or
@@ -27,7 +28,9 @@ export async function inspectDeviceDataSafety():Promise<SafetyDecision>{
   }
   const pending=await vault.pending()
   check()
+  const storeRisk=await inspectStoreRisk()
+  check()
   const status=vault.time.status()
   return assessLocalDeletion(localSafetyRows(headers,states),pending,
-    status.trusted,!active.offline&&navigator.onLine,false)
+    status.trusted,!active.offline&&navigator.onLine,false,storeRisk)
 }

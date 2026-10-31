@@ -7,3 +7,5 @@ export {listRecipientThumbnails} from './infrastructure/recipient-list'
 export type {RecipientThumbnailRef,RecipientThumbnailPage} from './infrastructure/recipient-list'
 export type {ThumbnailShareStatus} from './infrastructure/grants'
 export {recheckRecipientGrant} from './infrastructure/recipient-scope'
+
+export {inspectGrantStoreCounts} from './infrastructure/database'

@@ -45,3 +45,12 @@ export const grantDb=new GrantsDB()
 export function scopedId(account:string,device:string,id:string):string{
   return account+'/'+device+'/'+id
 }
+
+export async function inspectGrantStoreCounts(account:string,device:string){
+  const [operations,shares,encryptedGrants]=await Promise.all([
+    grantDb.operations.where('[accountId+deviceId]').equals([account,device]).count(),
+    grantDb.thumbnailShares.where('[accountId+deviceId]').equals([account,device]).toArray(),
+    grantDb.secrets.where('[accountId+deviceId]').equals([account,device]).count(),
+  ])
+  return{grantPending:operations+shares.filter(row=>row.state!=='acknowledged').length,encryptedGrants}
+}

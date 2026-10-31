@@ -15,3 +15,5 @@ export {decryptRecipientThumbnail} from './infrastructure/recipient-thumbnail'
 
 // Canonical asset cipher encoder for cross-feature interoperability and crypto vectors.
 export {encryptAsset} from './infrastructure/cipher'
+
+export {inspectPhotoStoreCounts} from './infrastructure/database'

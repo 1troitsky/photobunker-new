@@ -151,3 +151,14 @@ export async function probeEncryptedFallback():Promise<boolean>{
   }catch{return false}
   finally{await db.blobFallback.delete(key).catch(()=>{})}
 }
+
+/** Scoped, read-only crash journal and outbox counts for device safety. */
+export async function inspectPhotoStoreCounts(account:string){
+  const [photoJournals,photoCipherAssets,rows]=await Promise.all([
+    db.journal.where('accountId').equals(account).count(),
+    db.assets.where('accountId').equals(account).count(),
+    db.outbox.where('accountId').equals(account).toArray(),
+  ])
+  return{photoJournals,photoCipherAssets,
+    photoOutbox:rows.filter(row=>!['acknowledged','cancelled'].includes(row.state)).length}
+}
