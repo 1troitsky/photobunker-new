@@ -178,8 +178,11 @@ export async function loginWithDevice(device:LocalDevice):Promise<void>{
 }
 export async function offlineUnlock(device:LocalDevice):Promise<void>{
   const epoch=currentGeneration()
+  // A local sign-out (including staged emergency self-revoke) cannot be
+  // undone offline. Only a server-proven login may clear this durable marker.
+  if(await isSignedOut(device.accountId,device.deviceId))
+    throw Error('identity.offline_signed_out')
   const pkg=await openDevice(device.envelope,device.encryptionKey,device.accountId,device.deviceId)
-  await markSignedOut(device.accountId,device.deviceId,false)
   assertEpoch(epoch)
   await activated(device,pkg,true)
 }
