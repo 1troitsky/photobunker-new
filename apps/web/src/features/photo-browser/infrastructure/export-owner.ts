@@ -39,6 +39,49 @@ async function stripJpeg(source:Blob,active:Account,signal:AbortSignal):Promise<
     canvas.width=0;canvas.height=0
   }
 }
+type Vault=ReturnType<typeof openLocalPhotoVault>
+async function ownerSafeJpeg(item:BrowserPhoto,vault:Vault,active:Account,signal:AbortSignal):Promise<Blob>{
+  const header=await vault.readHeader(item.id)
+  guard(active,signal)
+  if(!header||header.accountId!==active.accountId||
+    header.photoId!==item.id||header.expiresAt<=vault.time.now()||
+    header.expiresAt!==item.expiresAt)
+    throw Error('browser.export_denied')
+  // Owner vault ACL ensures selected version is the current active rendition.
+  const jpeg=await vault.read(item.id,header.assetId)
+  guard(active,signal)
+  const safe=await stripJpeg(jpeg,active,signal)
+  guard(active,signal)
+  const latest=await vault.readHeader(item.id)
+  guard(active,signal)
+  if(!latest||latest.assetId!==header.assetId||
+    latest.revision!==header.revision||latest.expiresAt<=vault.time.now())
+    throw Error('browser.export_changed')
+  return safe
+}
+/** Explicit user-triggered safe single rendition. The immutable original and
+ * EXIF are never downloaded through this owner browser capability.
+ */
+export async function exportOwnerPhotoJpeg(item:BrowserPhoto,signal:AbortSignal):Promise<void>{
+  const active=identity.value
+  if(!active)throw Error('browser.account_locked')
+  guard(active,signal)
+  const jpeg=await ownerSafeJpeg(item,openLocalPhotoVault(),active,signal)
+  guard(active,signal)
+  const filename=safePart(NAME_ID.test(item.nameId??'')?item.nameId!:item.title,item.id)+'.jpg'
+  const url=URL.createObjectURL(jpeg)
+  registerDecryptedObjectUrl(url)
+  try{
+    guard(active,signal)
+    const anchor=document.createElement('a')
+    anchor.href=url;anchor.download=filename;anchor.style.display='none'
+    document.body.append(anchor)
+    try{anchor.click()}finally{anchor.remove()}
+  }finally{
+    window.setTimeout(()=>revokeDecryptedObjectUrl(url),10000)
+  }
+}
+
 /** Explicit owner export only: current locally encrypted rendition, NOT the
  * immutable original, grant thumbnails, hidden metadata or EXIF. No legacy API.
  * The only plaintext persistence is the user-requested ZIP in Downloads.
@@ -64,22 +107,7 @@ export async function exportOwnerBrowserZip(
   for(let i=0;i<selected.length;i++){
     guard(active,signal)
     const item=selected[i]!
-    const header=await vault.readHeader(item.id)
-    guard(active,signal)
-    if(!header||header.accountId!==active.accountId||
-      header.photoId!==item.id||header.expiresAt<=vault.time.now()||
-      header.expiresAt!==item.expiresAt)
-      throw Error('browser.export_denied')
-    // Owner vault ACL ensures selected version is the current active rendition.
-    const jpeg=await vault.read(item.id,header.assetId)
-    guard(active,signal)
-    const safe=await stripJpeg(jpeg,active,signal)
-    guard(active,signal)
-    const latest=await vault.readHeader(item.id)
-    guard(active,signal)
-    if(!latest||latest.assetId!==header.assetId||
-      latest.revision!==header.revision||latest.expiresAt<=vault.time.now())
-      throw Error('browser.export_changed')
+    const safe=await ownerSafeJpeg(item,vault,active,signal)
     const base=NAME_ID.test(item.nameId??'')?item.nameId!:item.title
     const name=distinctPath(safePart(base,item.id)+'.jpg',paths)
     await zip.add(name,safe)

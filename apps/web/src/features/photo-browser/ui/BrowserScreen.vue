@@ -6,9 +6,9 @@ import {GalleryThumbnail} from '../../gallery'
 import {onPhotoSync} from '../../photo-sync'
 import {language,AppIcon} from '../../ui-preview'
 import {loadLocalBrowser} from '../application/browse'
-import {exportOwnerBrowserZip} from '../infrastructure/export-owner'
+import {exportOwnerBrowserZip,exportOwnerPhotoJpeg} from '../infrastructure/export-owner'
 import {selectedVisiblePhotos,togglePhotoSelection,MAX_ZIP_SELECTION} from '../domain/selection'
-import {browserFolders,visibleBrowserPhotos,type BrowserPhoto,type BrowserAssignment,
+import {browserFolders,browserTreeGroups,visibleBrowserPhotos,type BrowserPhoto,type BrowserAssignment,
   type BrowserDisplay,type BrowserSort} from '../domain/model'
 
 const router=useRouter()
@@ -27,7 +27,7 @@ const txt=computed(()=>ru.value?{
   note:'Локальный просмотр и экспорт своих текущих версий. Общие коллекции и доступ участников пока не подключены.',
   all:'Все фото',personal:'Личные',missing:'Недоступное задание',
   assignments:'Задания',search:'Название или NAME-ID',newest:'Новые',oldest:'Старые',name:'По имени',
-  grid:'Сетка',list:'Список',refresh:'Обновить',loading:'Открываем защищённые данные…',
+  grid:'Сетка',list:'Список',tree:'Дерево',card:'Карточка',cancelExport:'Отменить экспорт',refresh:'Обновить',loading:'Открываем защищённые данные…',
   locked:'Откройте анонимный аккаунт, чтобы просматривать фотографии.',
   empty:'Фотографий нет',emptyHint:'Снимите фото или выберите другую папку.',
   failure:'Не удалось открыть защищённый фото-браузер.',open:'Открыть фотографию',
@@ -36,13 +36,13 @@ const txt=computed(()=>ru.value?{
   exportZip:'Сохранить ZIP',exportWarning:'ZIP с текущими изображениями будет сохранён в загрузки устройства. Приватные метаданные и EXIF не включаются.',
   exportLimit:'ZIP — не более 10 локальных фото за раз (до 16 МБ).',
   exportWorking:'Подготавливаем защищённый экспорт…',exportSent:'Запрошено скачивание ZIP.',exportFailed:'Экспорт прерван или недоступен.',
-  choose:'Выбрать фото',finishChoosing:'Готово',selected:'Выбрано',clearSelection:'Снять выделение',selectionLimit:'Максимум 10 фотографий',
+  single:'Скачать JPEG',choose:'Выбрать фото',finishChoosing:'Готово',selected:'Выбрано',clearSelection:'Снять выделение',selectionLimit:'Максимум 10 фотографий',
 }:{
   title:'Photo Browser',subtitle:'Private photos on this device',
   note:'Local browsing and export of current owner renditions. Shared collections and recipient access are not yet enabled.',
   all:'All photos',personal:'Personal',missing:'Unavailable assignment',
   assignments:'Assignments',search:'Title or NAME-ID',newest:'Newest',oldest:'Oldest',name:'Name',
-  grid:'Grid',list:'List',refresh:'Refresh',loading:'Opening encrypted data…',
+  grid:'Grid',list:'List',tree:'Tree',card:'Photo Card',cancelExport:'Cancel export',refresh:'Refresh',loading:'Opening encrypted data…',
   locked:'Unlock your anonymous account to browse photos.',
   empty:'No photos',emptyHint:'Capture a photo or choose another folder.',
   failure:'Could not open the protected photo browser.',open:'Open photo',
@@ -51,13 +51,14 @@ const txt=computed(()=>ru.value?{
   exportZip:'Save ZIP',exportWarning:'The current images will be downloaded to this device. Private metadata and EXIF are excluded.',
   exportLimit:'Up to 10 local photos per ZIP (16 MB maximum).',
   exportWorking:'Preparing private export…',exportSent:'ZIP download requested.',exportFailed:'Export cancelled or unavailable.',
-  choose:'Select photos',finishChoosing:'Done',selected:'Selected',clearSelection:'Clear selection',selectionLimit:'Maximum 10 photos',
+  single:'Download JPEG',choose:'Select photos',finishChoosing:'Done',selected:'Selected',clearSelection:'Clear selection',selectionLimit:'Maximum 10 photos',
 })
 const validPhotos=computed(()=>photos.value.filter(p=>p.expiresAt>now.value))
 const folders=computed(()=>browserFolders(assignments.value,validPhotos.value))
 const visible=computed(()=>visibleBrowserPhotos(validPhotos.value,activeFolder.value,
   search.value,sort.value,now.value))
 const selectedPhotos=computed(()=>selectedVisiblePhotos(visible.value,selectedIds.value))
+const treeGroups=computed(()=>browserTreeGroups(folders.value,visible.value))
 function toggleChoosing(){
   if(exporting.value)return
   choosing.value=!choosing.value
@@ -106,6 +107,11 @@ async function refresh(){
     if(!stopped&&generation===token){photos.value=[];assignments.value=[];error.value=txt.value.failure}
   }finally{if(!stopped&&generation===token)loading.value=false}
 }
+async function openCard(id:string){
+  if(!identity.value)return
+  // The card independently re-opens the private encrypted vault and checks TTL.
+  await router.push('/photos/'+encodeURIComponent(id)+'/card')
+}
 async function openPhoto(id:string){
   // A route locator is never an authorization grant: LocalPhotoViewer
   // reopens scoped, encrypted vault material and enforces TTL independently.
@@ -113,6 +119,21 @@ async function openPhoto(id:string){
   await router.push('/photos/'+encodeURIComponent(id))
 }
 
+async function downloadSingle(photo:BrowserPhoto){
+  if(exporting.value||choosing.value||!identity.value)return
+  const active=identity.value,controller=new AbortController()
+  exportController=controller
+  exporting.value=true;exportError.value='';exportNotice.value='';exportDone.value=0
+  try{
+    await exportOwnerPhotoJpeg(photo,controller.signal)
+    if(exportController===controller&&identity.value?.accountId===active.accountId&&
+      identity.value?.deviceId===active.deviceId)exportNotice.value=txt.value.exportSent
+  }catch(e){
+    if(exportController===controller)exportError.value=e instanceof Error?e.message:txt.value.exportFailed
+  }finally{
+    if(exportController===controller){exportController=null;exporting.value=false}
+  }
+}
 async function downloadZip(){
   if(exporting.value||!choosing.value||selectedPhotos.value.length<1||!identity.value)return
   exportController?.abort()
@@ -196,6 +217,8 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
             <option value="name">{{ txt.name }}</option>
           </select>
           <div class="pill-group">
+            <button type="button" :class="{selected:display==='tree'}" :aria-pressed="display==='tree'"
+              @click="display='tree'">{{ txt.tree }}</button>
             <button type="button" :class="{selected:display==='grid'}" :aria-pressed="display==='grid'"
               @click="display='grid'">{{ txt.grid }}</button>
             <button type="button" :class="{selected:display==='list'}" :aria-pressed="display==='list'"
@@ -214,6 +237,7 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
           </template>
           <small>{{ txt.exportWarning }} {{ txt.exportLimit }}</small>
           <span v-if="exporting" role="status">{{ exportDone }} / {{ selectedPhotos.length }}</span>
+          <button v-if="exporting" type="button" @click="exportController?.abort()">{{txt.cancelExport}}</button>
           <p v-if="exportError" role="alert">{{ exportError }}</p>
           <p v-if="exportNotice" role="status">{{ exportNotice }}</p>
         </div>
@@ -222,21 +246,41 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
         <div v-else-if="visible.length===0" class="pb-browser-empty">
           <h3>{{ txt.empty }}</h3><p>{{ txt.emptyHint }}</p>
         </div>
+        <div v-else-if="display==='tree'" class="pb-browser-tree">
+          <section v-for="group in treeGroups" :key="group.folder.id" class="pb-tree-group">
+            <h3><AppIcon name="folder"/> {{label(group.folder.id,group.folder.kind,group.folder.title)}} <small>{{group.photos.length}}</small></h3>
+            <div v-for="photo in group.photos" :key="photo.id" class="pb-tree-photo">
+              <button v-if="choosing" type="button" :aria-pressed="selectedIds.has(photo.id)"
+                @click="toggleSelected(photo.id)">{{selectedIds.has(photo.id)?'☑':'☐'}} {{txt.choose}}</button>
+              <button type="button" @click="openPhoto(photo.id)">{{photo.title||photo.nameId||txt.file}}</button>
+              <small>{{date(photo.capturedAt)}}</small>
+              <button type="button" @click="openCard(photo.id)">{{txt.card}}</button>
+              <button v-if="!choosing" type="button" :disabled="exporting"
+                @click="downloadSingle(photo)">{{txt.single}}</button>
+            </div>
+          </section>
+        </div>
         <div v-else :class="['pb-browser-photos',display]" role="list">
-          <button v-for="photo in visible" :key="photo.id" role="listitem" type="button"
-            :aria-label="txt.open+' '+(photo.nameId??photo.title??txt.file)"
-            class="pb-browser-photo" :class="{ 'is-selected': choosing&&selectedIds.has(photo.id) }"
-            :aria-pressed="choosing?selectedIds.has(photo.id):undefined"
-            @click="choosing?toggleSelected(photo.id):openPhoto(photo.id)">
-            <span class="pb-browser-image"><GalleryThumbnail :photo-id="photo.id"
-              :label="photo.title||photo.nameId||txt.file"/></span>
-            <span class="pb-browser-caption">
-              <span v-if="choosing" class="pb-browser-selection">{{ selectedIds.has(photo.id)?'✓':'○' }}</span>
-              <strong>{{ photo.title||photo.nameId||txt.file }}</strong>
-              <small>{{ photo.nameId||date(photo.capturedAt) }}</small>
-              <small>{{ stateLabel(photo.sync) }}</small>
-            </span>
-          </button>
+          <article v-for="photo in visible" :key="photo.id" class="pb-browser-item" role="listitem">
+            <button type="button"
+              :aria-label="(choosing?txt.choose:txt.open)+' '+(photo.nameId??photo.title??txt.file)"
+              class="pb-browser-photo" :class="{ 'is-selected': choosing&&selectedIds.has(photo.id) }"
+              :aria-pressed="choosing?selectedIds.has(photo.id):undefined"
+              @click="choosing?toggleSelected(photo.id):openPhoto(photo.id)">
+              <span class="pb-browser-image"><GalleryThumbnail :photo-id="photo.id"
+                :label="photo.title||photo.nameId||txt.file"/></span>
+              <span class="pb-browser-caption">
+                <span v-if="choosing" class="pb-browser-selection">{{ selectedIds.has(photo.id)?'✓':'○' }}</span>
+                <strong>{{ photo.title||photo.nameId||txt.file }}</strong>
+                <small>{{ photo.nameId||date(photo.capturedAt) }}</small>
+                <small>{{ stateLabel(photo.sync) }}</small>
+              </span>
+            </button>
+            <div v-if="!choosing" class="pb-item-actions">
+              <button class="pb-card-shortcut" type="button" @click="openCard(photo.id)">{{txt.card}}</button>
+              <button class="pb-card-shortcut" type="button" :disabled="exporting" @click="downloadSingle(photo)">{{txt.single}}</button>
+            </div>
+          </article>
         </div>
       </div>
     </div>
@@ -266,6 +310,20 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
 .pb-browser-tools input,.pb-browser-tools select{min-height:44px;background:var(--surface);
   border:1px solid var(--border);border-radius:10px;color:var(--text);padding:0 12px;max-width:100%;width:100%}
 .pb-browser-tools select{width:auto}
+.pb-browser-tree{display:grid;gap:16px}
+.pb-tree-group{padding:14px;border:1px solid var(--border);border-radius:12px;min-width:0}
+.pb-tree-group h3{display:flex;align-items:center;gap:8px;font-size:14px;margin:0 0 10px}
+.pb-tree-group small{color:var(--secondary);font-size:11px}
+.pb-tree-photo{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--border);padding:8px 0}
+.pb-tree-photo button{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;min-height:40px;padding:7px 9px;overflow-wrap:anywhere}
+.pb-tree-photo button:nth-child(2){flex:1;text-align:left}
+.pb-browser-item{display:flex;flex-direction:column;min-width:0}
+.pb-browser-item .pb-browser-photo{flex:1}
+.pb-item-actions{display:flex;gap:4px;flex-wrap:wrap}
+.pb-item-actions button{flex:1 1 90px}
+.pb-card-shortcut{font-size:12px;min-height:40px;text-align:center;color:var(--accent);background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-top:4px}
+.pb-browser-photos.list .pb-browser-item{flex-direction:row;gap:8px}
+.pb-browser-photos.list .pb-card-shortcut{margin-top:0}
 .pb-browser-photos.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:14px}
 .pb-browser-photos.list{display:flex;flex-direction:column;gap:8px}
 .pb-browser-photo{text-align:left;display:flex;flex-direction:column;min-width:0;overflow:hidden;
