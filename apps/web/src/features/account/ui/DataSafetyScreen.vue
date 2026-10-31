@@ -27,6 +27,7 @@ const copy=computed(()=>ru.value?{
   device_erase_not_implemented:'Механизм безопасного удаления не реализован',
   photo_journal_incomplete:'Есть незавершённые зашифрованные записи',stores_not_inspected:'Все хранилища ещё не проверены',
   otherQueues:'Операции заданий, команд и доступа',journals:'Незавершённые записи файлов',
+  recoveryVerify:'Проверить расшифровку на втором устройстве',
   sharedCiphertext:'Общие зашифрованные записи аккаунта',unknownCiphertext:'Осиротевшие или неопределённые записи',
   account_shared_ciphertext:'Есть общие для аккаунта зашифрованные данные',
   unattributed_local_artifacts:'Есть файлы с неустановленным владельцем или без ссылки',
@@ -52,6 +53,7 @@ const copy=computed(()=>ru.value?{
   device_erase_not_implemented:'Safe device-erasure workflow is not implemented',
   photo_journal_incomplete:'Unfinished encrypted file writes remain',stores_not_inspected:'Not all stores were inspected',
   otherQueues:'Assignment, team and sharing operations',journals:'Unfinished file writes',
+  recoveryVerify:'Verify decryption on a second device',
   sharedCiphertext:'Account-shared encrypted records',unknownCiphertext:'Unattributed or orphan records',
   account_shared_ciphertext:'Account-shared ciphertext is retained',
   unattributed_local_artifacts:'Unattributed or orphaned local files exist',
@@ -153,6 +155,7 @@ const issueLabel=(code:string)=>copy.value[code as keyof typeof copy.value]??cod
       </section>
     </div>
     <p role="note">{{copy.warning}}</p>
+    <RouterLink to="/profile/recovery-check">{{copy.recoveryVerify}}</RouterLink>
     <button type="button" :disabled="busy||!identity" @click="inspect">{{copy.check}}</button>
     <p v-if="!identity" role="status">{{copy.locked}}</p>
     <p v-else-if="busy" role="status">{{copy.checking}}</p>
