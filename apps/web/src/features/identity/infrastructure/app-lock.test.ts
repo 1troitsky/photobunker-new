@@ -1,7 +1,8 @@
 import 'fake-indexeddb/auto'
 import {afterAll,beforeEach,describe,expect,it} from 'vitest'
 import {appLockState,assertAppUnlocked,configureAppPin,lockApp,
-  onAppLockInvalidate,prepareAppLock,resetAppLock,unlockAppPin} from './app-lock'
+  onAppLockInvalidate,prepareAppLock,resetAppLock,unlockAppPin,
+  removeRevokedDeviceAppPin} from './app-lock'
 
 const account='00000000-0000-4000-8000-000000001100'
 const device='00000000-0000-4000-8000-000000001101'
@@ -45,6 +46,21 @@ describe('PB2 App Lock PIN identity barrier',()=>{
       await expect(unlockAppPin('00000000')).rejects.toThrow('pin.invalid')
     }
     await expect(unlockAppPin('44556677')).rejects.toThrow('pin.cooldown')
+    expect(appLockState.value.locked).toBe(true)
+  })
+  it('post-ACK App PIN cleanup never deletes another local device verifier',async()=>{
+    const target=device+'-revoked-'+counter
+    const other=device+'-other-'+counter
+    await prepareAppLock(account,target)
+    await configureAppPin('11112222')
+    await prepareAppLock(account,other)
+    await configureAppPin('22223333')
+    await removeRevokedDeviceAppPin(account,target)
+    await removeRevokedDeviceAppPin(account,target)
+    await prepareAppLock(account,target)
+    expect(appLockState.value.configured).toBe(false)
+    await prepareAppLock(account,other)
+    expect(appLockState.value.configured).toBe(true)
     expect(appLockState.value.locked).toBe(true)
   })
   it('other account or device cannot inherit an unlocked gate',async()=>{

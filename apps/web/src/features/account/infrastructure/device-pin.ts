@@ -119,3 +119,22 @@ export async function verifyDevicePin(kind:DevicePinKind,pin:string):Promise<voi
   if(id!==scope(kind))throw Error('pin.account_changed')
   if(!correct)throw Error('pin.invalid')
 }
+
+/** Idempotent cleanup after a verified server revoke ACK, never before.
+ * Delete only the two PIN verifiers of this exact account/device.
+ */
+export async function removeRevokedDeviceActionPins(accountId:string,deviceId:string):Promise<void>{
+  const current=identity.value
+  if(current?.accountId===accountId&&current.deviceId===deviceId)
+    throw Error('pin.active_device_cleanup_forbidden')
+  const handle=await open()
+  try{
+    await new Promise<void>((resolve,reject)=>{
+      const tx=handle.transaction('pins','readwrite')
+      for(const kind of ['local-delete','emergency'] as const)
+        tx.objectStore('pins').delete(key(accountId,deviceId,kind))
+      tx.oncomplete=()=>resolve()
+      tx.onabort=()=>reject(tx.error??Error('pin.cleanup_failed'))
+    })
+  }finally{handle.close()}
+}

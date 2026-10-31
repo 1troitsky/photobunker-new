@@ -17,6 +17,7 @@ const CollaborationScreen = () => import('./features/collaboration/ui/Collaborat
 const PhotoReviewScreen = () => import('./features/photo-review/ui/ReviewScreen.vue')
 const ProfileScreen = () => import('./features/account/ui/ProfileScreen.vue')
 const DataSafetyScreen = () => import('./features/account/ui/DataSafetyScreen.vue')
+const RevokedDeviceStatusScreen = () => import('./features/account/ui/RevokedDeviceStatusScreen.vue')
 
 /* Shell always opens without blocking HTTP; Identity v2 is initialized lazily. */
 export const router = createRouter({
@@ -24,6 +25,7 @@ export const router = createRouter({
   routes: [
     { path: '/', redirect: () => homeSection() },
     { path: '/welcome', name: 'welcome', component: WelcomeView },
+    { path: '/device-revocation/status', name: 'device-revocation-status', component: RevokedDeviceStatusScreen },
     { path: '/account/create', name: 'account-create', component: IdentityPage },
     { path: '/account/restore', name: 'account-restore', component: IdentityPage },
     {
