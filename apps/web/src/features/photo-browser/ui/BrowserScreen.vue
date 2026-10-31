@@ -256,10 +256,15 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
               <strong>{{ photo.title||photo.nameId||txt.file }}</strong>
               <small>{{ photo.nameId||date(photo.capturedAt) }}</small>
               <small>{{ stateLabel(photo.sync) }}</small>
-              <span v-if="!choosing" class="pb-browser-card-action" @click.stop="openCard(photo.id)" role="link" tabindex="0"
-                @keydown.enter.stop="openCard(photo.id)" @keydown.space.prevent.stop="openCard(photo.id)">{{txt.card}}</span>
+
             </span>
           </button>
+          <div v-if="!choosing" class="pb-browser-card-toolbar">
+            <button v-for="photo in visible" :key="photo.id" type="button"
+              class="subtle-button pb-card-shortcut" @click="openCard(photo.id)">
+              {{txt.card}} — {{photo.title||photo.nameId||txt.file}}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -296,7 +301,8 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
 .pb-tree-photo{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--border);padding:8px 0}
 .pb-tree-photo button{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;min-height:40px;padding:7px 9px;overflow-wrap:anywhere}
 .pb-tree-photo button:nth-child(2){flex:1;text-align:left}
-.pb-browser-card-action{color:var(--accent);text-decoration:underline;min-height:24px;cursor:pointer}
+.pb-browser-card-toolbar{display:flex;flex-wrap:wrap;gap:6px;grid-column:1/-1}
+.pb-card-shortcut{font-size:12px;min-height:36px;max-width:100%;overflow-wrap:anywhere}
 .pb-browser-photos.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:14px}
 .pb-browser-photos.list{display:flex;flex-direction:column;gap:8px}
 .pb-browser-photo{text-align:left;display:flex;flex-direction:column;min-width:0;overflow:hidden;
