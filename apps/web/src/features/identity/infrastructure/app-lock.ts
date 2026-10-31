@@ -125,6 +125,7 @@ export async function configureAppPin(pin:string):Promise<void>{
   keyReady(scope,token)
   state.value={scope,configured:true,locked:false,ready:true}
   channel?.postMessage({scope,event:'configured'})
+  if(typeof document!=='undefined'&&document.hidden)lockApp()
 }
 export function lockApp():void{
   const old=state.value
@@ -159,6 +160,7 @@ export async function unlockAppPin(pin:string):Promise<void>{
   })
   keyReady(scope,token)
   if(!verified)throw Error('pin.invalid')
+  if(typeof document!=='undefined'&&document.hidden)throw Error('pin.background_locked')
   state.value={scope,configured:true,locked:false,ready:true}
   channel?.postMessage({scope,event:'unlocked'})
 }
