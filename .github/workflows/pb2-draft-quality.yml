@@ -238,7 +238,7 @@ jobs:
         run: |
           set -euo pipefail
           cd apps/api
-          php -r 'require "vendor/autoload.php"; $app=require "bootstrap/app.php"; $app->make(\\Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap(); echo "CI Laravel env=".config("app.env")." expectedOrigin=".config("app.url").PHP_EOL;'
+          php -r 'require "vendor/autoload.php"; $app=require "bootstrap/app.php"; $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap(); echo "CI Laravel env=".config("app.env")." expectedOrigin=".config("app.url").PHP_EOL;'
           php artisan serve --host=127.0.0.1 --port=8099 > "$RUNNER_TEMP/pb2-e2ee-server.log" 2>&1 &
           backend_pid=$!
           cd ../..
