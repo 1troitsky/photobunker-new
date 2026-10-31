@@ -56,6 +56,45 @@ final class PhotoRecoveryCheckController extends Controller
             $this->receipt($row)->getData(true))->all()])
             ->header('Cache-Control','no-store');
     }
+    /** Read-only per-device coverage of CURRENT active critical cloud assets.
+     * Distinguish device-attested coverage from independent restore guarantees.
+     * Neither this endpoint nor any stored check authorizes erasure.
+     */
+    public function summary(Request $request,string $photoId):JsonResponse {
+        P::uuid($photoId);
+        [$account]=$this->actor($request);
+        $photo=DB::table('photo_records')->where('id',$photoId)
+            ->where('account_id',$account)->where('state','active')->first();
+        abort_unless($photo&&(int)$photo->expires_at>=(int)floor(microtime(true)*1000),404);
+        $objects=DB::table('photo_objects')->where('photo_id',$photoId)
+            ->where('state','active')->whereIn('kind',['master','original','edit','metadata'])
+            ->limit(64)->get(['id','sha256']);
+        $active=$objects->keyBy('id');
+        $checks=DB::table('photo_recovery_checks as check')
+            ->join('identity_devices as verifier','verifier.id','=','check.verifier_device_id')
+            ->where('check.photo_id',$photoId)->where('check.account_id',$account)
+            ->whereNull('verifier.revoked_at')->where('verifier.account_id',$account)
+            ->where('check.verifier_device_id','!=',$photo->device_id)
+            ->whereIn('check.asset_id',$objects->pluck('id'))
+            ->limit(2000)->get(['check.asset_id','check.verifier_device_id','check.cipher_sha256']);
+        $counts=[];
+        foreach($checks as $check){
+            $asset=$active->get($check->asset_id);
+            if(!$asset||!hash_equals($asset->sha256,$check->cipher_sha256))continue;
+            $counts[$check->verifier_device_id][$check->asset_id]=true;
+        }
+        $devices=[];
+        foreach($counts as $device=>$found){
+            $devices[]=['deviceId'=>$device,'verifiedAssets'=>count($found),
+                'complete'=>count($found)===$active->count()&&$active->count()>0];
+        }
+        usort($devices,fn($a,$b)=>strcmp($a['deviceId'],$b['deviceId']));
+        return response()->json([
+            'photoId'=>$photoId,'originDeviceId'=>$photo->device_id,
+            'criticalAssets'=>$active->count(),'devices'=>$devices,
+            'state'=>'device-attestation-only',
+        ])->header('Cache-Control','no-store');
+    }
     public function store(Request $request,string $photoId,string $assetId):JsonResponse {
         $origin=$request->headers->get('Origin');
         abort_unless(is_string($origin)&&hash_equals(rtrim(config('app.url'),'/'),$origin),403);
