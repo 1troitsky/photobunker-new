@@ -10,7 +10,7 @@ export type BrowserFolder=Readonly<{
   id:string;kind:'all'|'personal'|'assignment'|'missing';title:string|null;count:number
 }>
 export type BrowserSort='newest'|'oldest'|'name'
-export type BrowserDisplay='grid'|'list'
+export type BrowserDisplay='grid'|'list'|'tree'
 
 export function browserFolders(assignments:readonly BrowserAssignment[],
   photos:readonly BrowserPhoto[]):BrowserFolder[]{
@@ -48,4 +48,20 @@ export function visibleBrowserPhotos(photos:readonly BrowserPhoto[],
     return (sort==='oldest'?a.capturedAt-b.capturedAt:b.capturedAt-a.capturedAt)||
       a.id.localeCompare(b.id)
   })
+}
+
+/** Owner-only Finder-style tree projection; photo rows remain local vault locators.
+ * No permissions or recipient grants are inferred from a folder.
+ */
+export type BrowserTreeGroup=Readonly<{folder:BrowserFolder;photos:BrowserPhoto[]}>
+export function browserTreeGroups(
+  folders:readonly BrowserFolder[], visible:readonly BrowserPhoto[],
+):BrowserTreeGroup[]{
+  const groups=folders.filter(folder=>folder.kind!=='all').map(folder=>({
+    folder,
+    photos:visible.filter(photo=>folder.kind==='personal'
+      ?photo.assignmentId===null
+      :folder.id==='assignment:'+photo.assignmentId),
+  }))
+  return groups.filter(group=>group.photos.length>0)
 }
