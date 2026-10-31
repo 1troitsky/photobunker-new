@@ -133,3 +133,15 @@ export async function deliverPendingRevocations():Promise<{
   }
   return {acknowledged,pending:(await pendingDeviceRevocations()).length}
 }
+
+/** Non-blocking recovery: only already staged, signed intents are replayed.
+ * Never invents an emergency or a deletion request on startup.
+ */
+let replayStarted=false
+export function startRevocationReplay():void{
+  if(replayStarted||typeof window==='undefined')return
+  replayStarted=true
+  const retry=()=>{void deliverPendingRevocations().catch(()=>{})}
+  window.addEventListener('online',retry)
+  retry()
+}
