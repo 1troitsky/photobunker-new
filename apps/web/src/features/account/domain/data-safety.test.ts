@@ -29,4 +29,24 @@ describe('G5 device-data safety gate',()=>{
     expect(result.permitted).toBe(false)
     expect(result.blockingReasons).toEqual(['device_erase_not_implemented'])
   })
+
+  it('blocks deletion for a leftover photo crash journal even without active photos',()=>{
+    const result=assessLocalDeletion([],[],true,true,false,{
+      photoJournals:1,photoCipherAssets:2,photoOutbox:0,
+      assignmentPending:0,collaborationPending:0,grantPending:0,
+      encryptedGrants:0,unconfirmedTotal:1,
+    })
+    expect(result.permitted).toBe(false)
+    expect(result.blockingReasons).toContain('photo_journal_incomplete')
+    expect(result.blockingReasons).toContain('operations_pending')
+  })
+  it('does not ignore independent assignment/team/grant queues',()=>{
+    const result=assessLocalDeletion([],[],true,true,false,{
+      photoJournals:0,photoCipherAssets:0,photoOutbox:0,
+      assignmentPending:1,collaborationPending:2,grantPending:3,
+      encryptedGrants:1,unconfirmedTotal:6,
+    })
+    expect(result.blockingReasons).toContain('operations_pending')
+    expect(result.storeRisk?.unconfirmedTotal).toBe(6)
+  })
 })
