@@ -27,6 +27,9 @@ const copy=computed(()=>ru.value?{
   device_erase_not_implemented:'Механизм безопасного удаления не реализован',
   photo_journal_incomplete:'Есть незавершённые зашифрованные записи',stores_not_inspected:'Все хранилища ещё не проверены',
   otherQueues:'Операции заданий, команд и доступа',journals:'Незавершённые записи файлов',
+  sharedCiphertext:'Общие зашифрованные записи аккаунта',unknownCiphertext:'Осиротевшие или неопределённые записи',
+  account_shared_ciphertext:'Есть общие для аккаунта зашифрованные данные',
+  unattributed_local_artifacts:'Есть файлы с неустановленным владельцем или без ссылки',
   pinSetup:'Подготовить отдельный PIN (8 цифр)',pinReady:'PIN сохранён. Удаление не активировано.',pinFailure:'PIN не сохранён',
   verifyOnly:'Настройка этих PIN не разрешает удаление. Экстренный режим пока не включён.',
 }:{
@@ -49,6 +52,9 @@ const copy=computed(()=>ru.value?{
   device_erase_not_implemented:'Safe device-erasure workflow is not implemented',
   photo_journal_incomplete:'Unfinished encrypted file writes remain',stores_not_inspected:'Not all stores were inspected',
   otherQueues:'Assignment, team and sharing operations',journals:'Unfinished file writes',
+  sharedCiphertext:'Account-shared encrypted records',unknownCiphertext:'Unattributed or orphan records',
+  account_shared_ciphertext:'Account-shared ciphertext is retained',
+  unattributed_local_artifacts:'Unattributed or orphaned local files exist',
   pinSetup:'Prepare separate PIN (8 digits)',pinReady:'PIN saved. Erasure is not enabled.',pinFailure:'PIN was not saved',
   verifyOnly:'Setting these PINs never authorizes deletion. Emergency mode is not enabled.',
 })
@@ -160,6 +166,10 @@ const issueLabel=(code:string)=>copy.value[code as keyof typeof copy.value]??cod
         <div v-if="report.storeRisk"><dt>{{copy.otherQueues}}</dt>
           <dd>{{report.storeRisk.assignmentPending+report.storeRisk.collaborationPending+report.storeRisk.grantPending}}</dd></div>
         <div v-if="report.storeRisk"><dt>{{copy.journals}}</dt><dd>{{report.storeRisk.photoJournals}}</dd></div>
+        <div v-if="report.storeRisk?.ownership"><dt>{{copy.sharedCiphertext}}</dt>
+          <dd>{{report.storeRisk.ownership.accountShared}}</dd></div>
+        <div v-if="report.storeRisk?.ownership"><dt>{{copy.unknownCiphertext}}</dt>
+          <dd>{{report.storeRisk.ownership.unattributed+(report.storeRisk.orphanArtifacts??0)}}</dd></div>
       </dl>
       <h2>{{copy.issues}}</h2>
       <ul><li v-for="reason in report.blockingReasons" :key="reason">{{issueLabel(reason)}}</li></ul>
