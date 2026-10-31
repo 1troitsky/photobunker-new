@@ -83,6 +83,11 @@ export async function attestRemotePhotoRecovery(photoId:string):Promise<CloudRec
   }
   // Only after ALL critical objects have decrypted can any claim be signed.
   // Never claim a whole photo recovered if one object was corrupted/missing.
+  const existingReply=await photoRequest('/'+photoId+'/recovery-checks')
+  if(!existingReply.ok)throw Error('recovery.receipts_http_'+existingReply.status)
+  const existing=await existingReply.json() as {checks:CloudRecoveryCheck[]}
+  if(!Array.isArray(existing.checks)||existing.checks.length>32)
+    throw Error('recovery.receipts_invalid')
   const checks:CloudRecoveryCheck[]=[]
   for(const {asset,plainSha256} of verified){
     assertActive(account,device)
@@ -90,6 +95,22 @@ export async function attestRemotePhotoRecovery(photoId:string):Promise<CloudRec
       photoId,assetId:asset.assetId,cipherSha256:asset.sha256,plainSha256,
       originDeviceId:manifest.originDeviceId,verifiedDeviceId:device,
       operationId:crypto.randomUUID(),
+    }
+    const previously=existing.checks.filter(check=>check.assetId===asset.assetId)
+    if(previously.length>1)throw Error('recovery.duplicate_receipts')
+    if(previously.length===1){
+      const receipt=previously[0]!
+      const oldFields={photoId,assetId:asset.assetId,cipherSha256:asset.sha256,
+        plainSha256,originDeviceId:manifest.originDeviceId,verifiedDeviceId:device,
+        operationId:receipt.operationId}
+      const expected=await payloadDigest(oldFields)
+      if(receipt.photoId!==photoId||receipt.originDeviceId!==manifest.originDeviceId||
+        receipt.verifiedDeviceId!==device||receipt.cipherSha256!==asset.sha256||
+        receipt.plainSha256!==plainSha256||receipt.payloadHash!==expected||
+        receipt.state!=='device-attested'||!UUID.test(receipt.operationId))
+        throw Error('recovery.stale_or_mismatched_receipt')
+      checks.push(receipt)
+      continue
     }
     const signature=await signRecoveredCloudAsset(fields)
     assertActive(account,device)
