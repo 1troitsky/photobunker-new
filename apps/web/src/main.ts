@@ -11,6 +11,8 @@ import './features/identity/ui/identity.css'
 /* UI navigation never awaits Identity; background proof check is non-blocking. */
 createApp(App).use(createPinia()).use(router).mount('#app')
 registerServiceWorker()
+/* Retry ONLY already signed, persisted device intents. No new revoke or wipe. */
+void import('./features/account').then(({startRevocationReplay})=>startRevocationReplay()).catch(()=>{})
   void import('./features/identity').then(({ backgroundSessionCheck }) => backgroundSessionCheck()).catch(() => {})
   
   /* Non-blocking foreground encrypted delivery; camera never awaits network. */
