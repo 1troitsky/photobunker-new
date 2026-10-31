@@ -25,11 +25,10 @@ async function createAccount(page:Page):Promise<string>{
 
 async function syncContacts(page:Page,other:string):Promise<void>{
   await page.goto('/contacts')
-  await page.locator('.collab-actions button').filter({hasText:/Retry|Повторить/i}).first().click()
   await expect.poll(async()=>{
-    const row=page.locator('.collab-person').filter({hasText:other})
-    return await row.count()
-  },{timeout:30000}).toBe(1)
+    await page.getByRole('button',{name:/^Retry$|^Повторить$/i}).first().click()
+    return await page.locator('.collab-person').filter({hasText:other}).count()
+  },{intervals:[750,1200,2000],timeout:30000}).toBe(1)
 }
 
 test('two browsers: grant invite, genuine camera photo and recipient E2EE decryption',async()=>{
@@ -86,7 +85,10 @@ test('two browsers: grant invite, genuine camera photo and recipient E2EE decryp
     await recipient.goto('/assignment-grants')
     await recipient.getByRole('button',{name:/^Refresh$|^Обновить$/i}).first().click()
     const incoming=recipient.locator('.grant-entry').filter({hasText:assignmentId})
-    await expect(incoming).toBeVisible({timeout:30000})
+    await expect.poll(async()=>{
+      await recipient.getByRole('button',{name:/^Refresh$|^Обновить$/i}).first().click()
+      return await incoming.count()
+    },{intervals:[750,1500,2200],timeout:30000}).toBe(1)
     await incoming.locator('input[type=password]').fill(code)
     await incoming.getByRole('button',{name:/^Accept$|^Принять$/i}).click()
     await recipient.getByRole('button',{name:/Send pending operations|Отправить ожидающие операции/i}).click()
