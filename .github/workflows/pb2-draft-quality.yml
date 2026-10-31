@@ -232,6 +232,7 @@ jobs:
           SESSION_SECURE_COOKIE: 'false'
           PHP_CLI_SERVER_WORKERS: '4'
           PHOTO_RECIPIENT_THUMBNAIL_PREVIEW: 'true'
+          PB_IDENTITY_ORIGIN_DIAGNOSTIC: '1'
           PHOTOBUNKER_IDENTITY_PROXY: http://127.0.0.1:8099
           PB_PHOTO_SHARE_LIVE_ORIGIN: http://127.0.0.1:4173
         run: |
@@ -240,7 +241,9 @@ jobs:
           php artisan serve --host=127.0.0.1 --port=8099 > "$RUNNER_TEMP/pb2-e2ee-server.log" 2>&1 &
           backend_pid=$!
           cd ../..
-          trap 'kill "$backend_pid" 2>/dev/null || true' EXIT
+          # Print only the test-only origin addresses if the browser case
+          # fails; never print the complete Laravel log or request payloads.
+          trap 'grep -F "PB2_ORIGIN_DIAG" "$RUNNER_TEMP/pb2-e2ee-server.log" || true; kill "$backend_pid" 2>/dev/null || true' EXIT
           for attempt in $(seq 1 40); do
             if curl --silent --fail http://127.0.0.1:8099/identity/v2/csrf >/dev/null; then break; fi
             sleep 1
