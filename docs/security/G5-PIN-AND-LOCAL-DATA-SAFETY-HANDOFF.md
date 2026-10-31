@@ -152,3 +152,32 @@ The logged-in Data Safety read-only report now includes shared/unattributed reco
 The scanner enumerates indexed storage metadata in all nine known photo IndexedDB tables, including *keys only* for fallback blobs to avoid loading encrypted media into memory. **It does not recursively enumerate OPFS directory entries or discover OPFS files not referenced from any IndexedDB manifest/journal**; that missing evidence is an explicit blocker (`opfs_unindexed_paths_not_enumerated`). Full local erasure requires a separate OPFS traversal and real browser fault testing.
 
 The derived trusted-clock eligibility now requires `targetDeviceId===record.deviceId`; a trusted clock belonging to any other device remains held by policy even though its ownership is known. The actual cleanup method deletes only the exact composite `accountId+'/'+deviceId` row, rechecking both fields inside a Dexie transaction. This avoids cross-device data loss during a revoke.
+
+## G5 independent second-device E2EE cloud recovery attestation — 2026-11-01 Draft
+
+This slice adds a **real second-device online re-download + client-side AES-256-GCM decrypt check**, signed by the already-enrolled second device. It neither imports plaintext to IndexedDB/OPFS nor authorizes deletion. It cannot provide formal proof that the browser was honest or that keys will remain recoverable; the signed statement is intentionally called a **device attestation** rather than a mathematical/cryptographic proof of recoverability.
+
+### End-to-end flow
+
+1. Open the same anonymous account on a **different enrolled device** via PB2 recovery/pairing. Visit `/profile/data-safety → /profile/recovery-check` and supply a photo UUID captured on device A.
+2. Via authenticated PhotoSync HTTPS, get the currently active server manifest, now including the trusted `originDeviceId` from `photo_records.device_id`. Refuse a same-device check, expired photos, invalid/duplicate asset IDs, wrong account/scope, or missing original/master or metadata. No local cached photo is eligible.
+3. For **every** current critical cloud object (master/original/edit/metadata), GET fresh ciphertext, check exact size and SHA-256 against the authenticated object manifest, unwrap the correct encrypted DEK with the current second-device account vault, and perform complete chunk-by-chunk AEAD AES-GCM decryption and length verification in volatile memory. If any critical asset fails, do **not** sign or upload even a partial set of checks.
+4. Only after all objects decrypt successfully does device B sign a canonical, versioned `photobunker.recovery-check.v1\\n` statement per asset: photo UUID, object UUID, source device UUID, verifier device UUID, SHA-256 of **ciphertext** and literal `decryption: aead-verified`, plus unique operation UUID. **No plaintext hash, plaintext pixels, original metadata content, private key or recovery secret is sent to the server.** A raw plaintext hash would leak a reusable fingerprint and is forbidden here.
+5. Server enforces Laravel session + CSRF + strict Origin, enrolled device P-256 signature, different source/verifier device, exact current active `photo_objects.id` and ciphertext digest, source device recorded on the photo, live TTL, exact JSON fields, immutable operation+asset+device uniqueness, and no-store HTTP receipts. Repeating the exact operation returns the same receipt. Different claims over that asset/verifier conflict.
+6. If a prior attempt was partially accepted before timeout, a GET for **only this verifying device's existing still-active receipts** lets the client re-check the full ciphertext set and reuse matching immutable receipts. Stale/mismatched receipts are rejected. Source device may separately query a read-only summary: current critical asset count, per-device coverage, and whether a currently enrolled independent verifier attested **every active object version**. A changed object hash invalidates earlier coverage. Revoked verifier devices do not count.
+
+### What this DOES and DOES NOT demonstrate
+
+- Demonstrates in the UI code path that an independently enrolled browser can download the active encrypted objects from the real cloud, fully decrypt and validate all critical chunks with its own restored account keys, and issue device-signed accountable attestations. Server checks device identity and exact encrypted object hashes.
+- Does NOT provide a secure enclave / trusted-execution proof; a compromised second device can lie about decrypting. The server cannot derive or validate a plaintext proof because it has no decryption keys. HTTPS receipts are not separately server-signed assertions.
+- Does NOT prove future key durability or recovery of a separate offline edit not yet on the server; **no Local Delete, Emergency Wipe or key destruction is enabled by full coverage**. Deletion remains `permitted:false`, pending independent device recovery acceptance, complete OPFS inventory, multi-tab/shutdown tests and user consent.
+- Server stores a minimal ciphertext SHA-256 and signed claim digest, not the plaintext fingerprint. `photo_recovery_checks` rows cascade with deleted photos/objects/devices, so photo TTL cleanup does not become blocked by attestations.
+- Current UI uses UUID entry to be explicit and avoid guessing photo identity. A later user-friendly selector can link from actual photo cards; it must not weaken cloud-bound source checking.
+
+### Gate tests authored (NOT EXECUTED)
+
+PHPUnit: independent registered verifier accepted, idempotent receipt replay, conflicting operation rejected, spoofed source rejected, wrong signer/invalid Origin/anonymous rejected, server digest mismatch rejected, incomplete two-asset coverage until both current files attested, old version SHA no longer counts.
+
+Vitest: both critical objects decrypt before signing **any** claim, tampered second object blocks all signing, same-device check rejected, account switch cancels, stale receipts rejected, read-only summary rejects inconsistent or same-source claims. Run real PostgreSQL/Garage and two-browser HTTPS tests before claiming an end-to-end PASS.
+
+**Release status: Draft only; tests added but not run; no deletion permission.**
