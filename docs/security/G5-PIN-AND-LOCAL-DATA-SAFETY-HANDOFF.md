@@ -36,3 +36,23 @@ Emergency input must not be implemented as a shortcut that deletes OPFS/IndexedD
 - E2EE two-account photo read after owner device lock/revoke and after explicit recipient grant revoke.
 
 Do not merge or enable destructive controls until those security reviews and device scenarios pass.
+
+## 2026-10-31: G5 App Lock integration (Draft, not security-accepted)
+
+The stacked implementation branch adds an **opt-in 6–8 digit App PIN**, an independent IndexedDB verifier with random salt and PBKDF2-SHA256 (310,000 iterations), bounded failed-attempt cooldown, wall-clock rollback rejection, device/account scope, cross-tab lock broadcast, and lock-on-background. A PIN can be configured from `/profile/data-safety`, then immediately locks from the same screen; unlocking only occurs through a local verifier. A locked shell unmounts protected Vue routes.
+
+Identity enforces the lock at new `acquireStorageKeys` grants and grant `check()`, owner DEK rewraps, device/root signing, relevant account mutations and photo/assignment/collaboration HTTP. Lock invalidates request generation, aborts pending requests, revokes registered decrypted object URLs and notifies active view cleanup handlers. Thus **existing vault instances become invalid**, even after a later unlock; each new access must acquire fresh grants.
+
+**This is not hardware-backed cryptographic key erasure.** The existing device-envelope CryptoKeys still exist in browser storage and within the active in-memory Identity state while locked. JavaScript-side PIN gating cannot guarantee resistance against hostile extensions, modified client code, full local device compromise, concurrent WebCrypto work outside these capability guards or offline verifier extraction. The active session and all feature APIs require separate independent security review. There is no claim of remote wiping cached data or PIN-protected account recovery.
+
+For lost PIN, the lock view offers a non-destructive path to Recovery Key login, which creates a fresh trusted device subject to server recovery policy. Existing local ciphertext is not actively erased by this path; **unsynced items may not be recoverable on the new device**. Password/PIN is never placed in a URL, log, remote API or local plaintext record.
+
+The **Local-delete PIN** and **Emergency PIN** remain genuinely unavailable, not simulated. A separate hardware/device threat assessment and durable signed deletion intents with offline delivery are mandatory before implementing them.
+
+### Additional verification gates
+
+- Run fresh locked account / reload / offline PWA / lock-on-background / wrong PIN cooldown / clock rollback on physical iOS Safari and Android.
+- Verify *every* crypto, signed request and media storage access after lock; specifically simultaneous tabs, queued background sync and in-flight owner/recipient E2EE decrypt.
+- Prove lock instantly clears current previews and stale asset grants even during an IndexedDB write or WebCrypto call; verify no unsynced asset is deleted.
+- Threat-review low-entropy PIN verifier, atomic cross-tab attempt records and ability to bypass JS-side controls by tampering with web bundles/IndexedDB.
+- If any bypass or plaintext residue is found, leave G5 App Lock **disabled for production** until hardening is complete.
