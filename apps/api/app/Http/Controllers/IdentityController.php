@@ -25,14 +25,6 @@ final class IdentityController extends Controller
         if (! in_array($r->method(),['GET','HEAD'],true)) {
             $origin = $r->headers->get('Origin');
             $expected = rtrim(config('app.url'),'/');
-            if(config('app.env')==='testing'&&env('PB_IDENTITY_ORIGIN_DIAGNOSTIC')==='1'){
-                // CI-only address metadata; do not log credentials or payloads.
-                // Disposable CI runner only: addresses are public metadata.
-                file_put_contents(sys_get_temp_dir().'/pb2-origin-diagnostic.log',
-                    'PB2_ORIGIN_DIAG expected='.$expected.
-                    ' received='.(is_string($origin)?$origin:'<absent>').PHP_EOL,
-                    FILE_APPEND|LOCK_EX);
-            }
             abort_unless(is_string($origin) && hash_equals($expected, $origin),403);
         }
     }
