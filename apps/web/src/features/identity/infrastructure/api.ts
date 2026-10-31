@@ -103,7 +103,7 @@ export async function photoRequest(
 export async function assignmentRequest(
   path:string,method:'GET'|'PUT'='GET',body?:string,
 ):Promise<Response>{
-  if(!/^\/(?:list|grants|grants\/operations\/[a-f0-9-]{36}|[a-f0-9-]{36}(?:\/history)?)$/.test(path))
+  if(!/^\/(?:list|grants|grants\/operations\/[a-f0-9-]{36}|[a-f0-9-]{36}(?:\/(?:history|progress))?)$/.test(path))
     throw new IdentityError('assignment.invalid_path',400)
   const epoch=currentGeneration(),controller=new AbortController()
   controllers.add(controller)
