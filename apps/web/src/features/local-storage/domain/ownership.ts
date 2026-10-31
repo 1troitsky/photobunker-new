@@ -14,8 +14,8 @@ export type OwnershipClassification=Readonly<{
   reason:string
 }>
 export type LocalOwnershipRow=Readonly<{
-  kind:LocalRecordKind;accountId:string;deviceId?:string
-  referenced:boolean;pending:boolean
+  kind:LocalRecordKind;accountId:string;deviceId?:string;
+  targetDeviceId?:string;referenced:boolean;pending:boolean
 }>
 export type OwnershipSummary=Readonly<{
   total:number;accountShared:number;deviceScoped:number;unattributed:number;
@@ -29,9 +29,13 @@ export function classifyLocalRecord(row:LocalOwnershipRow):OwnershipClassificati
   if(!row.accountId||row.pending)return {
     kind:row.kind,scope:'unattributed',eligibility:'hold',reason:'incomplete_or_pending',
   }
-  if(row.kind==='trusted-clock'&&row.deviceId)return {
+  if(row.kind==='trusted-clock'&&row.deviceId&&row.deviceId===row.targetDeviceId)return {
     kind:row.kind,scope:'device-scoped',eligibility:'post-revoke-derived',
     reason:'device_local_trusted_clock_only',
+  }
+  if(row.kind==='trusted-clock'&&row.deviceId)return {
+    kind:row.kind,scope:'device-scoped',eligibility:'hold',
+    reason:'other_device_or_unverified_target',
   }
   if(row.kind==='journal')return {
     kind:row.kind,scope:row.deviceId?'device-scoped':'unattributed',
