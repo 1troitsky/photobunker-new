@@ -172,3 +172,10 @@ channel?.addEventListener('message',event=>{
   }
   // Unlock never automatically unlocks another tab.
 })
+
+/** Mobile PWA backgrounding invalidates active PIN-gated grants. */
+if(typeof document!=='undefined'){
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden&&state.value.configured&&!state.value.locked)lockApp()
+  })
+}
