@@ -376,7 +376,7 @@ export async function signOwnRevocationIntent(operationId:string,
   if(!/^[0-9a-f-]{36}$/.test(operationId)||!['local-delete','emergency'].includes(intent))
     throw Error('revoke.invalid_intent')
   const payload={accountId:current.accountId,deviceId:current.deviceId,intent,operationId}
-  const message='photobunker.device-revocation.v1\\n'+
+  const message='photobunker.device-revocation.v1\n'+
     JSON.stringify(Object.fromEntries(Object.entries(payload).sort(([a],[b])=>a.localeCompare(b))))
   const signature=await sign(current.device.deviceKey,message)
   assertEpoch(epoch);assertAppUnlocked()
