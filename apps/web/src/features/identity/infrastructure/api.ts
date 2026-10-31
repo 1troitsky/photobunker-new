@@ -52,6 +52,7 @@ export async function call<T>(path:string,method:'GET'|'POST'|'PUT'|'DELETE'='GE
       method,credentials:'same-origin',cache:'no-store',signal:controller.signal,
       headers,body:body===undefined?undefined:JSON.stringify(body),
     })
+    if(response.status===419)resetCsrf()
     if(!response.ok)throw new IdentityError('identity.http_error',response.status)
     const value=await response.json() as T
     assertGeneration(epoch)
