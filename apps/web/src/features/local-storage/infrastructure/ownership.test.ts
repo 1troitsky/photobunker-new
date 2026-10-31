@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import {beforeEach,describe,expect,it} from 'vitest'
-import {db} from './database'
+import {db,removeRevokedDeviceClock} from './database'
 import {scanLocalOwnership} from './ownership'
 const account='g5-account',device='g5-device'
 beforeEach(async()=>{await db.delete();await db.open()})
@@ -31,6 +31,17 @@ describe('G5 local ownership table inventory',()=>{
     expect(result.summary.accountShared).toBeGreaterThanOrEqual(4)
     expect(result.disposition).toBe('hold_ciphertext')
     expect(result.blockingReasons).toContain('unattributed_local_artifacts')
+  })
+  it('clears only a revoked device clock and keeps another device clock',async()=>{
+    await db.clock.add({key:account+'/'+device,accountId:account,deviceId:device,
+      iv:'iv',ciphertext:'clock-a',wrappedDEK:{iv:'iv',ciphertext:'wrapped'}})
+    await db.clock.add({key:account+'/other-device',accountId:account,
+      deviceId:'other-device',iv:'iv',ciphertext:'clock-b',
+      wrappedDEK:{iv:'iv',ciphertext:'wrapped'}})
+    await removeRevokedDeviceClock(account,device)
+    await removeRevokedDeviceClock(account,device)
+    expect(await db.clock.get(account+'/'+device)).toBeUndefined()
+    expect((await db.clock.get(account+'/other-device'))?.ciphertext).toBe('clock-b')
   })
   it('never ignores a device staging journal or unconfirmed operation',async()=>{
     await db.journal.add({key:'journal-1',operationId:'operation-2',
