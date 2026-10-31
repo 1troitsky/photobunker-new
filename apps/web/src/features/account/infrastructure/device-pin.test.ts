@@ -1,0 +1,34 @@
+import 'fake-indexeddb/auto'
+import {beforeEach,describe,expect,it,vi} from 'vitest'
+import {shallowRef} from 'vue'
+const session=shallowRef<{accountId:string;deviceId:string}|null>(null)
+const gate=shallowRef({ready:true,locked:false})
+vi.mock('../../identity',()=>({identity:session,appLockState:gate}))
+import {configureDevicePin,devicePinConfigured,verifyDevicePin} from './device-pin'
+let counter=0
+beforeEach(()=>{counter++;session.value={accountId:'acct'+counter,deviceId:'device'+counter};gate.value={ready:true,locked:false}})
+describe('separate PB2 destructive-action PIN verifiers (no delete authority)',()=>{
+  it('persists independent credentials for distinct intents',async()=>{
+    expect(await devicePinConfigured('local-delete')).toBe(false)
+    await configureDevicePin('local-delete','12345678')
+    expect(await devicePinConfigured('local-delete')).toBe(true)
+    expect(await devicePinConfigured('emergency')).toBe(false)
+    await configureDevicePin('emergency','87654321')
+    await verifyDevicePin('local-delete','12345678')
+    await verifyDevicePin('emergency','87654321')
+    await expect(verifyDevicePin('emergency','12345678')).rejects.toThrow('pin.invalid')
+  })
+  it('cannot verify a PIN while Identity is locked or switched',async()=>{
+    await configureDevicePin('local-delete','12345678')
+    gate.value={ready:true,locked:true}
+    await expect(verifyDevicePin('local-delete','12345678')).rejects.toThrow('pin.identity_locked')
+    gate.value={ready:true,locked:false}
+    session.value={accountId:'another',deviceId:'device'}
+    expect(await devicePinConfigured('local-delete')).toBe(false)
+  })
+  it('requires eight digits and does not authorize any erase action',async()=>{
+    await expect(configureDevicePin('emergency','1234')).rejects.toThrow('pin.length')
+    await configureDevicePin('emergency','12345678')
+    await expect(configureDevicePin('emergency','12345678')).rejects.toThrow()
+  })
+})
