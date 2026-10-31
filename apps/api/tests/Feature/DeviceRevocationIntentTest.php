@@ -36,7 +36,8 @@ final class DeviceRevocationIntentTest extends TestCase
         $key=$this->signer();
         DB::table('identity_accounts')->insert([
             'id'=>$account,'operation_id'=>(string)Str::uuid(),'prepare_hash'=>hash('sha256','test'),
-            'status'=>'ready','revision'=>1,'created_at'=>now(),'updated_at'=>now(),
+            'status'=>'ready','revision'=>1,'reserved_until'=>now()->addMinutes(15),
+            'created_at'=>now(),'updated_at'=>now(),
         ]);
         DB::table('identity_devices')->insert([
             'id'=>$device,'account_id'=>$account,'signing_spki'=>$key['spki'],
