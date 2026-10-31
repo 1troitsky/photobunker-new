@@ -11,7 +11,7 @@ vi.mock('../../identity',()=>({
 vi.mock('../../local-storage',()=>({
   openLocalPhotoVault:()=>({verifyRemoteRecoveryAsset:decrypt}),
 }))
-import {attestRemotePhotoRecovery} from './second-device-recovery'
+import {attestRemotePhotoRecovery,inspectRemoteRecoveryCoverage} from './second-device-recovery'
 const photo='cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 const origin='dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 const master='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
@@ -87,6 +87,28 @@ describe('G5 independent cloud recovery confirmation',()=>{
     await expect(attestRemotePhotoRecovery(photo))
       .rejects.toThrow('recovery.identity_switched')
     expect(sign).not.toHaveBeenCalled()
+  })
+  it('coverage is read-only and never authorizes deletion',async()=>{
+    request.mockImplementation(async(path:string)=>{
+      if(path.endsWith('/recovery-checks/summary'))
+        return okJson({photoId:photo,originDeviceId:origin,criticalAssets:2,
+          devices:[{deviceId:active.value.deviceId,verifiedAssets:2,complete:true}],
+          state:'device-attestation-only'})
+      throw Error('unexpected request')
+    })
+    const result=await inspectRemoteRecoveryCoverage(photo)
+    expect(result.devices[0]?.complete).toBe(true)
+    expect(result.state).toBe('device-attestation-only')
+    expect(sign).not.toHaveBeenCalled()
+    expect(request.mock.calls.filter(c=>c[1]==='PUT')).toHaveLength(0)
+  })
+  it('rejects forged complete flags or source-device coverage',async()=>{
+    request.mockImplementation(async()=>okJson({photoId:photo,
+      originDeviceId:origin,criticalAssets:2,
+      devices:[{deviceId:origin,verifiedAssets:1,complete:true}],
+      state:'device-attestation-only'}))
+    await expect(inspectRemoteRecoveryCoverage(photo))
+      .rejects.toThrow('recovery.coverage_invalid')
   })
   it('never trusts a previously stored receipt for different ciphertext',async()=>{
     const fake={operationId:'11111111-1111-4111-8111-111111111111',
