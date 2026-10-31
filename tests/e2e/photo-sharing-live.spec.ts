@@ -101,7 +101,9 @@ test('two browsers: grant invite, genuine camera photo and recipient E2EE decryp
       .toContainText(/Synced|Синхронизировано/i,{timeout:45000})
     await owner.goto(assignmentPath)
     await owner.getByRole('button',{name:/^In progress$|^В работе$/i}).click()
-    await expect(owner.locator('.assignment-detail')).toContainText(/Synced|Синхронизировано/i,{timeout:45000})
+    // Only the server-acknowledged in-progress state exposes the camera route.
+    await expect(owner.getByRole('link',
+      {name:/Capture in assignment|Снимать в задании/i})).toBeVisible({timeout:45000})
 
     // Invitation code is exchanged ONLY in test-process memory; never in URL.
     await owner.goto('/assignment-grants?assignment='+assignmentId)
@@ -123,7 +125,8 @@ test('two browsers: grant invite, genuine camera photo and recipient E2EE decryp
     await recipient.getByRole('button',{name:/Send pending operations|Отправить ожидающие операции/i}).click()
     await expect(incoming).toContainText(/Invitation accepted|Приглашение принято/i,{timeout:45000})
 
-    await owner.goto('/camera?assignment='+assignmentId)
+    await owner.goto(assignmentPath)
+    await owner.getByRole('link',{name:/Capture in assignment|Снимать в задании/i}).click()
     const camera=owner.getByTestId('production-camera')
     await expect(camera.locator('select').first()).toHaveValue(assignmentId,{timeout:30000})
     await owner.getByRole('button',{name:/Enable camera|Включить камеру/i}).click()
@@ -142,7 +145,7 @@ test('two browsers: grant invite, genuine camera photo and recipient E2EE decryp
     },{timeout:30000,intervals:[300,800,1300]}).toBe('saved')
     await owner.goto('/photos')
     await owner.getByRole('button',{name:/Sync now|Синхронизировать/i}).click()
-    await expect(owner.locator('.gallery-state').first())
+    await expect(owner.locator('.secure-photo-row .secure-local-label').first())
       .toContainText(/Cloud verified|В облаке/i,{timeout:90000})
 
     // Explicit owner approval wraps that photo's existing thumbnail DEK.
