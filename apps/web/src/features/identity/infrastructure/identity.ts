@@ -56,6 +56,7 @@ export type AccountDeviceRecord=Readonly<{
 }>
 /** Fetch server-authoritative device revocation status, never local guesses. */
 export async function accountDeviceRecords():Promise<AccountDeviceRecord[]>{
+  assertAppUnlocked()
   const active=state.value,epoch=currentGeneration()
   if(!active||active.offline)throw Error('identity.requires_online')
   const response=await call<{devices:{
@@ -212,6 +213,7 @@ export async function switchAccount(accountId:string,deviceId:string):Promise<vo
   await loginWithDevice(device)
 }
 export async function rotateRecoveryKey(encoded:string):Promise<void>{
+  assertAppUnlocked()
   const epoch=currentGeneration()
   const current=state.value
   if(!current || current.offline)throw new Error('identity.requires_online')
@@ -284,9 +286,11 @@ export async function beginPairing(accountId:string):Promise<{id:string;fingerpr
   return {id:pairing.id,fingerprint:pairing.fingerprint}
 }
 export async function pairingRequests():Promise<{id:string;device_id:string;device_spki:string;ecdh_spki:string;fingerprint:string}[]>{
+  assertAppUnlocked()
   return (await call<{pairings:{id:string;device_id:string;device_spki:string;ecdh_spki:string;fingerprint:string}[]}>('/pairings')).pairings
 }
 export async function approvePairing(request:{id:string;device_id:string;device_spki:string;ecdh_spki:string;fingerprint:string},confirm:string):Promise<void>{
+  assertAppUnlocked()
   const current=state.value
   if(!current || current.offline || current.deviceId===request.device_id)throw new Error('identity.not_trusted_approver')
   const calculated=hex(await digest(new TextEncoder().encode(
@@ -329,6 +333,7 @@ export async function finishPairing():Promise<void>{
   await activated(p.device,pkg)
 }
 export async function revokeDevice(id:string):Promise<void>{
+  assertAppUnlocked()
   const current=state.value
   if(!current||current.offline)throw new Error('identity.requires_online')
   await call('/devices/'+id,'DELETE')
