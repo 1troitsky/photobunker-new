@@ -18,13 +18,18 @@ async function createAccount(page:Page):Promise<string>{
     if(url.pathname.startsWith('/identity/v2/')&&response.status()>=400){
       // Playwright's synchronous headers() intentionally omits security headers.
       // The async allHeaders() exposes Origin without logging secrets/credentials.
-      void Promise.all([response.request().allHeaders(),response.allHeaders()]).then(([requestHeaders,responseHeaders])=>{
-        const from=requestHeaders['origin']??'<absent>'
-        // A response MIME type and server software name are public metadata.
-        failures.push(url.pathname.split('/').slice(0,5).join('/')+':'+response.status()+
-          ' origin='+from+' responseType='+String(responseHeaders['content-type']??'none')+
-          ' server='+String(responseHeaders['server']??'none'))
-      }).catch(()=>failures.push(url.pathname+':'+response.status()))
+      void Promise.all([response.request().allHeaders(),response.allHeaders(),
+        response.status()===403?response.json().catch(()=>null):Promise.resolve(null)])
+        .then(([requestHeaders,responseHeaders,error])=>{
+          const from=requestHeaders['origin']??'<absent>'
+          // Only emit an error category from a fixed allowlist, never raw bodies.
+          const msg=error&&typeof error==='object'&&'message' in error?error.message:null
+          const kind=msg==='Origin mismatch.'?'origin_mismatch':
+            msg==='Forbidden.'?'forbidden':msg==='CSRF token mismatch.'?'csrf':'unspecified'
+          failures.push(url.pathname.split('/').slice(0,5).join('/')+':'+response.status()+
+            ' origin='+from+' responseType='+String(responseHeaders['content-type']??'none')+
+            ' server='+String(responseHeaders['server']??'none')+' reason='+kind)
+        }).catch(()=>failures.push(url.pathname+':'+response.status()))
     }
   }
   page.on('response',observe)
