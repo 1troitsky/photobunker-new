@@ -124,6 +124,39 @@ final class PhotoRecoveryCheckTest extends TestCase
         $this->put($input)->assertStatus(409);
         $this->assertDatabaseCount('photo_recovery_checks',0);
     }
+    public function test_coverage_requires_each_current_asset_and_excludes_stale_digest():void {
+        $fixture=$this->prepare();$this->session($fixture);
+        $metadata=(string)Str::uuid();
+        DB::table('photo_objects')->insert([
+            'id'=>$metadata,'photo_id'=>$fixture['photoId'],'kind'=>'metadata',
+            'revision'=>1,'bytes'=>25,'sha256'=>hash('sha256','metadata ciphertext'),
+            'manifest_json'=>'{}','object_key'=>'g5/'.(string)Str::uuid(),
+            'state'=>'active','created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $input=$this->input($fixture);
+        $this->put($input)->assertOk();
+        $route='/photos/v1/'.$fixture['photoId'].'/recovery-checks/summary';
+        $partial=$this->getJson($route)->assertOk()->json();
+        $this->assertSame(2,$partial['criticalAssets']);
+        $this->assertSame(1,$partial['devices'][0]['verifiedAssets']);
+        $this->assertFalse($partial['devices'][0]['complete']);
+        $second=$input;
+        $second['operationId']=(string)Str::uuid();
+        $second['assetId']=$metadata;
+        $second['cipherSha256']=hash('sha256','metadata ciphertext');
+        unset($second['signature']);
+        $second['signature']=$this->signature($fixture['verifyKey']['key'],
+            "photobunker.recovery-check.v1\n".P::canonical($second));
+        $this->put($second)->assertOk();
+        $completed=$this->getJson($route)->assertOk()->json();
+        $this->assertTrue($completed['devices'][0]['complete']);
+        // Even a previously valid device claim cannot cover mutated bytes.
+        DB::table('photo_objects')->where('id',$metadata)
+            ->update(['sha256'=>hash('sha256','changed metadata ciphertext')]);
+        $stale=$this->getJson($route)->assertOk()->json();
+        $this->assertFalse($stale['devices'][0]['complete']);
+        $this->assertSame(1,$stale['devices'][0]['verifiedAssets']);
+    }
     public function test_first_claim_requires_live_session_and_same_origin():void {
         $fixture=$this->prepare();$input=$this->input($fixture);
         $this->put($input)->assertUnauthorized();
