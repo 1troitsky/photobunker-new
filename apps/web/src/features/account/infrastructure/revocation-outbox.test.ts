@@ -1,12 +1,13 @@
 import 'fake-indexeddb/auto'
 import {beforeEach,describe,expect,it,vi} from 'vitest'
-const {session,submit,verify,forgot,suspend}=vi.hoisted(()=>({
+const {session,submit,verify,forgot,suspend,cleanup}=vi.hoisted(()=>({
   session:{value:{accountId:'00000000-0000-4000-8000-000000000001',
     deviceId:'00000000-0000-4000-8000-000000000002',offline:false}},
   submit:vi.fn(),
   verify:vi.fn(async()=>{}),
   forgot:vi.fn(),
   suspend:vi.fn(async()=>{}),
+  cleanup:vi.fn(async()=>{}),
 }))
 vi.mock('../../identity',()=>({
   identity:session,
@@ -19,7 +20,9 @@ vi.mock('../../identity',()=>({
   suspendDeviceForPendingRevocation:suspend,
 }))
 vi.mock('./device-pin',()=>({verifyDevicePin:verify}))
-import {stageRevocationIntent,pendingDeviceRevocations,deliverPendingRevocations} from './revocation-outbox'
+vi.mock('./device-cleanup',()=>({cleanupRevokedDeviceVerifiers:cleanup}))
+import {stageRevocationIntent,pendingDeviceRevocations,deliverPendingRevocations,
+  reconcileRevokedDeviceCleanup,revokedDeviceStatuses} from './revocation-outbox'
 async function clearDB(){
   await new Promise<void>((resolve,reject)=>{
     const req=indexedDB.deleteDatabase('pb2-revocation-outbox-v1')
@@ -37,7 +40,8 @@ async function hash(row:{accountId:string;deviceId:string;intent:string;operatio
     .map(value=>value.toString(16).padStart(2,'0')).join('')
 }
 beforeEach(async()=>{
-  submit.mockReset();forgot.mockReset();verify.mockClear();suspend.mockClear()
+  submit.mockReset();forgot.mockReset();verify.mockClear();suspend.mockClear();cleanup.mockReset()
+  cleanup.mockImplementation(async()=>{})
   session.value={accountId:'00000000-0000-4000-8000-000000000001',
     deviceId:'00000000-0000-4000-8000-000000000002',offline:false}
   await clearDB()
@@ -67,6 +71,23 @@ describe('G5 immutable device revocation outbox',()=>{
     expect(submit).toHaveBeenCalledTimes(2)
     expect(submit.mock.calls[0]![0]).toEqual(submit.mock.calls[1]![0])
     expect(forgot).toHaveBeenCalledOnce()
+  })
+  it('never cleans before ACK, retries failed cleanup on reload without new revoke',async()=>{
+    const row=await stageRevocationIntent('emergency','12345678',true)
+    expect(await reconcileRevokedDeviceCleanup()).toEqual({completed:0,pending:0})
+    expect(cleanup).not.toHaveBeenCalled()
+    const receipt={accountId:row.accountId,deviceId:row.deviceId,operationId:row.operationId,
+      intent:row.envelope.intent,payloadHash:await hash(row.envelope),state:'revoked',
+      committedAt:'2026-10-31T15:00:00.000Z'}
+    submit.mockResolvedValueOnce(receipt)
+    cleanup.mockRejectedValueOnce(Error('idb_io_failed'))
+    expect(await deliverPendingRevocations()).toEqual({acknowledged:1,pending:0})
+    expect((await revokedDeviceStatuses())[0]?.localCredentialCleanup).toBe('pending')
+    expect(cleanup).toHaveBeenCalledTimes(1)
+    expect(await reconcileRevokedDeviceCleanup()).toEqual({completed:1,pending:0})
+    expect((await revokedDeviceStatuses())[0]?.localCredentialCleanup).toBe('completed')
+    expect(submit).toHaveBeenCalledTimes(1)
+    expect(await reconcileRevokedDeviceCleanup()).toEqual({completed:0,pending:0})
   })
   it('does not accept a mismatched receipt',async()=>{
     const row=await stageRevocationIntent('emergency','12345678',true)
