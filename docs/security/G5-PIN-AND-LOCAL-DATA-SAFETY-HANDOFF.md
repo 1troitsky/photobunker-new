@@ -79,3 +79,22 @@ It is scoped to current Identity account and device, detects account switching a
 5. Atomic key-grant revocation and OPFS/IndexedDB deletion for **this device only**, preserving other trusted devices and remote ciphertext until independently authorized. This requires explicit negative tests and owner acceptance.
 
 This package delivers preparation plus inventory, **not a completed Local Delete/Emergency implementation**. Never enable UI destructive actions based solely on an eight-digit verifier or a `permitted:false` inventory.
+
+## G5 signed device-revocation protocol — 2026-10-31 Draft
+
+This stacked slice implements a server-authoritative self-device revocation protocol and a signed durable browser outbox, **not local encrypted-data erasure**. The revocation endpoint is:
+`PUT /identity/v2/device-revocations/{operationId}`.
+
+- **Exact intent**: accountId, deviceId, intent = `local-delete` or `emergency`, operationId; one IEEE P1363 ECDSA P-256 device signature over `photobunker.device-revocation.v1\\n` plus ASCII canonical JSON sorted by property name. The account/device cannot be changed on replay. The server binds the signing SPKI to the currently enrolled device and requires the originating active session for first commit. The separate PIN verifier is a device-local user gesture gate, not trusted by the server.
+- **Server transaction**: verify same-origin, CSRF, exact schema, live device and signature, current authenticated device session, then revoke only that device and atomically persist immutable intent + payload/signature digests and committed UTC time. The resulting receipt is returned with `Cache-Control: no-store`. A repeated identical signed operation receives the exact stored receipt without needing an active (now revoked) session. A conflicting replay returns 409. Foreign devices and unverifiable signatures cannot create a revoke.
+- **Browser ordering**: explicit 8-digit purpose PIN + explicit unsynced-data-loss consent; generate one UUID and signature; commit signed envelope in a unique-per-device IndexedDB outbox; durably mark the current device locally signed out and dispose active key grants. No request is sent before the local intent commits. Background/reconnect/visible-page replay sends *only already staged* operations.
+- **ACK**: validate operation ID, account, device, intent, exact SHA-256 payload digest, state and UTC timestamp before recording `acknowledged`. Offline/timeouts/invalid ACKs remain pending. A rotated CSRF token (419) clears local cache for the next retry. A server receipt is authenticated through same-origin HTTPS; **it is not a separate cryptographic server signature**.
+- **Scope**: the server revoke prevents new authenticated reads from this device, but does **not delete offline copies, OPFS blobs, browser keys, other trusted devices, recipient grants, or cloud photos**. It cannot erase all copies on a compromised physical device and should not be marketed as instant remote device wipe. Signed local intent and browser IndexedDB can be erased by the user or browser eviction; no physical durability guarantee.
+
+### UI and release restrictions
+
+For safety, this PR exposes the protocol to application code and background replay but does **not** activate a clickable destructive PIN action. The on-device App Lock and the earlier G5 read-only inventory remain. To enable a real Emergency or Local Delete button, add an explicit second confirmation showing unsynced-only photo counts, device loss severity, current server connectivity, a recovery-key check and independent security review. A different local purge phase must be transactional and resumable across all feature stores, and must not be inferred from a server ACK alone.
+
+### Verification requirements
+
+Run all tests and an HTTPS/CSRF/real-session two-device browser flow. In particular: revoke one device then verify other device remains authorized; same-operation retransmission after lost ACK; changed intent/signature/operation/account rejected; first request without session rejected; signing after PIN lock denied; stale/corrupt IDB entries and parallel tabs; browser reload after staged offline revoke must not reopen the device; no loss of only unsynced ciphertext. Never claim signed client intent equals a server ACK.
