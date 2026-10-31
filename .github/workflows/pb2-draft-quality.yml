@@ -246,6 +246,18 @@ jobs:
             sleep 1
           done
           curl --silent --fail http://127.0.0.1:8099/identity/v2/csrf >/dev/null
+          # A valid Origin with intentionally invalid public JSON must make it
+          # past the origin guard. 403 indicates a proxy/env mismatch, not E2EE.
+          browser_origin='http://127.0.0.1:4173'
+          status="$(curl --silent --output /dev/null --write-out '%{http_code}' \\
+            --request POST -H "Origin: $browser_origin" \\
+            -H 'Content-Type: application/json' --data '{}' \\
+            http://127.0.0.1:8099/identity/v2/prepare)"
+          echo "CI same-origin preflight response: $status"
+          if [ "$status" = 403 ]; then
+            echo 'Origin preflight denied by Laravel; check APP_URL vs preview origin'
+            exit 1
+          fi
           pnpm exec playwright test tests/e2e/photo-sharing-live.spec.ts
       - name: Stop isolated Garage
         if: always()
