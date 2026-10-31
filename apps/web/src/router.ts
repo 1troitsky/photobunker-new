@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import FoundationView from './features/foundation/ui/FoundationView.vue'
+import { homeSection } from './features/ui-preview/application/home-preference'
 
 const WelcomeView = () => import('./features/ui-preview/ui/WelcomeView.vue')
 const IdentityPage = () => import('./features/identity/ui/IdentityPage.vue')
@@ -20,7 +21,7 @@ const ProfileScreen = () => import('./features/account/ui/ProfileScreen.vue')
 export const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    { path: '/', redirect: '/welcome' },
+    { path: '/', redirect: () => homeSection() },
     { path: '/welcome', name: 'welcome', component: WelcomeView },
     { path: '/account/create', name: 'account-create', component: IdentityPage },
     { path: '/account/restore', name: 'account-restore', component: IdentityPage },
