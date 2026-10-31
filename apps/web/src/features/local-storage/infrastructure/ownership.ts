@@ -68,7 +68,7 @@ export async function scanLocalOwnership(accountId:string,deviceId:string):Promi
   // Every ciphertext-bearing row remains on hold, even when every upload
   // reports a server receipt: no second-device decrypt proof exists.
   const blockingReasons=['remote_decrypt_not_proven','account_shared_ciphertext',
-    'cross_tab_snapshot_not_atomic']
+    'cross_tab_snapshot_not_atomic','opfs_unindexed_paths_not_enumerated']
   if(orphanAssetRows||orphanBlobRows||unresolvedJournalPaths)
     blockingReasons.push('unattributed_local_artifacts')
   if(unconfirmedPhotoOperations||journals.length||leases.length)
