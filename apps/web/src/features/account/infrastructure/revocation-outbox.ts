@@ -10,7 +10,7 @@ export type RevocationReceipt=Readonly<{
   payloadHash:string;state:'revoked';committedAt:string
 }>
 export type RevocationRow=Readonly<{
-  operationId:string;accountId:string;deviceId:string;
+  operationId:string;accountId:string;deviceId:string;scope:string;
   envelope:SignedDeviceRevocation;state:'pending'|'acknowledged';
   receipt:RevocationReceipt|null;createdAt:number
 }>
@@ -19,8 +19,10 @@ async function database():Promise<IDBDatabase>{
   return new Promise((resolve,reject)=>{
     const request=indexedDB.open(DB,1)
     request.onupgradeneeded=()=>{
-      if(!request.result.objectStoreNames.contains('intents'))
-        request.result.createObjectStore('intents',{keyPath:'operationId'})
+      if(!request.result.objectStoreNames.contains('intents')){
+        const store=request.result.createObjectStore('intents',{keyPath:'operationId'})
+        store.createIndex('scope','scope',{unique:true})
+      }
     }
     request.onsuccess=()=>resolve(request.result)
     request.onerror=()=>reject(request.error??Error('revoke.storage_unavailable'))
@@ -99,7 +101,8 @@ export async function stageRevocationIntent(kind:DevicePinKind,pin:string,
   if(existing.some(row=>row.accountId===current.accountId&&
     row.deviceId===current.deviceId))throw Error('revoke.already_pending')
   const row:RevocationRow={operationId,accountId:current.accountId,
-    deviceId:current.deviceId,envelope,state:'pending',receipt:null,createdAt:Date.now()}
+    deviceId:current.deviceId,scope:current.accountId+'/'+current.deviceId,
+    envelope,state:'pending',receipt:null,createdAt:Date.now()}
   await save(row)
   // There is deliberately no network call during stage: the caller must first
   // leave protected UI, lock the device, then request delivery.
@@ -143,5 +146,6 @@ export function startRevocationReplay():void{
   replayStarted=true
   const retry=()=>{void deliverPendingRevocations().catch(()=>{})}
   window.addEventListener('online',retry)
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)retry()})
   retry()
 }
