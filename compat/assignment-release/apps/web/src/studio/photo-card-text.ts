@@ -1,0 +1,40 @@
+import { locale } from '../i18n'
+const copy = {
+  card: ['Карточка', 'Card'],
+  photoCard: ['Карточка фотографии', 'Photo card'],
+  private: ['Приватная карточка', 'Private card'],
+  nameId: ['NAME-ID', 'NAME-ID'],
+  pendingId: ['ID будет присвоен после подключения', 'ID will be assigned after reconnect'],
+  description: ['Описание', 'Description'],
+  expires: ['Запланированное удаление', 'Scheduled deletion'],
+  noExpiry: ['Срок не указан', 'No expiry recorded'],
+  captured: ['Дата съёмки', 'Captured'],
+  gallery: ['Показать в галерее', 'Show in gallery'],
+  author: ['Автор', 'Author'],
+  location: ['Координаты', 'Coordinates'],
+  copy: ['Скопировать координаты', 'Copy coordinates'],
+  copied: ['Координаты скопированы', 'Coordinates copied'],
+  copyError: ['Не удалось скопировать координаты', 'Could not copy coordinates'],
+  metadata: ['Показать остальные metadata', 'Show other metadata'],
+  hideMetadata: ['Скрыть metadata', 'Hide metadata'],
+  camera: ['Камера', 'Camera'],
+  dimensions: ['Разрешение', 'Resolution'],
+  bytes: ['Размер', 'File size'],
+  format: ['Формат', 'Format'],
+  method: ['Способ съёмки', 'Capture method'],
+  accuracy: ['Точность', 'Accuracy'],
+  localMap: ['Схематичное обозначение точки, не географическая карта', 'Schematic point marker, not a geographic map'],
+  mapPrivacy: ['Карта работает локально. Координаты не передаются картографическим сервисам.', 'The map is local. Coordinates are not sent to map providers.'],
+  unavailable: ['Карточка недоступна', 'Card unavailable'],
+  unavailableHint: ['Фото удалено, срок истёк или доступ отозван.', 'Photo was removed, expired or access was revoked.'],
+  offline: ['Нет локальной копии этой карточки. Подключитесь к сети и повторите.', 'This card is not available locally. Connect to the internet and retry.'],
+  denied: ['У вас нет доступа к этой карточке.', 'You do not have access to this card.'],
+  locked: ['Откройте приватные фотографии, чтобы увидеть карточку.', 'Unlock your private photos to see this card.'],
+  retry: ['Повторить', 'Retry'],
+  loading: ['Открываем карточку…', 'Opening card…'],
+  noTitle: ['Без названия', 'Untitled'],
+} as const
+export type PhotoCardTextKey = keyof typeof copy
+export function photoCardText(key: PhotoCardTextKey) {
+  return copy[key][locale.value === 'ru' ? 0 : 1]
+}

@@ -22,7 +22,7 @@ import { language, setLanguage, setTheme, text, theme } from './copy'
         <span>PhotoBunker</span>
       </RouterLink>
       <span
-        v-if="!route.path.startsWith('/photos') && route.path!=='/camera'"
+        v-if="route.path.endsWith('/preview')"
         class="shell-preview"
       >{{ text.preview }}</span>
       <div class="shell-tools">

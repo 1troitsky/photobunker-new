@@ -1,10 +1,22 @@
 /// <reference types="vitest/config" />
 
 import vue from '@vitejs/plugin-vue'
-import { defineConfig } from 'vite'
+import { defineConfig, type ProxyOptions } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 const identityProxy = process.env.PHOTOBUNKER_IDENTITY_PROXY
+
+// Preview is a reverse proxy, not a new security origin. Retain the genuine
+// browser Origin and Host for Laravel's strict origin/CSRF enforcement; never
+// substitute a trusted value for a missing or invalid browser Origin.
+function backendProxy(target:string):ProxyOptions{
+  return {target,changeOrigin:false,configure(proxy){
+    proxy.on('proxyReq',(outgoing,incoming)=>{
+      const origin=incoming.headers.origin
+      if(typeof origin==='string')outgoing.setHeader('Origin',origin)
+    })
+  }}
+}
 
 export default defineConfig({
   plugins: [
@@ -37,8 +49,10 @@ export default defineConfig({
   ],
   preview: {
     proxy: identityProxy ? {
-      '/identity/v2': { target: identityProxy },
-      '/photos/v1': { target: identityProxy },
+      '/identity/v2': backendProxy(identityProxy),
+      '/photos/v1': backendProxy(identityProxy),
+      '/assignments/v1': backendProxy(identityProxy),
+      '/collaboration/v1': backendProxy(identityProxy),
     } : undefined,
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',

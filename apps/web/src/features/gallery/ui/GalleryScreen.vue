@@ -23,7 +23,7 @@ const txt=computed(()=>ru.value?{
   empty:'Фотографий пока нет',emptyHint:'Сделайте снимок или подключитесь к облаку.',search:'Название или NAME-ID',
   grid:'Сетка',list:'Список',refresh:'Обновить',sync:'Синхронизировать',pending:'Имя ожидается',
   local:'На устройстве',syncing:'Синхронизация…',synced:'В облаке',retry:'Повтор загрузки',remote:'Из облака',
-  title:'Название',save:'Сохранить',cancel:'Отмена',open:'Открыть',edit:'Изменить название',
+  title:'Название',save:'Сохранить',cancel:'Отмена',open:'Открыть',edit:'Изменить название',card:'Карточка',
   locked:'Для галереи откройте анонимный аккаунт.',restore:'Восстановить доступ',create:'Создать аккаунт',
   gps:'Геолокация',gpsGrant:'Разрешить GPS',gpsOff:'Отключить GPS',gpsOn:'Включить GPS',
   gpsSave:'Добавить свежие координаты',gpsMissing:'Свежая GPS-точка недоступна',
@@ -34,7 +34,7 @@ const txt=computed(()=>ru.value?{
   empty:'No photographs yet',emptyHint:'Capture a photo or reconnect to the cloud.',search:'Title or NAME-ID',
   grid:'Grid',list:'List',refresh:'Refresh',sync:'Sync now',pending:'Name pending',
   local:'On device',syncing:'Syncing…',synced:'Cloud verified',retry:'Retry',remote:'Cloud only',
-  title:'Title',save:'Save',cancel:'Cancel',open:'Open',edit:'Edit title',
+  title:'Title',save:'Save',cancel:'Cancel',open:'Open',edit:'Edit title',card:'Photo Card',
   locked:'Unlock your anonymous account to view the gallery.',restore:'Restore access',create:'Create account',
   gps:'Location',gpsGrant:'Allow GPS',gpsOff:'Disable GPS',gpsOn:'Enable GPS',
   gpsSave:'Add fresh coordinates',gpsMissing:'No recent GPS fix available',
@@ -283,6 +283,7 @@ function date(n:number){return n?new Intl.DateTimeFormat(ru.value?'ru-RU':'en-US
               >
                 {{ txt.edit }}
               </button>
+              <RouterLink v-if="item.loaded" :to="'/photos/'+item.id+'/card'" class="subtle-button">{{ txt.card }}</RouterLink>
               <button
                 type="button"
                 :disabled="!item.loaded||!gpsAllowed"

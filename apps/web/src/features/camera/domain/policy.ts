@@ -8,8 +8,30 @@ export const MIN_TTL_DAYS=1
 export const MAX_TTL_DAYS=45
 export const DEFAULT_TTL_DAYS=45
 export type PersonalPolicy=Readonly<{policyVersion:1;source:'personal';assignmentId:null;mode:2|3;ttlDays:number}>
+export type AssignmentPolicy=Readonly<{policyVersion:1;source:'assignment';assignmentId:string;
+  assignmentRevision:number;policyRevision:number;mode:2|3;ttlDays:number;
+  requiredGps?:boolean;enableNameId?:boolean;startsAt?:string|null;finishesAt?:string|null;
+  requireDescription?:boolean;descriptionMinLength?:number;requireTags?:boolean;allowedTags?:string[]}>
+export type CapturePolicy=PersonalPolicy|AssignmentPolicy
+export type FrozenAssignment=Readonly<{assignmentId:string;assignmentRevision:number;
+  policyRevision:number;mode:2|3;retentionDays:number;capturedAt:number}>
+export function assignmentPolicy(s:{assignmentId:string;assignmentRevision:number;policyRevision:number;mode:2|3;retentionDays:number;
+  requiredGps?:boolean;enableNameId?:boolean;startsAt?:string|null;finishesAt?:string|null;
+  requireDescription?:boolean;descriptionMinLength?:number;requireTags?:boolean;allowedTags?:string[]}):AssignmentPolicy{
+  if(!/^[a-f0-9-]{36}$/.test(s.assignmentId)||!Number.isInteger(s.assignmentRevision)||s.assignmentRevision<1||
+    !Number.isInteger(s.policyRevision)||s.policyRevision<1||![2,3].includes(s.mode)||
+    !Number.isInteger(s.retentionDays)||s.retentionDays<1||s.retentionDays>45)
+    throw Error('camera.invalid_assignment_policy')
+  return Object.freeze({policyVersion:1,source:'assignment',assignmentId:s.assignmentId,
+    assignmentRevision:s.assignmentRevision,policyRevision:s.policyRevision,mode:s.mode,
+    ttlDays:s.retentionDays,
+    requiredGps:s.requiredGps??false,enableNameId:s.enableNameId??true,
+    startsAt:s.startsAt??null,finishesAt:s.finishesAt??null,
+    requireDescription:s.requireDescription??false,descriptionMinLength:s.descriptionMinLength??0,
+    requireTags:s.requireTags??false,allowedTags:[...(s.allowedTags??[])]})
+}
 export type CaptureMetadata=Readonly<{
-  policyVersion:1;policy:PersonalPolicy;mode:2|3;captureMethod:Method
+  policyVersion:1;policy:CapturePolicy;mode:2|3;captureMethod:Method
   sourceWidth:number;sourceHeight:number;outputWidth:number;outputHeight:number
   capturedAt:number;expiresAt:number;mime:'image/jpeg';compression:CompressionProfile
 }>
@@ -26,7 +48,7 @@ export function geometry(width:number,height:number):{width:number;height:number
   const w=Math.max(1,Math.floor(width*factor)),h=Math.max(1,Math.floor(height*factor))
   return {width:w,height:h}
 }
-export function snapshot(policy:PersonalPolicy,capturedAt:number,source:{width:number;height:number},
+export function snapshot(policy:CapturePolicy,capturedAt:number,source:{width:number;height:number},
   output:{width:number;height:number},method:Method):CaptureMetadata{
   if(!Number.isSafeInteger(capturedAt)||capturedAt<=0)throw new Error('camera.untrusted_time')
   const expiresAt=capturedAt+policy.ttlDays*86_400_000

@@ -1,0 +1,10 @@
+# Application services have no external egress. Only Nginx keeps a host ingress
+# network: internal-only published ports are unreachable with some runtimes.
+services:
+  gateway:
+    networks: [local, ingress]
+
+networks:
+  local:
+    internal: true
+  ingress: {}

@@ -1,0 +1,297 @@
+name: PB2 Draft quality gate
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pb2-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Vue, TS, architecture, unit, bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run full web quality checks and capture output
+        shell: bash
+        run: |
+          failures=0
+          for task in test:architecture lint typecheck test:unit build; do
+            echo "=== pnpm ${task} ===" | tee -a web-check.log
+            if pnpm "${task}" 2>&1 | tee -a web-check.log; then
+              echo "PASS: pnpm ${task}" | tee -a web-check.log
+            else
+              echo "FAIL: pnpm ${task}" | tee -a web-check.log
+              failures=1
+            fi
+          done
+          exit "${failures}"
+      - name: Keep diagnostics from failed checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pb2-web-check-output
+          path: web-check.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  php:
+    name: Laravel PHP 8.4 and PHPUnit
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, xml, openssl, sqlite3, pdo_sqlite, fileinfo, curl, zip
+          coverage: none
+      - name: Install locked Composer dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+      - name: PHP syntax and tests with diagnostics
+        shell: bash
+        run: |
+          failures=0
+          echo '=== PHP lint ===' | tee -a php-check.log
+          if find app tests database -name '*.php' -print0 | xargs -0 -n1 php -l 2>&1 | tee -a php-check.log; then
+            echo 'PASS: PHP syntax' | tee -a php-check.log
+          else
+            echo 'FAIL: PHP syntax' | tee -a php-check.log
+            failures=1
+          fi
+          echo '=== PHPUnit ===' | tee -a php-check.log
+          if php vendor/bin/phpunit 2>&1 | tee -a php-check.log; then
+            echo 'PASS: PHPUnit' | tee -a php-check.log
+          else
+            echo 'FAIL: PHPUnit' | tee -a php-check.log
+            failures=1
+          fi
+          exit "${failures}"
+      - name: Keep diagnostics from failed checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pb2-php-check-output
+          path: apps/api/php-check.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  live-storage:
+    name: PostgreSQL + Garage S3 integration (isolated)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: pb2_ci_g1
+          POSTGRES_USER: pb2_ci
+          POSTGRES_PASSWORD: pb2_ci_disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pb2_ci -d pb2_ci_g1"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_URL: https://localhost
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: pb2_ci_g1
+      DB_USERNAME: pb2_ci
+      DB_PASSWORD: pb2_ci_disposable
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      PHOTO_S3_ENDPOINT: http://127.0.0.1:3900
+      PHOTO_S3_REGION: garage
+      PHOTO_S3_BUCKET: pb2-ci-g1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, fileinfo, curl, zip
+          coverage: none
+      - name: Start isolated Garage and assign single-node layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/garage/meta" "$RUNNER_TEMP/garage/data"
+          secret="$(openssl rand -hex 32)"
+          cat > "$RUNNER_TEMP/garage/garage.toml" <<EOF
+          metadata_dir = "/var/lib/garage/meta"
+          data_dir = "/var/lib/garage/data"
+          db_engine = "sqlite"
+          replication_factor = 1
+          rpc_bind_addr = "127.0.0.1:3901"
+          rpc_public_addr = "127.0.0.1:3901"
+          rpc_secret = "$secret"
+          [s3_api]
+          s3_region = "garage"
+          api_bind_addr = "127.0.0.1:3900"
+          EOF
+          docker run -d --name pb2-g1-garage --network host \
+            -v "$RUNNER_TEMP/garage/garage.toml:/etc/garage.toml:ro" \
+            -v "$RUNNER_TEMP/garage/meta:/var/lib/garage/meta" \
+            -v "$RUNNER_TEMP/garage/data:/var/lib/garage/data" \
+            dxflrs/garage:v2.5.0
+          for attempt in $(seq 1 30); do
+            if docker exec pb2-g1-garage /garage status >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          node="$(docker exec pb2-g1-garage /garage node id -q | tr -d '\r\n')"
+          node="${node%%@*}"
+          test -n "$node"
+          docker exec pb2-g1-garage /garage layout assign -z ci -c 1G "$node"
+          docker exec pb2-g1-garage /garage layout apply --version 1
+          docker exec pb2-g1-garage /garage bucket create pb2-ci-g1
+          # Avoid writing S3 credentials to stdout or committed artifacts.
+          docker exec pb2-g1-garage /garage key create pb2-ci-key > "$RUNNER_TEMP/garage/key.txt"
+          key="$(sed -n 's/^[[:space:]]*Key ID:[[:space:]]*//p' "$RUNNER_TEMP/garage/key.txt" | head -1)"
+          password="$(sed -n 's/^[[:space:]]*Secret key:[[:space:]]*//p' "$RUNNER_TEMP/garage/key.txt" | head -1)"
+          test -n "$key" && test -n "$password"
+          echo "::add-mask::$key"
+          echo "::add-mask::$password"
+          docker exec pb2-g1-garage /garage bucket allow \
+            --read --write --owner pb2-ci-g1 --key pb2-ci-key
+          {
+            echo "PHOTO_S3_ACCESS_KEY=$key"
+            echo "PHOTO_S3_SECRET_KEY=$password"
+          } >> "$GITHUB_ENV"
+          rm -f "$RUNNER_TEMP/garage/key.txt"
+      - name: Install PHP dependencies and create disposable PostgreSQL schema
+        working-directory: apps/api
+        run: |
+          composer install --no-interaction --no-progress --prefer-dist
+          php artisan migrate --force
+      - name: Exercise real Garage object readback, orphan recovery, expiry and tombstones
+        working-directory: apps/api
+        run: php tests/integration/garage-postgres-smoke.php
+      - name: Exercise real HTTP Identity, upload, readback and TTL against Garage
+        shell: bash
+        working-directory: apps/api
+        env:
+          APP_URL: http://127.0.0.1:8099
+          SESSION_DRIVER: file
+          SESSION_SECURE_COOKIE: 'false'
+          PHOTO_RECIPIENT_THUMBNAIL_PREVIEW: 'true'
+          PHP_CLI_SERVER_WORKERS: '4'
+        run: |
+          set -euo pipefail
+          php artisan serve --host=127.0.0.1 --port=8099 > "$RUNNER_TEMP/pb2-http-server.log" 2>&1 &
+          server_pid=$!
+          trap 'pkill -P "$server_pid" 2>/dev/null || true; kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:8099/identity/v2/csrf >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --silent --fail http://127.0.0.1:8099/identity/v2/csrf >/dev/null
+          php tests/integration/http-laravel-garage-smoke.php
+      # Same disposable PostgreSQL/Garage services also run two genuine
+      # browser-local identities. Avoid mock API routes or test-only login.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install real browser dependencies and production UI
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+          pnpm build
+      - name: Two Chromium identities, real Laravel/Garage and E2EE decryption
+        shell: bash
+        env:
+          APP_URL: http://127.0.0.1:4173
+          APP_ENV: testing
+          SESSION_DRIVER: file
+          SESSION_SECURE_COOKIE: 'false'
+          PHP_CLI_SERVER_WORKERS: '4'
+          PHOTO_RECIPIENT_THUMBNAIL_PREVIEW: 'true'
+          PHOTOBUNKER_IDENTITY_PROXY: http://127.0.0.1:8101
+          PB_PHOTO_SHARE_LIVE_ORIGIN: http://127.0.0.1:4173
+        run: |
+          set -euo pipefail
+          cd apps/api
+          php artisan serve --host=127.0.0.1 --port=8101 > "$RUNNER_TEMP/pb2-e2ee-server.log" 2>&1 &
+          backend_pid=$!
+          cd ../..
+          trap 'pkill -P "$backend_pid" 2>/dev/null || true; kill "$backend_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 40); do
+            if curl --silent --fail http://127.0.0.1:8101/identity/v2/csrf >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --silent --fail http://127.0.0.1:8101/identity/v2/csrf >/dev/null
+          # A valid Origin with intentionally invalid public JSON must make it
+          # past the origin guard. 403 indicates a proxy/env mismatch, not E2EE.
+          browser_origin='http://127.0.0.1:4173'
+          status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --request POST -H "Origin: $browser_origin" \
+            -H 'Content-Type: application/json' --data '{}' \
+            http://127.0.0.1:8101/identity/v2/prepare)"
+          echo "CI same-origin preflight response: $status"
+          if [ "$status" != 419 ]; then
+            echo 'Identity preflight must reject tokenless POST with CSRF 419 (and not Origin 403)'
+            exit 1
+          fi
+          pnpm exec playwright test tests/e2e/photo-sharing-live.spec.ts
+      - name: Stop isolated Garage
+        if: always()
+        run: docker rm -f pb2-g1-garage >/dev/null 2>&1 || true
+
+  browser:
+    name: Chromium production bundle smoke (no backend)
+    needs: web
+    # Playwright 1.56.1 has no Chromium dependency resolver for ubuntu-26.04.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Playwright Chromium + system libraries
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Compile production PWA bundle
+        run: pnpm build
+      - name: Browser UI smoke; live server scenarios skip explicitly
+        run: pnpm test:browser
+      - name: Preserve browser traces if tests fail
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pb2-browser-smoke-failures
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+

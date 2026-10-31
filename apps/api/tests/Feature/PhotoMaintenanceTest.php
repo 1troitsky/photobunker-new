@@ -43,6 +43,43 @@ final class PhotoMaintenanceTest extends TestCase {
         $this->assertSame([],Storage::disk('photo-ciphertext')->allFiles());
         $this->assertDatabaseMissing('photo_records',['id'=>$f['photo']]);
     }
+
+    public function test_expired_photo_is_denied_immediately_before_scheduler_cleanup():void {
+        Storage::fake('photo-ciphertext');
+        $f=$this->pendingPhoto(now()->subMinute()->getTimestampMs());
+        $owner=DB::table('photo_records')->where('id',$f['photo'])->value('account_id');
+        Storage::disk('photo-ciphertext')->put($f['key'],random_bytes(32));
+        try {
+            app(\App\Photo\PhotoSync::class)->requirePhoto($f['photo'],$owner);
+            $this->fail('Expired ciphertext must be denied before scheduled GC.');
+        } catch(\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            $this->assertSame(410,$e->getStatusCode());
+        }
+        $this->assertTrue(Storage::disk('photo-ciphertext')->exists($f['key']));
+        app(Lifecycle::class)->mark($f['photo']);
+        $this->assertDatabaseHas('photo_records',['id'=>$f['photo'],'state'=>'deleting']);
+        app(Lifecycle::class)->cleanup($f['photo']);
+        $this->assertFalse(Storage::disk('photo-ciphertext')->exists($f['key']));
+    }
+    public function test_tombstone_sweep_removes_late_ciphertext_write_after_photo_cleanup():void {
+        Storage::fake('photo-ciphertext');
+        $f=$this->pendingPhoto(now()->subMinute()->getTimestampMs());
+        app(Lifecycle::class)->mark($f['photo']);
+        app(Lifecycle::class)->cleanup($f['photo']);
+        $this->assertDatabaseMissing('photo_records',['id'=>$f['photo']]);
+        // Simulate delayed object-store write arriving after logical deletion.
+        Storage::disk('photo-ciphertext')->put($f['key'],random_bytes(32));
+        DB::table('photo_tombstones')->where('photo_id',$f['photo'])
+            ->update(['cleanup_until'=>now()->subMinute()]);
+        app(Lifecycle::class)->sweepTombstones(10);
+        $this->assertFalse(Storage::disk('photo-ciphertext')->exists($f['key']));
+        $this->assertDatabaseHas('photo_tombstones',[
+            'photo_id'=>$f['photo'],'object_keys'=>null,'cleanup_until'=>null,
+        ]);
+        // A cleared tombstone still rejects recreation by its immutable photo ID.
+        $this->assertDatabaseHas('photo_tombstones',['photo_id'=>$f['photo']]);
+    }
+
     public function test_orphan_grace_deletes_uncommitted_cipher_without_invalidating_reservation():void {
         Storage::fake('photo-ciphertext');
         $f=$this->pendingPhoto(now()->addDay()->getTimestampMs());

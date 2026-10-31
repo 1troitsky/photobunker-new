@@ -1,0 +1,17 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+.local/
+**/node_modules/
+**/vendor/
+**/dist/
+**/coverage/
+**/test-results/
+**/playwright-report/
+**/.phpunit.cache/
+**/.phpunit.result.cache
+*.log
+
+# Local RTC API keys and TLS private material
+infra/rtc/.local/

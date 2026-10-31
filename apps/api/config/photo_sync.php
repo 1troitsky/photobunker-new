@@ -1,6 +1,12 @@
 <?php
 return [
     'disk'=>'photo-ciphertext',
+    // Default OFF until full two-account independent security/crypto/device acceptance.
+    // Recipient reads stay closed in production even if preview is misconfigured.
+    // Explicit opt-in is permitted only for isolated local/testing/staging
+    // two-account E2EE acceptance after the test operator controls the host.
+    'recipient_thumbnail_reads_enabled'=>in_array(env('APP_ENV','production'),['local','testing','staging'],true)
+        && filter_var(env('PHOTO_RECIPIENT_THUMBNAIL_PREVIEW',false),FILTER_VALIDATE_BOOLEAN),
     'account_quota_bytes'=>(int) env('PHOTO_ACCOUNT_QUOTA_BYTES',1073741824),
     'max_asset_bytes'=>134217728,
     'max_metadata_bytes'=>1048576,

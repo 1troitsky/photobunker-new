@@ -2,7 +2,7 @@ import { computed, shallowRef } from 'vue'
 import { call, challenge, currentGeneration, envelopeHash, invalidateRequests, resetCsrf } from '../infrastructure/api'
 import { b64, createPB2, digest, exportECDHPublic, freshPackage, hex, importSigner, newPairingKey,
   openDevice, openPairing, openRecovery, parsePB2, random, sealDevice, sealPairing,
-  sealRecovery, sign, uuid, exchangeKey, wrapAssetDEK, unwrapAssetDEK } from '../infrastructure/crypto'
+  sealRecovery, sign, uuid, exchangeKey, wrapAssetDEK, unwrapAssetDEK, withTransientOwnerDEK, importSpki, verify } from '../infrastructure/crypto'
 import type { PackageV2 } from '../infrastructure/crypto'
 import { getPending, listDevices, newLocalDevice, openIdentityDB, probeCapabilities,
   putPending, reservePending, dropPending, saveDevice, getRecoveryPending, saveRecoveryPending,
@@ -42,6 +42,28 @@ export async function logout():Promise<void>{
 }
 export function forgetRuntime():void{dispose();resetCsrf()}
 export async function availableDevices():Promise<LocalDevice[]> {return listDevices()}
+export type AccountDeviceRecord=Readonly<{
+  id:string;createdAt:string;revokedAt:string|null
+}>
+/** Fetch server-authoritative device revocation status, never local guesses. */
+export async function accountDeviceRecords():Promise<AccountDeviceRecord[]>{
+  const active=state.value,epoch=currentGeneration()
+  if(!active||active.offline)throw Error('identity.requires_online')
+  const response=await call<{devices:{
+    id:string;created_at:string;revoked_at:string|null
+  }[]}>('/devices')
+  assertEpoch(epoch)
+  if(active!==state.value)throw Error('identity.account_changed')
+  if(!Array.isArray(response.devices)||response.devices.length>200)
+    throw Error('identity.invalid_devices')
+  return response.devices.map(d=>{
+    if(!d||typeof d.id!=='string'||!/^[a-f0-9-]{36}$/.test(d.id)||
+      typeof d.created_at!=='string'||!(d.revoked_at===null||typeof d.revoked_at==='string'))
+      throw Error('identity.invalid_devices')
+    return{id:d.id,createdAt:d.created_at,revokedAt:d.revoked_at}
+  })
+}
+
 export async function prepareCreate():Promise<string>{
   await probeCapabilities()
   const existing=await getPending()
@@ -366,6 +388,82 @@ export function acquireStorageKeys() {
   return {scope,check,create,open}
 }
 /** An authenticated HTTPS server clock sample, never a caller-supplied wall time. */
+/**
+ * Internal use case capability: only the current owner can create a
+ * recipient-specific encrypted envelope. The raw DEK is never returned to UI.
+ */
+/** Verify the author's detached device signature over the exact received statement.
+ * The server supplies the enrolled author device SPKI, not the recipient.
+ */
+
+/** Public account identity pinned by the invitation secret, never by a photo manifest. */
+export function currentAccountSpki():string{
+  const active=state.value
+  if(!active)throw Error('identity.account_locked')
+  return active.pkg.accountSpki
+}
+/** The account signing key authenticates the exact device SPKI and signed
+ * photo statement. Recipients validate it against their OOB-pinned account SPKI.
+ */
+export async function signOwnerDeviceProof(contract:string):Promise<{
+  deviceId:string;deviceSpki:string;rootSignature:string
+}>{
+  const active=state.value,epoch=currentGeneration()
+  if(!active||active.offline)throw Error('identity.account_locked')
+  if(contract.length<200||contract.length>8000)throw Error('grant.contract_invalid')
+  const message='photobunker.photo-recipient-root.v1\n'+active.device.deviceId+
+    '\n'+active.device.deviceSpki+'\n'+contract
+  const rootSignature=await sign(await importSigner(active.pkg.accountPkcs8),message)
+  assertEpoch(epoch)
+  if(state.value!==active)throw Error('identity.account_changed')
+  return {deviceId:active.device.deviceId,deviceSpki:active.device.deviceSpki,rootSignature}
+}
+
+
+/** Client proves device signature and ACCOUNT signature against owner root
+ * that came only from a recipient's OOB invitation, not from server manifest.
+ */
+export async function verifyPinnedOwnerDeviceProof(contract:string,deviceSignature:string,
+  deviceSpki:string,accountSpki:string,deviceId:string,rootSignature:string,
+  expectedPinnedAccountSpki:string):Promise<boolean>{
+  if(!expectedPinnedAccountSpki||accountSpki!==expectedPinnedAccountSpki||
+    !/^[a-f0-9-]{36}$/.test(deviceId)||contract.length<200||contract.length>8000)return false
+  try{
+    const rootMsg='photobunker.photo-recipient-root.v1\n'+deviceId+
+      '\n'+deviceSpki+'\n'+contract
+    return await verify(await importSpki(expectedPinnedAccountSpki),rootMsg,rootSignature)&&
+      await verifyOwnerThumbnailStatement(contract,deviceSignature,deviceSpki)
+  }catch{return false}
+}
+
+export async function verifyOwnerThumbnailStatement(statement:string,signature:string,
+  enrolledSignerSpki:string):Promise<boolean>{
+  if(statement.length<200||statement.length>8000)return false
+  try{
+    return await verify(await importSpki(enrolledSignerSpki),
+      'photobunker.photo-recipient.v1\n'+statement,signature)
+  }catch{return false}
+}
+export async function withCurrentOwnerAssetDEK<T>(assetId:string,expiry:number,
+  wrapped:{iv:string;ciphertext:string},
+  operation:(bytes:Uint8Array<ArrayBuffer>)=>Promise<T>):Promise<T>{
+  const active=state.value,epoch=currentGeneration()
+  if(!active)throw Error('identity.account_locked')
+  if(!Number.isSafeInteger(expiry)||expiry<=Date.now())throw Error('identity.asset_expired')
+  const check=()=>{assertEpoch(epoch);if(state.value!==active)
+    throw Error('identity.account_changed')}
+  check()
+  const result=await withTransientOwnerDEK(active.pkg,assetId,String(expiry),
+    wrapped,async raw=>{
+      check()
+      const envelope=await operation(raw)
+      check()
+      return envelope
+    })
+  check()
+  return result
+}
+
 export async function fetchAuthenticatedServerTime():Promise<number>{
   const active=state.value,epoch=currentGeneration()
   if(!active || active.offline)throw new Error('time.not_authenticated')

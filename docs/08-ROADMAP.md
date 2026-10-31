@@ -1,3 +1,5 @@
+> **OWNER OVERRIDE 2026-10-30:** Плановый выпуск Issues R2-12+ остановлен. PR #36/#38/#39/#40 заморожены, не сливаются и не закрываются; код включён в отдельный интеграционный Draft PR #41 вместе с isolated PB1 compatibility. Следующий этап — исправления Codex и сквозная проверка в этом единственном PR, а не новые Issues. См. [handoff](ASSIGNMENT-RELEASE-CONSOLIDATION-HANDOFF.md).
+
 # 08. PhotoBunker New — единый Implementation Roadmap
 
 **Версия:** 2026-10-28; **независимый процесс принят владельцем 2026-10-29**. Это единственный roadmap нового проекта. **Issues и их логические зависимости неизменны, но выполнение теперь идёт по stacked branches без ожидания Codex review/merge**, см. [14 — Independent Development](14-INDEPENDENT-DEVELOPMENT-PIPELINE.md). Операционный Project status — отдельно от факта Implementation Ready/Implemented.

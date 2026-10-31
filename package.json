@@ -18,7 +18,10 @@
     "test:architecture": "node tools/architecture/check.mjs apps/web/src && node tools/architecture/verify-negative.mjs",
     "test:browser": "playwright test",
     "test": "pnpm test:architecture && pnpm test:unit",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "release:legacy:install": "npm install --prefix compat/assignment-release/apps/web --no-audit --no-fund",
+    "release:legacy:build": "npm run --prefix compat/assignment-release/apps/web build",
+    "release:legacy:test": "npm run --prefix compat/assignment-release/apps/web test"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

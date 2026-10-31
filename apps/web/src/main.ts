@@ -11,7 +11,14 @@ import './features/identity/ui/identity.css'
 /* UI navigation never awaits Identity; background proof check is non-blocking. */
 createApp(App).use(createPinia()).use(router).mount('#app')
 registerServiceWorker()
-void import('./features/identity').then(({ backgroundSessionCheck }) => backgroundSessionCheck()).catch(() => {})
+  void import('./features/identity').then(({ backgroundSessionCheck }) => backgroundSessionCheck()).catch(() => {})
+  
+  /* Non-blocking foreground encrypted delivery; camera never awaits network. */
+  void import('./features/photo-sync').then(({startPhotoSync})=>startPhotoSync()).catch(()=>{})
+  void import('./features/assignments').then(({startAssignmentSync})=>startAssignmentSync()).catch(()=>{})
+  
+  /* R2-09: independent foreground team/contact outbox; no navigation/network gate. */
+  void import('./features/collaboration').then(({startCollaborationSync})=>startCollaborationSync()).catch(()=>{})
 
-/* Non-blocking foreground encrypted delivery; camera never awaits network. */
-void import('./features/photo-sync').then(({startPhotoSync})=>startPhotoSync()).catch(()=>{})
+  /* Signed invitation outbox only; recipient PhotoSync reads remain forbidden. */
+  void import('./features/photo-grants').then(({startGrantSync})=>startGrantSync()).catch(()=>{})

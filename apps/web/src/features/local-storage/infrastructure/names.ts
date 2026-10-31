@@ -6,9 +6,9 @@ function formatName(prefix:string,n:number):string{
   if(!/^[A-Z]{4}$/.test(prefix)||!Number.isInteger(n)||n<1||n>9999)throw Error('gallery.name_invalid')
   return prefix+String(n).padStart(4,'0')
 }
-type Range={id:string;prefix:string;first:number;last:number;next:number}
+type Range={id:string;prefix:string;first:number;last:number;next:number;assignmentId?:string|null}
 const encoder=new TextEncoder(),decoder=new TextDecoder()
-type LeaseBody={id:string;prefix:string;first:number;last:number;next:number}
+type LeaseBody={id:string;prefix:string;first:number;last:number;next:number;assignmentId?:string|null}
 async function unpack(row:NameLeaseRow|undefined):Promise<Range|null>{
   if(!row||row.ciphertext.size===0)return null
   const keys=acquireStorageKeys()
@@ -20,6 +20,7 @@ async function unpack(row:NameLeaseRow|undefined):Promise<Range|null>{
   const data=JSON.parse(decoder.decode(raw)) as LeaseBody
   if(!/^[A-Z]{4}$/.test(data.prefix)||!Number.isSafeInteger(data.next)||
     data.next<data.first||data.next>data.last+1)throw Error('gallery.lease_corrupt')
+  if((data.assignmentId??null)!==(row.assignmentId??null))throw Error('gallery.lease_scope')
   return data
 }
 async function seal(row:LeaseBody,scope:{accountId:string;deviceId:string}):Promise<import('./database').NameLeaseRow>{
@@ -30,6 +31,7 @@ async function seal(row:LeaseBody,scope:{accountId:string;deviceId:string}):Prom
     secret.key,encoder.encode(JSON.stringify(row)))
   keys.check()
   return{key,accountId:scope.accountId,deviceId:scope.deviceId,leaseId:row.id,
+    assignmentId:row.assignmentId??null,
     iv:btoa(String.fromCharCode(...iv)),ciphertext:new Blob([ciphertext]),wrappedDEK:secret.wrapped}
 }
 function session(){const keys=acquireStorageKeys();return {scope:keys.scope,check:keys.check}}
@@ -37,7 +39,7 @@ async function lock<T>(scope:string,fn:()=>Promise<T>):Promise<T>{
   if(navigator.locks)return navigator.locks.request('pb-name-v1:'+scope,{mode:'exclusive'},fn)
   return fn() // IndexedDB CAS below prevents double issuance even without Web Locks.
 }
-export async function takeReservedName():Promise<{nameId:string;leaseId:string;number:number}|null>{
+export async function takeReservedName(assignmentId:string|null=null):Promise<{nameId:string;leaseId:string;number:number}|null>{
   const {scope,check}=session(),prefix=scope.accountId+'/'+scope.deviceId
   return lock(prefix,async()=>{
     for(let attempt=0;attempt<5;attempt++){
@@ -46,7 +48,7 @@ export async function takeReservedName():Promise<{nameId:string;leaseId:string;n
       for(const row of rows){
         check()
         const data=await unpack(row)
-        if(!data||data.next>data.last)continue
+        if(!data||data.next>data.last||(data.assignmentId??null)!==assignmentId)continue
         const next=await seal({...data,next:data.next+1},scope)
         const taken=await db.transaction('rw',db.nameLeases,async()=>{
           const current=await db.nameLeases.get(row.key)
@@ -61,22 +63,25 @@ export async function takeReservedName():Promise<{nameId:string;leaseId:string;n
     return null
   })
 }
-export async function reserveNameRange():Promise<void>{
+export async function reserveNameRange(assignmentId:string|null=null):Promise<void>{
   const {scope,check}=session(),prefix=scope.accountId+'/'+scope.deviceId
   await lock(prefix,async()=>{
     const rows=await db.nameLeases.where('[accountId+deviceId]')
       .equals([scope.accountId,scope.deviceId]).toArray()
-    for(const row of rows){const data=await unpack(row);if(data&&data.next<=data.last)return}
-    const interrupted=rows.find(row=>row.ciphertext.size===0)
+    for(const row of rows){const data=await unpack(row);
+      if(data&&(data.assignmentId??null)===assignmentId&&data.next<=data.last)return}
+    const interrupted=rows.find(row=>row.ciphertext.size===0&&
+      (row.assignmentId??null)===assignmentId)
     const requestId=interrupted?.leaseId??crypto.randomUUID()
     // Stable reservation UUID survives lost ACK and reload; never reserve a second range blindly.
     const key=prefix+'/'+requestId
     if(!interrupted)await db.nameLeases.add({key,accountId:scope.accountId,deviceId:scope.deviceId,leaseId:requestId,
-      iv:'',ciphertext:new Blob([]),wrappedDEK:{iv:'',ciphertext:''}})
-    const response=await photoRequest('/names/reserve','POST',JSON.stringify({requestId,count:32}))
+      assignmentId,iv:'',ciphertext:new Blob([]),wrappedDEK:{iv:'',ciphertext:''}})
+    const response=await photoRequest('/names/reserve','POST',JSON.stringify({requestId,count:32,assignmentId}))
     if(!response.ok)throw Error('gallery.name_reserve_'+response.status)
-    const data=await response.json() as {id:string;prefix:string;first:number;last:number}
+    const data=await response.json() as {id:string;prefix:string;first:number;last:number;assignmentId:string|null}
     check()
+    if(data.assignmentId!==assignmentId)throw Error('gallery.lease_scope')
     const sealed=await seal({...data,next:data.first},scope)
     await db.nameLeases.delete(key)
     await db.nameLeases.put(sealed)

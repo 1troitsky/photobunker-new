@@ -14,3 +14,16 @@ export { signPhotoSyncContract } from './infrastructure/identity'
 export { photoRequest } from './infrastructure/api'
 
 export {signMetadataContract} from './infrastructure/identity'
+
+export {assignmentRequest} from './infrastructure/api'
+
+export {collaborationRequest} from './infrastructure/api'
+
+export {withCurrentOwnerAssetDEK} from './infrastructure/identity'
+export {verifyOwnerThumbnailStatement} from './infrastructure/identity'
+
+export {currentAccountSpki,signOwnerDeviceProof} from './infrastructure/identity'
+export {verifyPinnedOwnerDeviceProof} from './infrastructure/identity'
+
+export {accountDeviceRecords} from './infrastructure/identity'
+export type {AccountDeviceRecord} from './infrastructure/identity'

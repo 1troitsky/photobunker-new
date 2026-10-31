@@ -17,7 +17,7 @@ final class PhotoAssetCleanupJob implements ShouldQueue{
     $o=DB::table('photo_objects')->where('id',$this->assetId)->where('photo_id',$this->photoId)->first();
     if(!$o)return;
     $photo=DB::table('photo_records')->where('id',$this->photoId)->first();
-    if($photo && $photo->metadata_asset_id===$this->assetId)return;
+    if($photo && ($photo->metadata_asset_id===$this->assetId || $photo->edit_asset_id===$this->assetId))return;
     $disk=Storage::disk(config('photo_sync.disk'));
     if($disk->exists($o->object_key)&&(!$disk->delete($o->object_key)||$disk->exists($o->object_key)))
       throw new \RuntimeException('gallery.old_asset_cleanup_retry');

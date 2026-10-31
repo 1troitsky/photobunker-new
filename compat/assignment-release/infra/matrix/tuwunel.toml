@@ -1,0 +1,19 @@
+[global]
+server_name = "matrix.photobunker.test"
+database_path = "/var/lib/tuwunel"
+address = ["0.0.0.0"]
+port = 8008
+allow_registration = false
+allow_federation = false
+# PhotoBunker presence is exclusively ACL-filtered in its identity API.
+# Do not expose native per-user activity to Matrix room members or raw clients.
+allow_local_presence = false
+allow_incoming_presence = false
+allow_outgoing_presence = false
+federate_created_rooms = false
+new_user_displayname_suffix = ""
+allow_device_name_federation = false
+allow_public_room_directory_over_federation = false
+lockdown_public_room_directory = true
+log = "error"
+rocksdb_log_level = "error"

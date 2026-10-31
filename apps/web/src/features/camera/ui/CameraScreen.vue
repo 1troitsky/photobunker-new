@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import {computed,nextTick,onMounted,onUnmounted,ref,shallowRef,watch} from 'vue'
-import {useRouter} from 'vue-router'
+import {useRoute,useRouter} from 'vue-router'
 import {identity,onIdentityCleanup} from '../../identity'
 import {language} from '../../ui-preview'
-import {startGrantedGps} from '../../gallery'
+import {startGrantedGps,reserveNameRange} from '../../gallery'
+import {openAssignments,onAssignmentChange,policySnapshot,type AssignmentView} from '../../assignments'
 import {BrowserCamera,captureError,openCaptureSession,DEFAULT_TTL_DAYS} from '../index'
 import type {CaptureMode,Facing,CaptureProgress,CaptureSession} from '../index'
 
@@ -11,8 +12,45 @@ const ru=computed(()=>language.value==='ru')
 const video=ref<HTMLVideoElement|null>(null),frozen=ref<HTMLCanvasElement|null>(null)
 const started=ref(false),starting=ref(false),processing=ref(false),grid=ref(false)
 const facing=ref<Facing>('environment'),mode=ref<CaptureMode>(3),ttl=ref(DEFAULT_TTL_DAYS)
+const description=ref(''),tagText=ref('')
 const status=ref(''),error=ref(''),savedId=ref(''),savedCount=ref(0),clock=ref('unknown')
-const router=useRouter()
+const router=useRouter(),route=useRoute()
+const assignmentId=ref(''),availableAssignments=ref<AssignmentView[]>([]),assignmentError=ref('')
+let releaseAssignments:()=>void=()=>{}
+const chosenAssignment=computed(()=>availableAssignments.value.find(x=>x.id===assignmentId.value))
+watch(chosenAssignment,(next)=>{
+  if(next){
+    mode.value=next.mode;ttl.value=next.retentionDays
+    if(next.sync==='synced'&&next.enableNameId!==false&&!identity.value?.offline)
+      void reserveNameRange(next.id).catch(()=>{/* offline capture keeps stable UUID */})
+  }
+})
+const assignmentCopy=computed(()=>ru.value?{
+  choose:'Задание',personal:'Личная съёмка',refresh:'Обновить задания',
+  locked:'Съёмка по заданию доступна после серверного подтверждения статуса «В работе».',
+  capture:'Съёмка по заданию',frozen:'Режим, TTL и ревизия задания фиксируются при съёмке.',
+  invalid:'Нет разрешения или актуальной подтверждённой политики. Выберите задание снова.',
+  gps:'Геолокация обязательна для этого задания.',date:'Период съёмки',
+  preset:'Пресет камеры',cameraInstructions:'Инструкция для съёмки',
+  description:'Описание снимка',tags:'Теги (через запятую)',
+}:{
+  choose:'Assignment',personal:'Personal capture',refresh:'Refresh assignments',
+  locked:'Assignment capture requires a server-acknowledged In progress status.',
+  capture:'Assignment capture',frozen:'Mode, TTL and assignment revisions freeze at capture.',
+  invalid:'Assignment permission or current confirmed policy is missing. Choose again.',
+  gps:'GPS is required for this assignment.',date:'Capture period',
+  preset:'Camera preset',cameraInstructions:'Capture instructions',
+  description:'Photo description',tags:'Tags (comma-separated)',
+})
+async function refreshAssignments(){
+  if(!identity.value){availableAssignments.value=[];assignmentId.value='';return}
+  try{
+    availableAssignments.value=(await openAssignments().list()).filter(x=>x.status==='in_progress'&&x.sync==='synced')
+    const query=typeof route.query.assignment==='string'?route.query.assignment:''
+    if(!assignmentId.value && query)assignmentId.value=query
+  }catch{availableAssignments.value=[]}
+}
+
 let controller:BrowserCamera|null=null,mounted=false
 const session=shallowRef<CaptureSession|null>(null)
 const copy=computed(()=>ru.value?{
@@ -59,6 +97,12 @@ const errorText=computed(()=>{
     'camera.jpeg_encode_failed':['Ошибка JPEG-кодирования. Снимок не сохранён.','JPEG compression failed. Photo not saved.'],
     'camera.account_changed':['Аккаунт или устройство изменено. Действие отменено.','Account or device changed. Operation cancelled.'],
     'camera.canvas_unavailable':['Обработка изображения не поддерживается браузером.','Image processing is unavailable in this browser.'],
+    'camera.gps_required':['Нужна точная геолокация. Разрешите GPS и повторите съёмку.','GPS location required. Allow GPS and retry.'],
+    'camera.assignment_outside_dates':['Съёмка вне установленного периода задания.','Capture is outside the assignment date range.'],
+    'camera.description_required':['Требуется описание снимка.','Photo description is required.'],
+    'camera.tags_required':['Укажите обязательные теги.','Photo tags are required.'],
+    'camera.tags_not_allowed':['Теги не соответствуют правилам задания.','Tags are not permitted by this assignment.'],
+    'camera.annotation_invalid':['Описание или теги некорректны.','Invalid photo description or tags.'],
   }
   return dictionary[key]?.[ru.value?0:1]??(key?copy.value.error+' '+key:'')
 })
@@ -72,12 +116,14 @@ function dispose(){
   stop();session.value?.cancel();session.value=null
   processing.value=false;status.value='';error.value='';savedId.value='';savedCount.value=0;clock.value='unknown'
 }
-const release=onIdentityCleanup(dispose)
+const release=onIdentityCleanup(()=>{dispose();availableAssignments.value=[];assignmentId.value=''})
 function hidden(){if(document.hidden)dispose()}
 function leaving(){dispose()}
 onMounted(()=>{
   mounted=true
   startGrantedGps()
+  releaseAssignments=onAssignmentChange(()=>{void refreshAssignments()})
+  void refreshAssignments()
   if(video.value)controller=new BrowserCamera(video.value)
   if(identity.value)session.value=openCaptureSession()
   void prepareTime()
@@ -85,18 +131,18 @@ onMounted(()=>{
   window.addEventListener('pagehide',leaving)
 })
 onUnmounted(()=>{
-  mounted=false;dispose();controller=null;release()
+  mounted=false;dispose();controller=null;release();releaseAssignments()
   document.removeEventListener('visibilitychange',hidden)
   window.removeEventListener('pagehide',leaving)
 })
 watch(identity,async(next,previous)=>{
   if(next?.accountId!==previous?.accountId||next?.deviceId!==previous?.deviceId){
-    dispose()
+    dispose();assignmentId.value='';availableAssignments.value=[]
     if(next){
       await nextTick()
       if(!mounted||!identity.value||!video.value)return
       controller=new BrowserCamera(video.value)
-      try{session.value=openCaptureSession();void prepareTime()}catch{/* show identity state */}
+      try{session.value=openCaptureSession();void prepareTime();void refreshAssignments()}catch{/* show identity state */}
     }
   }
 })
@@ -144,14 +190,27 @@ function progress(value:CaptureProgress){
 }
 async function shutter(){
   if(!controller||!session.value||!started.value||processing.value||session.value.hasPending)return
-  processing.value=true;error.value='';savedId.value='';status.value=copy.value.compressing
+  processing.value=true;error.value='';assignmentError.value='';savedId.value='';status.value=copy.value.compressing
   // Immediate in-memory shutter freeze; never persisted into a browser cache or file.
   freeze()
   try{
+    // Read the fresh *durable* assignment projection, never an optimistic UI row.
+    let frozen:ReturnType<typeof policySnapshot>|undefined
+    if(assignmentId.value){
+      const assignment=await openAssignments().get(assignmentId.value)
+      if(assignment.status!=='in_progress'||assignment.sync!=='synced'){
+        assignmentError.value=assignmentCopy.value.invalid
+        throw Error('camera.assignment_not_authorized')
+      }
+      frozen=policySnapshot(assignment)
+    }
     const source=await controller.take()
-    const record=await session.value.prepare(source.blob,source.method,mode.value,ttl.value,progress)
+    const selectedMode=frozen?.mode??mode.value,selectedTtl=frozen?.retentionDays??ttl.value
+    const record=await session.value.prepare(source.blob,source.method,selectedMode,selectedTtl,
+      progress,frozen,{description:description.value,
+        tags:tagText.value.split(',').map(tag=>tag.trim()).filter(Boolean)})
     savedId.value=record.photoId;savedCount.value++;status.value=copy.value.saved
-    clock.value='trusted'
+    description.value='';tagText.value='';clock.value='trusted'
   }catch(e){error.value=captureError(e);status.value=''}
   finally{processing.value=false;clearFreeze()}
 }
@@ -191,8 +250,42 @@ const viewSaved=()=>savedId.value?router.push('/photos/'+savedId.value):undefine
     </div>
     <template v-else>
       <div class="capture-policy">
-        <h2>{{ copy.policy }}</h2>
-        <fieldset :disabled="processing">
+        <label class="capture-retention">{{ assignmentCopy.choose }}
+          <select v-model="assignmentId" :disabled="processing||!!session?.hasPending">
+            <option value="">{{ assignmentCopy.personal }}</option>
+            <option v-for="item in availableAssignments" :key="item.id" :value="item.id">
+              {{ item.title }}
+            </option>
+          </select>
+        </label>
+        <div v-if="chosenAssignment" class="assignment-capture-instructions">
+          <p v-if="chosenAssignment.cameraInstructions" class="camera-hint">
+            <strong>{{ assignmentCopy.cameraInstructions }}:</strong> {{ chosenAssignment.cameraInstructions }}
+          </p>
+          <p v-if="chosenAssignment.capturePreset" class="camera-hint">
+            {{ assignmentCopy.preset }}: {{ chosenAssignment.capturePreset }}
+          </p>
+          <p v-if="chosenAssignment.requiredGps" class="camera-hint">{{ assignmentCopy.gps }}</p>
+          <p v-if="chosenAssignment.startsAt||chosenAssignment.finishesAt" class="camera-hint">
+            {{ assignmentCopy.date }}: {{ chosenAssignment.startsAt||'…' }} — {{ chosenAssignment.finishesAt||'…' }}
+          </p>
+        </div>
+        <div v-if="chosenAssignment" class="camera-annotation">
+          <label>{{ assignmentCopy.description }}
+            <textarea v-model="description" maxlength="2000" rows="2" :disabled="processing"></textarea>
+          </label>
+          <label>{{ assignmentCopy.tags }}
+            <input v-model="tagText" type="text" maxlength="1250" :disabled="processing">
+          </label>
+          <p v-if="chosenAssignment.allowedTags?.length" class="camera-hint">
+            {{ chosenAssignment.allowedTags.join(', ') }}
+          </p>
+        </div>
+        <p v-if="assignmentId" class="camera-hint">{{ chosenAssignment?
+          assignmentCopy.frozen:assignmentCopy.locked }}</p>
+        <p v-if="assignmentError" class="camera-feedback error" role="alert">{{ assignmentError }}</p>
+        <h2>{{ chosenAssignment?assignmentCopy.capture:copy.policy }}</h2>
+        <fieldset :disabled="processing||!!chosenAssignment">
           <legend class="sr-only">
             {{ copy.policy }}
           </legend>
@@ -382,6 +475,11 @@ const viewSaved=()=>savedId.value?router.push('/photos/'+savedId.value):undefine
 .capture-gate h2{width:100%;font-size:18px}
 .capture-policy{padding:13px 16px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
 .capture-policy h2{font-size:14px;margin:0 0 7px}
+.assignment-capture-instructions{padding:6px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.camera-annotation{display:grid;gap:8px;padding:8px 0}
+.camera-annotation label{display:grid;gap:4px;font-size:13px}
+.camera-annotation input,.camera-annotation textarea{width:100%;box-sizing:border-box;
+  background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px;font:inherit}
 .capture-policy fieldset{border:0;padding:0;margin:0;display:grid;gap:3px}
 .capture-mode{display:flex;align-items:center;gap:8px;padding:7px 0;min-height:44px;font-size:13px}
 .capture-mode input{width:18px;height:18px;accent-color:var(--accent)}
