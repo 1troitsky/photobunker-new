@@ -1,5 +1,5 @@
 import type {SyncState,OutboxEntry,PhotoHeader} from '../../local-storage'
-import type {StoreRisk} from '../infrastructure/store-risk'
+import type {StoreRisk} from './store-risk'
 
 export type LocalSafetyRow=Readonly<{
   photoId:string;expiresAt:number;state:SyncState
