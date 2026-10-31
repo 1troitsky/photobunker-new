@@ -1,4 +1,5 @@
 import type {SyncState,OutboxEntry,PhotoHeader} from '../../local-storage'
+import type {StoreRisk} from '../infrastructure/store-risk'
 
 export type LocalSafetyRow=Readonly<{
   photoId:string;expiresAt:number;state:SyncState
@@ -6,7 +7,7 @@ export type LocalSafetyRow=Readonly<{
 export type SafetyDecision=Readonly<{
   permitted:false; // Never authorize destructive deletion from a summary.
   photoCount:number;unconfirmedCount:number;inFlightCount:number;
-  outboxCount:number;blockingReasons:readonly string[]
+  outboxCount:number;storeRisk:StoreRisk|null;blockingReasons:readonly string[]
 }>
 /**
  * G5 readiness / risk inventory, deliberately not authorization.
@@ -16,6 +17,7 @@ export type SafetyDecision=Readonly<{
 export function assessLocalDeletion(
   photos:readonly LocalSafetyRow[], pending:readonly Pick<OutboxEntry,'state'|'intent'>[],
   trustedTime:boolean,online:boolean,serverRecoveryVerified=false,
+  storeRisk:StoreRisk|null=null,
 ):SafetyDecision{
   const active=photos.filter(photo=>photo.expiresAt>0&&photo.state!=='expired')
   const unconfirmedCount=active.filter(photo=>photo.state!=='synced').length
@@ -25,11 +27,13 @@ export function assessLocalDeletion(
   if(!trustedTime)blockingReasons.push('time_untrusted')
   if(!online)blockingReasons.push('offline')
   if(unconfirmedCount)blockingReasons.push('local_copies_unconfirmed')
-  if(inFlightCount||outboxCount)blockingReasons.push('operations_pending')
+  if(inFlightCount||outboxCount||storeRisk?.unconfirmedTotal)blockingReasons.push('operations_pending')
+  if(storeRisk?.photoJournals)blockingReasons.push('photo_journal_incomplete')
+  if(!storeRisk)blockingReasons.push('stores_not_inspected')
   if(!serverRecoveryVerified)blockingReasons.push('remote_recovery_not_proven')
   blockingReasons.push('device_erase_not_implemented')
   return{permitted:false,photoCount:active.length,unconfirmedCount,
-    inFlightCount,outboxCount,blockingReasons}
+    inFlightCount,outboxCount,storeRisk,blockingReasons}
 }
 export function localSafetyRows(headers:readonly PhotoHeader[],state:ReadonlyMap<string,SyncState>):LocalSafetyRow[]{
   return headers.map(header=>({photoId:header.photoId,
