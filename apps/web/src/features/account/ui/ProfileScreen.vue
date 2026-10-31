@@ -34,6 +34,7 @@ const copy=computed(()=>ru.value?{
   account:'Аккаунт',appearance:'Внешний вид',theme:'Тема',light:'Светлая',dark:'Тёмная',
   lang:'Язык',photos:'Мои фото',camera:'Камера',assignments:'Задания',contacts:'Контакты',
   teams:'Команды',storage:'Защищённое хранилище',security:'Ключи и устройства',
+  dataSafety:'PIN и безопасность данных',
   error:'Операция не выполнена',noDevices:'Нет доступных данных об устройствах',
   noLegacy:'Единая Identity PB2. Старый аккаунт и Matrix не используются.',
   location:'Геолокация',locationHint:'Только после разрешения браузера и только пока приложение открыто.',
@@ -53,6 +54,7 @@ const copy=computed(()=>ru.value?{
   account:'Account',appearance:'Appearance',theme:'Theme',light:'Light',dark:'Dark',
   lang:'Language',photos:'My photos',camera:'Camera',assignments:'Assignments',contacts:'Contacts',
   teams:'Teams',storage:'Encrypted storage',security:'Keys and devices',
+  dataSafety:'PIN and data safety',
   error:'Action failed',noDevices:'No device information available',
   noLegacy:'Single PB2 identity. No legacy account or Matrix runtime.',
   location:'Location',locationHint:'Only with browser permission and while the app is open.',
@@ -150,6 +152,7 @@ watch(identity,()=>{devices.value=[];void refresh()})
       </section>
       <section class="pb-section">
         <h2>{{copy.security}}</h2><IdentityPanel />
+        <RouterLink to="/profile/data-safety">{{copy.dataSafety}}</RouterLink>
         <button type="button" :disabled="busy" @click="leave">{{copy.logout}}</button>
       </section>
     </template>

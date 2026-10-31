@@ -16,6 +16,7 @@ const AssignmentsScreen = () => import('./features/assignments/ui/AssignmentsScr
 const CollaborationScreen = () => import('./features/collaboration/ui/CollaborationScreen.vue')
 const PhotoReviewScreen = () => import('./features/photo-review/ui/ReviewScreen.vue')
 const ProfileScreen = () => import('./features/account/ui/ProfileScreen.vue')
+const DataSafetyScreen = () => import('./features/account/ui/DataSafetyScreen.vue')
 
 /* Shell always opens without blocking HTTP; Identity v2 is initialized lazily. */
 export const router = createRouter({
@@ -46,6 +47,7 @@ export const router = createRouter({
         { path: 'teams', name: 'teams', component: CollaborationScreen },
         { path: 'teams/:teamId', name: 'team-detail', component: CollaborationScreen },
         { path: 'profile', name: 'profile', component: ProfileScreen },
+        { path: 'profile/data-safety', name: 'data-safety', component: DataSafetyScreen },
         { path: 'editor/preview', name: 'editor-preview', component: MainScreens },
         { path: 'photo-card/preview', name: 'photo-card-preview', component: MainScreens },
         { path: 'pin/preview', name: 'pin-preview', component: MainScreens },
