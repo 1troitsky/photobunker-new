@@ -6,7 +6,7 @@ import {GalleryThumbnail} from '../../gallery'
 import {onPhotoSync} from '../../photo-sync'
 import {language,AppIcon} from '../../ui-preview'
 import {loadLocalBrowser} from '../application/browse'
-import {exportOwnerBrowserZip} from '../infrastructure/export-owner'
+import {exportOwnerBrowserZip,exportOwnerPhotoJpeg} from '../infrastructure/export-owner'
 import {selectedVisiblePhotos,togglePhotoSelection,MAX_ZIP_SELECTION} from '../domain/selection'
 import {browserFolders,browserTreeGroups,visibleBrowserPhotos,type BrowserPhoto,type BrowserAssignment,
   type BrowserDisplay,type BrowserSort} from '../domain/model'
@@ -36,7 +36,7 @@ const txt=computed(()=>ru.value?{
   exportZip:'Сохранить ZIP',exportWarning:'ZIP с текущими изображениями будет сохранён в загрузки устройства. Приватные метаданные и EXIF не включаются.',
   exportLimit:'ZIP — не более 10 локальных фото за раз (до 16 МБ).',
   exportWorking:'Подготавливаем защищённый экспорт…',exportSent:'Запрошено скачивание ZIP.',exportFailed:'Экспорт прерван или недоступен.',
-  choose:'Выбрать фото',finishChoosing:'Готово',selected:'Выбрано',clearSelection:'Снять выделение',selectionLimit:'Максимум 10 фотографий',
+  single:'Скачать JPEG',choose:'Выбрать фото',finishChoosing:'Готово',selected:'Выбрано',clearSelection:'Снять выделение',selectionLimit:'Максимум 10 фотографий',
 }:{
   title:'Photo Browser',subtitle:'Private photos on this device',
   note:'Local browsing and export of current owner renditions. Shared collections and recipient access are not yet enabled.',
@@ -51,7 +51,7 @@ const txt=computed(()=>ru.value?{
   exportZip:'Save ZIP',exportWarning:'The current images will be downloaded to this device. Private metadata and EXIF are excluded.',
   exportLimit:'Up to 10 local photos per ZIP (16 MB maximum).',
   exportWorking:'Preparing private export…',exportSent:'ZIP download requested.',exportFailed:'Export cancelled or unavailable.',
-  choose:'Select photos',finishChoosing:'Done',selected:'Selected',clearSelection:'Clear selection',selectionLimit:'Maximum 10 photos',
+  single:'Download JPEG',choose:'Select photos',finishChoosing:'Done',selected:'Selected',clearSelection:'Clear selection',selectionLimit:'Maximum 10 photos',
 })
 const validPhotos=computed(()=>photos.value.filter(p=>p.expiresAt>now.value))
 const folders=computed(()=>browserFolders(assignments.value,validPhotos.value))
@@ -119,6 +119,21 @@ async function openPhoto(id:string){
   await router.push('/photos/'+encodeURIComponent(id))
 }
 
+async function downloadSingle(photo:BrowserPhoto){
+  if(exporting.value||choosing.value||!identity.value)return
+  const active=identity.value,controller=new AbortController()
+  exportController=controller
+  exporting.value=true;exportError.value='';exportNotice.value='';exportDone.value=0
+  try{
+    await exportOwnerPhotoJpeg(photo,controller.signal)
+    if(exportController===controller&&identity.value?.accountId===active.accountId&&
+      identity.value?.deviceId===active.deviceId)exportNotice.value=txt.value.exportSent
+  }catch(e){
+    if(exportController===controller)exportError.value=e instanceof Error?e.message:txt.value.exportFailed
+  }finally{
+    if(exportController===controller){exportController=null;exporting.value=false}
+  }
+}
 async function downloadZip(){
   if(exporting.value||!choosing.value||selectedPhotos.value.length<1||!identity.value)return
   exportController?.abort()
@@ -240,6 +255,8 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
               <button type="button" @click="openPhoto(photo.id)">{{photo.title||photo.nameId||txt.file}}</button>
               <small>{{date(photo.capturedAt)}}</small>
               <button type="button" @click="openCard(photo.id)">{{txt.card}}</button>
+              <button v-if="!choosing" type="button" :disabled="exporting"
+                @click="downloadSingle(photo)">{{txt.single}}</button>
             </div>
           </section>
         </div>
@@ -259,9 +276,10 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
                 <small>{{ stateLabel(photo.sync) }}</small>
               </span>
             </button>
-            <button v-if="!choosing" class="pb-card-shortcut" type="button" @click="openCard(photo.id)">
-              {{txt.card}}
-            </button>
+            <div v-if="!choosing" class="pb-item-actions">
+              <button class="pb-card-shortcut" type="button" @click="openCard(photo.id)">{{txt.card}}</button>
+              <button class="pb-card-shortcut" type="button" :disabled="exporting" @click="downloadSingle(photo)">{{txt.single}}</button>
+            </div>
           </article>
         </div>
       </div>
@@ -301,6 +319,8 @@ watch(()=>[identity.value?.accountId,identity.value?.deviceId],()=>{
 .pb-tree-photo button:nth-child(2){flex:1;text-align:left}
 .pb-browser-item{display:flex;flex-direction:column;min-width:0}
 .pb-browser-item .pb-browser-photo{flex:1}
+.pb-item-actions{display:flex;gap:4px;flex-wrap:wrap}
+.pb-item-actions button{flex:1 1 90px}
 .pb-card-shortcut{font-size:12px;min-height:40px;text-align:center;color:var(--accent);background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-top:4px}
 .pb-browser-photos.list .pb-browser-item{flex-direction:row;gap:8px}
 .pb-browser-photos.list .pb-card-shortcut{margin-top:0}
