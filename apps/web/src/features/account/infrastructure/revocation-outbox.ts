@@ -117,7 +117,7 @@ export async function deliverPendingRevocations():Promise<{
   const rows=await pendingDeviceRevocations()
   let acknowledged=0
   for(const row of rows){
-    if(!navigator.onLine)break
+    if(typeof navigator!=='undefined'&&!navigator.onLine)break
     try{
       const receipt=await submitSignedRevocationIntent(row.envelope)
       const expected=await payloadHash(row.envelope)
