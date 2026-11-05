@@ -16,7 +16,7 @@
 
 | Объект | Факт | Статус |
 | --- | --- | --- |
-| Handoff branch | `handoff/owner-agent-2026-11-06` | `CONFIRMED` |
+| Рабочая ветка | `main`; handoff baseline `ac6e942` перенесён fast-forward | `CONFIRMED` локально 2026-11-06 |
 | Implementation snapshot | `595be251ae092ae40cd2354bc910afa31ecc76e5` | `CONFIRMED` local Q1 implementation |
 | Активный runtime | `compat/assignment-release/` | `CONFIRMED` |
 | Production URL | `https://photobunker.duckdns.org` | `CONFIRMED` 2026-11-05 |

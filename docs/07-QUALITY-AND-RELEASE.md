@@ -59,4 +59,4 @@ No-Go means do not label `production-ready`. Feature can be explicitly excluded 
 - **NOT RUN**, known issues and rollback;
 - conclusion: READY FOR REVIEW, INTEGRATED or ACCEPTED **with actor and evidence**.
 
-Агент выполняет один выбранный quick task, честно фиксирует `PASS/FAIL/NOT RUN`, обновляет status docs и отправляет commit до следующего шага. **UI/UX redress разрешён до Accepted:** visual redesign не должен требовать изменений domain/application/infrastructure, если функциональные требования не меняются. Владелец принимает реальное device experience.
+Агент выполняет один выбранный quick task, при необходимости доводит все его подзадачи до общего критерия, честно фиксирует `PASS/FAIL/NOT RUN`, обновляет status docs и после проверок отправляет commit в `main`. Применяются целевые проверки по риску; полный CI остаётся release gate, а не обязательным запуском после каждой подзадачи. **UI/UX redress разрешён до Accepted:** visual redesign не должен требовать изменений domain/application/infrastructure, если функциональные требования не меняются. Владелец принимает реальное device experience.
