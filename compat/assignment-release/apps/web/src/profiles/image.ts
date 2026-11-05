@@ -89,7 +89,9 @@ export function selectedExif(source: Exif | undefined, rules: ProfileRules, meta
     result.Exif[36867] = value
   }
   if (rules.location === 'off') result.GPS = {}
-  else if (source && rules.metadata === 'selected') result.GPS = structuredClone(source.GPS)
+  // Selected metadata uses only the validated foreground fix captured by the
+  // application. Never copy an opaque/stale source GPS block merely because
+  // optional location is enabled.
   if (metadata.location && rules.location !== 'off') {
     const coordinate = (value: number) => { const v = Math.abs(value); const degrees = Math.floor(v); const minutes = Math.floor((v - degrees) * 60); return [[degrees, 1], [minutes, 1], [Math.round(((v - degrees) * 60 - minutes) * 60 * 1_000_000), 1_000_000]] }
     result.GPS[1] = metadata.location.latitude < 0 ? 'S' : 'N'; result.GPS[2] = coordinate(metadata.location.latitude)

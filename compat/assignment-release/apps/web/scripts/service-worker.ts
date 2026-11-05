@@ -2,11 +2,14 @@ export function renderServiceWorker(paths: string[], revision: string): string {
   return `/* PhotoBunker: public app shell only. Never cache API or user media. */
 const CACHE_PREFIX = 'photobunker-shell-';
 const CACHE_NAME = CACHE_PREFIX + ${JSON.stringify(revision)};
+const REVISION = ${JSON.stringify(revision)};
 const STATIC_PATHS = new Set(${JSON.stringify(paths)});
-const APP_ROUTES = new Set(['/', '/camera', '/camera/presets', '/camera/presets/new', '/profiles', '/profiles/new', '/gallery', '/settings', '/profile', '/messages', '/assignments', '/assignments/new', '/profile/teams', '/profile/account', '/profile/edit', '/profile/contacts', '/profile/security', '/join']);
+const APP_ROUTES = new Set(['/', '/camera', '/camera/presets', '/camera/presets/new', '/profiles', '/profiles/new', '/gallery', '/browser', '/people', '/status', '/settings', '/settings/data', '/profile', '/assignments', '/assignments/new', '/profile/teams', '/profile/account', '/profile/edit', '/profile/contacts', '/profile/security', '/profile/photos-security', '/messages', '/join']);
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll([...STATIC_PATHS])));
+  event.waitUntil(caches.open(CACHE_NAME)
+    .then((cache) => cache.addAll([...STATIC_PATHS]))
+    .then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {
@@ -16,12 +19,18 @@ self.addEventListener('activate', (event) => {
   )).then(() => self.clients.claim()));
 });
 
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') event.waitUntil(self.skipWaiting());
+  if (event.data?.type === 'GET_VERSION' && event.ports?.[0])
+    event.ports[0].postMessage({ revision: REVISION });
+});
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
   if (request.method !== 'GET' || url.origin !== self.location.origin || url.search) return;
 
-  if (request.mode === 'navigate' && (APP_ROUTES.has(url.pathname) || /^\\/(?:gallery|profiles|assignments|camera\\/presets)\\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\\/(?:team|edit))?$/.test(url.pathname))) {
+  if (request.mode === 'navigate' && (APP_ROUTES.has(url.pathname) || /^\\/(?:gallery|photo-cards|profiles|camera\\/presets|assignments|browser|profile\\/teams)\\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\\/(?:card|team|edit))?$/.test(url.pathname))) {
     event.respondWith(fetch(request).catch(async () => {
       const cache = await caches.open(CACHE_NAME);
       return (await cache.match('/')) || Response.error();

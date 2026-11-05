@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { readThumbnail } from '../server/photos'
-const props = defineProps<{ id: string; alt?: string; accessKey?: string }>()
+const props = defineProps<{ id: string; alt?: string; accessKey?: string; expiresAt?: number }>()
 const url = ref('')
 let generation = 0
 function release() {
@@ -14,7 +14,7 @@ watch(
     const current = ++generation
     release()
     try {
-      const blob = await readThumbnail(id!)
+      const blob = await readThumbnail(id!, props.accessKey, props.expiresAt)
       if (current === generation) url.value = URL.createObjectURL(blob)
     } catch {
       /* The containing link remains usable when a preview is unavailable. */

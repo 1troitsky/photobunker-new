@@ -283,6 +283,7 @@ export function refreshPresenceHeartbeat(){
     if(pulseTimer){clearInterval(pulseTimer);pulseTimer=undefined}
     lastScope=s
   }
+  const needsImmediatePulse=!pulseTimer
   if(!instance){instance=crypto.randomUUID();sequence=0}
   async function send(){
     if(!pulseGate()||lastScope!==s||!instance)return
@@ -290,8 +291,8 @@ export function refreshPresenceHeartbeat(){
     try{await identityRequest('/presence/pulse','POST',{instanceId:id,sequence:n,active:true})}
     catch{/* Never infer online from a failed or unconfirmed heartbeat. */}
   }
-  void send()
-  if(!pulseTimer)pulseTimer=setInterval(()=>{void send()},25000)
+  if(needsImmediatePulse)void send()
+  if(!pulseTimer)pulseTimer=setInterval(()=>{void send()},8000)
   void flushPresencePreference()
 }
 export function stopPresenceHeartbeat(){
@@ -330,7 +331,7 @@ export function usePeerPresence(handle:Ref<string>){
   document.addEventListener('visibilitychange',visibilityChanged)
   const interval=setInterval(()=>{
     if(document.visibilityState==='visible')void refresh()
-  },20000)
+  },5000)
   onBeforeUnmount(()=>{
     generation++;clearInterval(interval)
     window.removeEventListener('offline',disconnected)

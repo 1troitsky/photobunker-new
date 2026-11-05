@@ -10,6 +10,7 @@ import {
 } from '../identity/store'
 import { identityRequest, IdentityError } from '../identity/api'
 import { a } from '../identity/text'
+import { inAppId, personLabel, publicIdInput } from '../identity/display'
 import { s } from '../studio/text'
 import { m } from '../messages/text'
 import { initials, avatarColor } from '../messages/presentation'
@@ -32,6 +33,7 @@ const visible = computed(() =>
       (person) =>
         !query.value ||
         [
+          person.userId,
           person.publicId,
           person.username,
           person.fields.name,
@@ -44,10 +46,10 @@ const visible = computed(() =>
     ),
 )
 function contactName(person: Person) {
-  return person.fields.name || (person.username ? '@' + person.username : person.fields.username || person.publicId)
+  return personLabel(person)
 }
 function contactSecondary(person: Person) {
-  const value = person.username ? '@' + person.username : person.publicId
+  const value = person.username ? '@' + person.username : inAppId(person.publicId, person.userId)
   return value === contactName(person) ? '' : value
 }
 async function refresh() {
@@ -105,7 +107,7 @@ async function find() {
   try {
     const owner = account.value?.id
     const found = await identityRequest<Person>(
-      `/people/${encodeURIComponent(query.value.trim())}`,
+      `/people/${encodeURIComponent(publicIdInput(query.value))}`,
     )
     if (owner === account.value?.id) openProfile(found.publicId)
   } catch (failure) {
@@ -163,7 +165,7 @@ async function unblock(value: string) {
         </div>
         <template v-if="tab === 'blocked'"
           ><div v-for="id in blocked" :key="id" class="participant-row">
-            <span>{{ id }}</span
+            <span>{{ inAppId(id) }}</span
             ><button
               class="quiet-button"
               :disabled="busy"
@@ -179,7 +181,7 @@ async function unblock(value: string) {
             class="picker-row contact-person-row"
             @click="openProfile(item.publicId)"
           >
-            <span :class="['chat-avatar', avatarColor(item.publicId)]">{{ initials(item.fields.name || item.username || item.publicId) }}</span
+            <span :class="['chat-avatar', avatarColor(item.publicId)]"><img v-if="item.fields.avatar" :src="item.fields.avatar" :alt="a('avatar')" /><template v-else>{{ initials(item.fields.name || item.username || item.publicId) }}</template></span
             ><span class="contact-person-copy"
               ><strong>{{ contactName(item) }}</strong
               ><small v-if="contactSecondary(item)">{{ contactSecondary(item) }}</small></span

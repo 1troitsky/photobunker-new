@@ -9,7 +9,8 @@ export const appLockReady = ref(false),
   appLockFailure = ref(false),
   appLocked = ref(true),
   appPinEnabled = ref(false),
-  appPinLegacy = ref(false)
+  appPinLegacy = ref(false),
+  appPinLength = ref(6)
 
 let loadEpoch = 0, guardEpoch = 0
 let current: PinRecord | undefined
@@ -33,7 +34,7 @@ function valid(value: PinRecord | undefined): boolean {
     /^[a-f0-9]{64}$/.test(value.verifier) &&
     Number.isSafeInteger(value.iterations) &&
     value.iterations >= 100000 && value.iterations <= 600000 &&
-    (value.length === 4 || value.length === 6 || value.length === 8) &&
+    Number.isInteger(value.length) && value.length >= 4 && value.length <= 8 &&
     Number.isSafeInteger(value.lastWall) && value.lastWall >= 0
 }
 function failClosed() {
@@ -77,12 +78,12 @@ async function calibrate(): Promise<number> {
   const elapsed = Math.max(1, performance.now() - start)
   return Math.max(100000, Math.min(600000, Math.round(100000 * (300 / elapsed) / 10000) * 10000))
 }
-async function makeRecord(pin: string, legacyFour = false): Promise<PinV2> {
-  if (!(legacyFour && /^\d{4}$/.test(pin)) && !/^(?:\d{6}|\d{8})$/.test(pin)) throw new Error('pin.length')
+async function makeRecord(pin: string): Promise<PinV2> {
+  if (!/^\d{4,8}$/.test(pin)) throw new Error('pin.length')
   const salt = hex(crypto.getRandomValues(new Uint8Array(16)))
   const iterations = await calibrate()
   return {
-    version: 2, salt, iterations, length: pin.length as 4 | 6 | 8,
+    version: 2, salt, iterations, length: pin.length as 4 | 5 | 6 | 7 | 8,
     verifier: await derive(pin, salt, iterations),
     failures: 0, until: 0, lastWall: Date.now(),
   }
@@ -117,6 +118,7 @@ export async function loadAppLock() {
   appLockFailure.value = false
   appPinEnabled.value = false
   appPinLegacy.value = false
+  appPinLength.value = 6
   current = undefined
   if (!id) {
     appLocked.value = false
@@ -136,7 +138,9 @@ export async function loadAppLock() {
     if (!valid(record)) throw new Error('pin.corrupt')
     current = record
     appPinEnabled.value = !!record && !('version' in record && record.version === 0)
-    appPinLegacy.value = !!record && (isLegacy(record) || isV2(record) && record.length === 4)
+    appPinLegacy.value = !!record && isLegacy(record)
+    appPinLength.value = record && isV2(record) ? record.length
+      : record && isLegacy(record) ? 4 : 6
     appLocked.value = appPinEnabled.value
     appLockReady.value = true
   } catch {
@@ -179,7 +183,9 @@ async function verify(pin: string, id: string, epoch: number, mutation: number) 
           lastWall: Math.max(now, previousRecord.lastWall ?? 0) }
       }
       const failures = Math.min(100, previousRecord.failures + 1)
-      const wait = failures < 3 ? 0 : Math.min(60000, 2000 * 2 ** Math.min(5, failures - 3))
+      // Five failed app-PIN attempts lock normal access for 30 minutes. The
+      // lock screen remains mounted so an emergency-delete PIN can still run.
+      const wait = failures < 5 ? 0 : 30 * 60 * 1000
       return { ...previousRecord, failures, until: Math.max(previousRecord.until, now + wait),
         lastWall: Math.max(now, previousRecord.lastWall ?? 0) }
     })
@@ -198,7 +204,7 @@ export async function unlockApp(pin: string) {
   if (isLegacy(verified)) {
     // Existing 4-digit PIN accepted until this successful unlock. Only then
     // replace its fast SHA-256 record; never rewrite failed legacy attempts.
-    const migrated = await makeRecord(pin, pin.length === 4)
+    const migrated = await makeRecord(pin)
     try {
       await writePin(id, previous => {
         if (!previous || !sameVerifier(previous, verified)) throw new Error('pin.changed')
@@ -208,24 +214,53 @@ export async function unlockApp(pin: string) {
     } catch (error) { storageFailure(error) }
     guard(id, epoch, mutation)
     current = migrated
-    appPinLegacy.value = migrated.length === 4
+    appPinLegacy.value = false
+    appPinLength.value = migrated.length
     changed('record')
   }
   appLocked.value = false
+}
+/** Prefix-safe comparison used only while configuring an emergency PIN.
+ * It never changes the normal PIN attempt counter. An emergency PIN shorter
+ * than the current app PIN is rejected because its prefix cannot be proven
+ * safely without retaining the normal PIN in memory.
+ */
+export async function conflictsWithAppPinPrefix(candidate: string) {
+  if (!appPinEnabled.value) return false
+  const id = scope(), epoch = loadEpoch, mutation = guardEpoch
+  guard(id, epoch, mutation)
+  if (candidate.length < appPinLength.value) return true
+  let saved: PinRecord | undefined
+  try { saved = await readPin(id) } catch (error) { storageFailure(error) }
+  guard(id, epoch, mutation)
+  if (!saved || !valid(saved) || ('version' in saved && saved.version === 0))
+    return storageFailure(new Error('pin.corrupt'))
+  const prefix = candidate.slice(0, appPinLength.value)
+  const entered = isLegacy(saved)
+    ? await legacyHash(prefix, saved.salt)
+    : await derive(prefix, saved.salt, saved.iterations)
+  guard(id, epoch, mutation)
+  return equal(entered, isLegacy(saved) ? saved.digest : saved.verifier)
 }
 export async function setAppPin(pin: string, oldPin?: string) {
   const id = scope(), epoch = loadEpoch, mutation = guardEpoch
   if (!id || !appLockReady.value || appLockFailure.value || appLocked.value)
     throw new Error('pin.locked')
-  if (!/^(?:\d{6}|\d{8})$/.test(pin)) throw new Error('pin.length')
+  if (!/^\d{4,8}$/.test(pin)) throw new Error('pin.length')
   const old = current
   if (appPinEnabled.value) {
     if (!oldPin) throw new Error('pin.confirm_required')
     await verify(oldPin, id, epoch, mutation)
   }
-  if (await (await import('./local-delete-pin')).matchesLocalDeletePin(pin) ||
-    await (await import('./emergency')).matchesConfiguredEmergencyPin(pin))
+  const emergency = await import('./emergency')
+  if (await emergency.matchesConfiguredEmergencyPin(pin))
     throw new Error('localDelete.samePin')
+  // The sealed emergency PIN cannot reveal all of its prefixes without
+  // weakening it. A normal-PIN change therefore switches the shared lock
+  // screen to explicit neutral confirmation until the emergency PIN is next
+  // configured, preventing either code from being submitted too early.
+  if (await emergency.hasConfiguredEmergencyPin())
+    await emergency.markEmergencyManualEntry()
   const next = await makeRecord(pin)
   guard(id, epoch, mutation)
   try {
@@ -241,6 +276,7 @@ export async function setAppPin(pin: string, oldPin?: string) {
   current = next
   appPinEnabled.value = true
   appPinLegacy.value = false
+  appPinLength.value = next.length
   changed('record')
 }
 export async function removeAppPin(oldPin: string) {
@@ -263,6 +299,7 @@ export async function removeAppPin(oldPin: string) {
   current = { version: 0 }
   appPinEnabled.value = false
   appPinLegacy.value = false
+  appPinLength.value = 6
   appLocked.value = false
   changed('record')
 }

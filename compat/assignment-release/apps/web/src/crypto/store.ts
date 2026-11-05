@@ -66,10 +66,6 @@ export type CaptureReady = {
 }
 export const keyState = shallowRef<KeyState>({ enabled: false })
 export const candidateKit = ref('')
-export const planReview = shallowRef<Plan>()
-export const untrustedKeys = ref<{ publicId: string; fingerprint: string }[]>(
-  [],
-)
 let idleWall = 0,
   idleMono = 0,
   baseWall = 0,
@@ -99,8 +95,6 @@ export function hardLock(broadcast = true) {
   staged = undefined
   rotating = false
   linkRequest.value = undefined
-  planReview.value = undefined
-  untrustedKeys.value = []
   pinDigest = ''
   pinSalt = ''
   failures = 0
@@ -145,7 +139,31 @@ function still(id: string, generation: number) {
   if (id !== account.value?.id || generation !== lockGeneration.value)
     throw new Error('crypto.locked')
 }
-export async function loadProtection() {
+let loadingProtection: { owner: string; promise: Promise<void> } | undefined
+let protectionRefreshRequested = false
+export function loadProtection(): Promise<void> {
+  const expectedOwner = account.value?.id ?? ''
+  if (loadingProtection) {
+    // The bootstrap job starts before /me resolves and will continue with the
+    // resolved account. Do not start a second /keys + read-proof chain when
+    // the account watcher fires a moment later.
+    if (loadingProtection.owner && loadingProtection.owner !== expectedOwner)
+      protectionRefreshRequested = true
+    return loadingProtection.promise
+  }
+  const promise = performLoadProtection()
+  loadingProtection = { owner: expectedOwner, promise }
+  void promise.finally(() => {
+    if (loadingProtection?.promise === promise) {
+      loadingProtection = undefined
+      const refresh = protectionRefreshRequested
+      protectionRefreshRequested = false
+      if (refresh) void loadProtection()
+    }
+  }).catch(() => {})
+  return promise
+}
+async function performLoadProtection() {
   await loadIdentity()
   await restorePublicCaptureIdentity().catch(() => {})
   const id = account.value?.id ?? ''
@@ -162,10 +180,43 @@ export async function loadProtection() {
     protectionReady.value = true
     return
   }
+  const previous = await db.get<KeyState>(`keys:${id}`).catch(() => undefined)
+  let locallyOpened = false
+  // A trusted device must be able to restore its encrypted local library
+  // without waiting for Laravel/Colima. The cached document was verified
+  // before it was persisted; restoreClock keeps TTL fail-closed on rollback.
+  // Server read authorization is refreshed below before any remote bytes are
+  // accepted.
+  if (previous && id === account.value?.id) {
+    keyState.value = previous
+    protectionEnabled.value = previous.enabled
+    if (previous.enabled && previous.document && previous.bundle &&
+        appLockReady.value && !appLocked.value && !strongUnlocked.value) {
+      try {
+        const kit = await rememberedKit() || (await readAccountSecrets())?.photoKey
+        if (kit) {
+          const generation = lockGeneration.value
+          await cryptoCall('unlock', {
+            kit,
+            bundle: previous.bundle,
+            document: previous.document,
+          })
+          await openedOffline(id, generation)
+          trusted = true
+          autoAttempt.add(`${id}:${deviceId.value}`)
+          locallyOpened = true
+        }
+      } catch {
+        // The server reconciliation below remains the source of truth. A bad
+        // local kit never grants access and falls back to the normal gate.
+      }
+    }
+    protectionReady.value = true
+    changed()
+  }
   try {
     const value = await request<KeyState>('/keys')
     cryptoError.value = ''
-    const previous = await db.get<KeyState>(`keys:${id}`)
     if (
       previous?.enabled &&
       (!value.enabled ||
@@ -177,6 +228,10 @@ export async function loadProtection() {
     )
       throw new Error('crypto.rollback')
     if (id !== account.value?.id) return
+    if (locallyOpened && previous && canonical(previous) !== canonical(value)) {
+      hardLock(false)
+      locallyOpened = false
+    }
     keyState.value = value
     protectionEnabled.value = value.enabled
     await db.put(`keys:${id}`, value)
@@ -192,6 +247,13 @@ export async function loadProtection() {
   } finally {
     if (id === account.value?.id) protectionReady.value = true
     changed()
+  }
+  if (locallyOpened && id === account.value?.id && navigator.onLine) {
+    try { await opened(id, lockGeneration.value) }
+    catch {
+      // Keep the already verified local cache available. Remote reads remain
+      // fail-closed because no read token is installed after a failed proof.
+    }
   }
   const attempt = `${id}:${deviceId.value}`
   if (
@@ -436,9 +498,20 @@ export function touch() {
   if (idle) clearTimeout(idle)
   idle = setTimeout(() => hardLock(), 300000)
 }
-export async function prepareContext(
+const preparingContexts = new Map<string, Promise<CaptureReady>>()
+export function prepareContext(assignmentId?: string): Promise<CaptureReady> {
+  const key = `${scope()}:${assignmentId ?? 'personal'}`
+  const running = preparingContexts.get(key)
+  if (running) return running
+  const promise = performPrepareContext(assignmentId)
+  preparingContexts.set(key, promise)
+  void promise.finally(() => {
+    if (preparingContexts.get(key) === promise) preparingContexts.delete(key)
+  }).catch(() => {})
+  return promise
+}
+async function performPrepareContext(
   assignmentId?: string,
-  approve = false,
 ): Promise<CaptureReady> {
   const id = scope()
   await ready()
@@ -458,14 +531,7 @@ export async function prepareContext(
         context.draft.membershipHash !== history.membershipHash))
   )
     throw new Error('crypto.rollback')
-  if (
-    approve &&
-    (!planReview.value ||
-      canonical(planReview.value) !== canonical(context.draft))
-  )
-    throw new Error('crypto.review_changed')
-  const unknown: { publicId: string; fingerprint: string }[] = [],
-    pins: {
+  const pins: {
       id: string
       value: {
         fingerprint: string
@@ -498,7 +564,6 @@ export async function prepareContext(
           saved.documentHash !== hash(canonical(member.key))))
     )
       throw new Error('crypto.key_changed')
-    if (!saved) unknown.push({ publicId: member.publicId, fingerprint })
     pins.push({
       id: `pin:${id}:${member.accountId}`,
       value: {
@@ -508,15 +573,6 @@ export async function prepareContext(
         documentHash: hash(canonical(member.key)),
       },
     })
-  }
-  untrustedKeys.value = unknown
-  const needsPolicyApproval =
-    !context.plan &&
-    context.draft.ownerId === id &&
-    context.draft.assignmentId !== null
-  if ((unknown.length || needsPolicyApproval) && !approve) {
-    planReview.value = context.draft
-    throw new Error('crypto.review_required')
   }
   let plan = context.plan
   if (!plan) {
@@ -556,8 +612,6 @@ export async function prepareContext(
     }
   await rememberClock(id, anchor.issuedAt)
   await db.put(`context:${id}:${assignmentId ?? 'personal'}`, readyContext)
-  planReview.value = undefined
-  untrustedKeys.value = []
   return readyContext
 }
 

@@ -105,7 +105,9 @@ export function contributorRules(): ContributorRules {
     galleryAllowed: true,
     thumbnailsOnly: false,
     sharingAllowed: true,
-    participantsOnly: true,
+    // A new assignment never silently restricts the owner's own sharing.
+    // Participant-only delivery is an explicit opt-in rule.
+    participantsOnly: false,
     useAssignmentPhotoId: true,
   }
 }
@@ -124,19 +126,23 @@ export function newPreset(name: string, source?: Profile): Preset {
       size: rules.resolution === 'fixed' ? 'custom' : 'maximum',
       date: rules.keepDate,
       time: rules.keepDate,
-      retention: rules.retentionSeconds ?? 1209600,
+      // Zero is the presentation-level "use the plan maximum" choice. The
+      // concrete finite value below is still fixed at capture and the signed
+      // server plan may shorten it; zero is never sent as "do not upload".
+      retention: source ? rules.retentionSeconds ?? 1209600 : 0,
       customHours: 48,
     },
   }
 }
 export function newTask(name: string): Task {
+  const now = Date.now()
   return {
     id: crypto.randomUUID(),
     name,
     instructions: '',
-    startsAt: null,
+    startsAt: now,
     finishesAt: null,
-    targetCount: 30,
+    targetCount: 1,
     shots: [],
     presetId: '',
     preset: null,
@@ -145,7 +151,7 @@ export function newTask(name: string): Task {
     rules: contributorRules(),
     completed: false,
     revision: 0,
-    createdAt: Date.now(),
+    createdAt: now,
   }
 }
 export function lines(value: string): string[] {
@@ -162,7 +168,9 @@ export function retentionSeconds(preset?: Preset | null): number {
   return preset
     ? preset.options.retention === 'custom'
       ? Math.round(preset.options.customHours * 3600)
-      : preset.options.retention
+      : preset.options.retention === 0
+        ? 0
+        : preset.options.retention || preset.rules.retentionSeconds || 1209600
     : 1209600
 }
 export function sessionFor(task?: Task, preset?: Preset | null): Session {
@@ -321,7 +329,7 @@ export function validateTask(
   if (
     !Number.isInteger(item.targetCount) ||
     item.targetCount < 1 ||
-    item.targetCount > 999 ||
+    item.targetCount > 9999 ||
     item.shots.length > 100 ||
     item.shots.some((value) => value.length > 80)
   )

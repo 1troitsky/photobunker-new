@@ -4,8 +4,19 @@ const DATABASE = 'photobunker-photo-browser-cache-v1'
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
 type Cipher = { key: CryptoKey; iv: Uint8Array; data: ArrayBuffer }
+export type BrowserFolder = {
+  id: string
+  name: string
+  photoIds: string[]
+  createdAt: number
+  /** Empty/undefined means Browser root. Assignment nodes use assignment:<id>. */
+  parentId?: string
+}
+export type BrowserOrganizer = { version: 1; folders: BrowserFolder[] }
 const name = (owner: string, device: string, id: string) =>
   'browser:' + owner + ':' + device + ':' + id
+const organizerName = (owner: string, device: string) =>
+  'organizer:' + owner + ':' + device
 const serial = new Map<string, Promise<unknown>>()
 async function ownerLock<T>(owner: string, job: () => Promise<T>): Promise<T> {
   const run = async (): Promise<T> => {
@@ -91,14 +102,47 @@ export async function saveBrowser(owner: string, device: string, snapshot: Brows
 export async function eraseBrowser(owner: string, device: string, id: string) {
   await ownerLock(owner, () => transact('readwrite', s => s.delete(name(owner, device, id))))
 }
+export async function readOrganizer(owner: string, device: string): Promise<BrowserOrganizer> {
+  const scope = organizerName(owner, device)
+  const row = await transact<Cipher | undefined>('readonly', s => s.get(scope))
+  if (!row) return { version: 1, folders: [] }
+  if (row.key.extractable || row.iv.length !== 12) throw new Error('browser.storage_invalid')
+  const clear = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: row.iv as Uint8Array<ArrayBuffer>,
+    additionalData: encoder.encode(scope) }, row.key, row.data)
+  const value = JSON.parse(decoder.decode(clear)) as BrowserOrganizer
+  if (value.version !== 1 || !Array.isArray(value.folders) || value.folders.some(folder =>
+    !folder || typeof folder.id !== 'string' || typeof folder.name !== 'string' ||
+    !Array.isArray(folder.photoIds) || !folder.photoIds.every(id => typeof id === 'string') ||
+    (folder.parentId !== undefined && typeof folder.parentId !== 'string') ||
+    !Number.isSafeInteger(folder.createdAt))) throw new Error('browser.storage_invalid')
+  return value
+}
+export async function saveOrganizer(owner: string, device: string, value: BrowserOrganizer): Promise<void> {
+  if (value.version !== 1 || value.folders.length > 200) throw new Error('browser.storage_invalid')
+  return ownerLock(owner, async () => {
+    const scope = organizerName(owner, device)
+    const old = await transact<Cipher | undefined>('readonly', s => s.get(scope))
+    const key = old?.key ?? await crypto.subtle.generateKey(
+      { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'],
+    )
+    const iv = crypto.getRandomValues(new Uint8Array(12))
+    const clear = encoder.encode(JSON.stringify(value))
+    try {
+      const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv,
+        additionalData: encoder.encode(scope) }, key, clear)
+      await transact('readwrite', s => s.put({ key, iv, data } satisfies Cipher, scope))
+    } finally { clear.fill(0) }
+  })
+}
 export async function eraseBrowsersForAccount(owner: string, device?: string) {
   await ownerLock(owner, async () => {
   const db = await database()
-  const prefix = 'browser:' + owner + ':' + (device ? device + ':' : '')
+  const prefixes = ['browser:' + owner + ':' + (device ? device + ':' : ''),
+    'organizer:' + owner + ':' + (device ? device : '')]
   const keys = await new Promise<string[]>((resolve, reject) => {
     const tx = db.transaction('records', 'readonly')
     const r = tx.objectStore('records').getAllKeys()
-    tx.oncomplete = () => { db.close(); resolve(r.result.map(String).filter(key => key.startsWith(prefix))) }
+    tx.oncomplete = () => { db.close(); resolve(r.result.map(String).filter(key => prefixes.some(prefix => key.startsWith(prefix)))) }
     tx.onabort = () => { db.close(); reject(new Error('browser.storage_failed')) }
   })
   for (const key of keys) await transact('readwrite', s => s.delete(key))

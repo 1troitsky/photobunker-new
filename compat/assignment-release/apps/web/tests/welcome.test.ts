@@ -12,10 +12,10 @@ import { welcomeText } from '../src/welcome/text'
 const identity = {
   id: '11111111-2222-4333-8444-555555555555',
   publicId: 'pb_owner', fields: {
-    name: '', username: '', email: '', phone: '', links: '', about: '',
+    avatar: '', name: '', username: '', email: '', phone: '', links: '', about: '',
   },
   visibility: {
-    name: 'private', username: 'private', email: 'private',
+    avatar: 'private', name: 'private', username: 'private', email: 'private',
     phone: 'private', links: 'private', about: 'private',
   },
   revision: 0,
@@ -47,12 +47,12 @@ describe('R1-10 / guest Welcome', () => {
     expect(view.get('.welcome-create').attributes('href')).toContain('/profile/account?')
     expect(view.get('.welcome-create').attributes('href')).toContain('mode=create')
     expect(view.get('.welcome-recover').attributes('href')).toContain('mode=recover')
-    await view.get('.welcome-create').trigger('click')
+    await router.push(view.get('.welcome-create').attributes('href') ?? '')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/profile/account')
     expect(router.currentRoute.value.query.mode).toBe('create')
     await router.push('/welcome')
-    await view.get('.welcome-recover').trigger('click')
+    await router.push(view.get('.welcome-recover').attributes('href') ?? '')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/profile/account')
     expect(router.currentRoute.value.query.mode).toBe('recover')

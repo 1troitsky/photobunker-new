@@ -10,6 +10,9 @@ import {
   identityUnavailable,
   sessionState,
 } from '../src/identity/store'
+import { locale } from '../src/i18n'
+import { deletionBlocked } from '../src/app/local-delete-run'
+import { emergencyBlocked, emergencyChecked } from '../src/app/emergency-run'
 let wrapper: ReturnType<typeof mount> | undefined
 beforeEach(() => {
   localStorage.clear()
@@ -17,6 +20,10 @@ beforeEach(() => {
   identityReady.value = false
   identityUnavailable.value = false
   sessionState.value = 'initial'
+  locale.value = 'ru'
+  emergencyBlocked.value = false
+  emergencyChecked.value = true
+  deletionBlocked.value = false
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => new Response('{}', { status: 401 })),

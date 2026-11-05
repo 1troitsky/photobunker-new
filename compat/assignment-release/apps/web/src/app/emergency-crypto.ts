@@ -17,10 +17,12 @@ export type SealedEmergencyKey = {
   ciphertext: string
   publicKey: string
   keyId: string
+  pinLength?: 6 | 7 | 8 | 9 | 10
+  manualEntry?: boolean
 }
 const utf8=new TextEncoder()
 const bytes=(value:string)=>unb64(value)
-function isPin(value:string) { return /^(?:\d{6}|\d{8})$/.test(value) }
+function isPin(value:string) { return /^\d{6,10}$/.test(value) }
 async function encryptionKey(pin:string,salt:string,iterations:number) {
   if(!isPin(pin) || !Number.isSafeInteger(iterations) || iterations<100000 || iterations>600000)
     throw new Error('emergency.pin')
@@ -29,7 +31,7 @@ async function encryptionKey(pin:string,salt:string,iterations:number) {
     name:'PBKDF2',hash:'SHA-256',iterations,salt:bytes(salt)
   },base,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])
 }
-export async function generateEmergencyKey(pin:string,keyId:string):Promise<SealedEmergencyKey> {
+export async function generateEmergencyKey(pin:string,keyId:string,manualEntry=false):Promise<SealedEmergencyKey> {
   if(!isPin(pin))throw new Error('emergency.pin')
   const pair=await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},true,['sign','verify'])
   const publicKey=b64(await crypto.subtle.exportKey('spki',pair.publicKey))
@@ -45,14 +47,17 @@ export async function generateEmergencyKey(pin:string,keyId:string):Promise<Seal
     const ciphertext=b64(await crypto.subtle.encrypt({
       name:'AES-GCM',iv:bytes(iv),additionalData:utf8.encode('photobunker.emergency.v1:'+keyId+':'+publicKey)
     },key,pkcs8))
-    return {version:1,salt,iv,iterations,ciphertext,publicKey,keyId}
+    return {version:1,salt,iv,iterations,ciphertext,publicKey,keyId,
+      pinLength:pin.length as 6|7|8|9|10,manualEntry}
   }finally{pkcs8.fill(0)}
 }
 /** Import PRIVATE signing material only after PIN-derived AES-GCM opens it.
  * The CryptoKey exposed to the consumer is non-extractable and ephemeral.
  */
 export async function openEmergencyKey(pin:string,value:SealedEmergencyKey):Promise<CryptoKey> {
-  if(value.version!==1 || !isPin(pin) || !/^[a-f0-9-]{36}$/i.test(value.keyId) ||
+  if(value.version!==1 || !isPin(pin) ||
+     (value.pinLength!==undefined && (value.pinLength<6 || value.pinLength>10 || pin.length!==value.pinLength)) ||
+     !/^[a-f0-9-]{36}$/i.test(value.keyId) ||
      value.iterations<100000 || value.iterations>600000 ||
      bytes(value.salt).length!==16 || bytes(value.iv).length!==12 ||
      bytes(value.publicKey).length!==91)

@@ -3,6 +3,51 @@ import { locale } from '../i18n'
 
 // Source-language message IDs keep security copy together with its translation.
 const english: Record<string, string> = {
+  'Мой профиль': 'My profile',
+  'Настройки приложения': 'Application settings',
+  'Оформление, язык и экран при запуске': 'Appearance, language and launch screen',
+  'Уникальный @username: 3–15 символов, латинские буквы, цифры, дефис или подчёркивание. Начинается с буквы; поиск по нему общедоступен.': 'Your unique @username: 3–15 Latin letters, digits, hyphens or underscores. It must start with a letter and is publicly searchable.',
+  'Язык': 'Language',
+  'Конфиденциальность и безопасность': 'Privacy and security',
+  'Видимость профиля, PIN-коды и устройства': 'Profile visibility, PINs and devices',
+  'Кэш, облако, очереди и резервные копии': 'Cache, cloud, queues and backups',
+  'Лимиты плана и Web3-оплата': 'Plan limits and Web3 payment',
+  'Статус': 'Status',
+  'Подключение, отправка и процессы устройства': 'Connection, uploads and device processes',
+  'Оформление, запуск, язык и приватность': 'Appearance, launch, language and privacy',
+  'Оформление, запуск, язык, безопасность и тариф': 'Appearance, launch, language, security and plan',
+  'Тариф и оплата': 'Plan & payment',
+  'Текущий план, лимиты и способы оплаты': 'Current plan, limits and payment methods',
+  'PIN-коды, устройства и экстренное удаление': 'PINs, devices and emergency deletion',
+  'Фотографии, резервные копии и занятое место': 'Photos, backups and storage usage',
+  'Лимиты, резервные копии и Web3-оплата': 'Limits, backups and Web3 payment',
+  'Статус и очереди': 'Status & queues',
+  'Подключение, отправка и локальные процессы': 'Connection, uploads and local processes',
+  'Снимки уже сохранены и зашифрованы. Отправка продолжится автоматически.': 'Photos are already saved and encrypted. Uploading will continue automatically.',
+  'Фотография': 'Photo',
+  'Включён на этом устройстве': 'Enabled on this device',
+  'Необязательная блокировка приложения': 'Optional app lock',
+  'Экстренное удаление': 'Emergency deletion',
+  'PIN настроен': 'PIN configured',
+  'Настроить отдельный PIN': 'Set a separate PIN',
+  'Резервная копия и доступ на других устройствах': 'Backup and access on other devices',
+  'Все настройки безопасности': 'All security settings',
+  'Владелец задания': 'Assignment owner',
+  'Участник задания': 'Assignment participant',
+  'Участники получают доступ сразу после сохранения задания.': 'Participants receive access as soon as the assignment is saved.',
+  'ID фотографии': 'Photo ID',
+  'Задание': 'Assignment',
+  'Открыть задание': 'Open assignment',
+  'Вы': 'You',
+  'Профиль участника': 'Participant profile',
+  'Поделиться карточкой': 'Share card',
+  'Общая команда для заданий и съёмок': 'A shared team for assignments and shoots',
+  'Владелец команды': 'Team owner',
+  'Участник команды': 'Team participant',
+  'Изменения состава применяются сразу после сохранения.': 'Membership changes apply as soon as they are saved.',
+  'Изменить состав': 'Edit members',
+  'Участники получают доступ сразу после сохранения команды.': 'Participants receive access as soon as the team is saved.',
+  'Ключ аккаунта будет удалён с этого устройства. Чтобы снова открыть данные, понадобится сохранённый ключ.': 'Your account key will be removed from this device. You will need the saved key to open your data again.',
   'Сохранить': 'Save',
   'Отмена': 'Cancel',
   'Ключ аккаунта будет удалён с этого устройства. Чтобы снова открыть фотографии и сообщения, понадобится сохранённый ключ.': 'Your account key will be removed from this device. You will need your saved key to open your photos and messages again.',
@@ -33,13 +78,8 @@ const english: Record<string, string> = {
   "Всё равно выйти": "Sign out anyway",
   "Готовим съёмку…": "Getting the camera ready\u2026",
   "Не удалось подготовить съёмку. Проверьте соединение и повторите.": "Could not prepare the camera. Check your connection and retry.",
-  "Участник задания ещё не подключил фотографии. Попросите его открыть приложение.": "A participant has not connected their photos yet. Ask them to open the app.",
-  "Владелец задания должен подтвердить участников перед общей съёмкой.": "The assignment owner must confirm the participants before a shared shoot.",
-  "Подтвердите участников задания перед общей съёмкой.": "Confirm assignment participants before a shared shoot.",
-  "Проверить участников": "Review participants",
-  "Участники общей съёмки": "Shared shoot participants",
-  "Эти участники получат доступ к снимкам в соответствии с правами задания. Сверьте их перед подтверждением.": "These participants will receive access to photos according to assignment permissions. Verify them before confirming.",
-  "Подтвердить участников": "Confirm participants",
+  "Не удалось автоматически подготовить доступ к снимкам. Повторите после подключения к сети.": "Photo access could not be prepared automatically. Retry when you are online.",
+  "План съёмки ещё синхронизируется. Повторите через несколько секунд.": "The capture plan is still syncing. Retry in a few seconds.",
   "Не удалось загрузить данные хранилища. Проверьте соединение и повторите.": "Could not load storage details. Check your connection and retry.",
   "Укажите целое число дней от 30 до 360.": "Enter a whole number of days from 30 to 360.",
   "Срок автоудаления сохранён.": "Auto-delete period saved.",
@@ -86,6 +126,7 @@ const english: Record<string, string> = {
   'Не удалось выполнить действие. Проверьте соединение и повторите.': 'Could not complete the action. Check your connection and try again.',
   'Подключаем фотографии…': 'Connecting photos…',
   'Фотографии пока недоступны': 'Photos are unavailable',
+  'Не удалось открыть библиотеку': 'Could not open the library',
   'Этот аккаунт создан в прежней версии приложения. Подключите его единственный ключ один раз. Затем фотографии и переписка будут открываться автоматически.': 'This account was created in a previous version. Connect its single account key once. Photos and messages will then open automatically.',
   'Ввести ключ аккаунта': 'Enter account key',
   'Не удалось подключить фотографии. Проверьте соединение и повторите. Ваши данные сохранены.': 'Could not connect photos. Check your connection and retry. Your data is preserved.',
@@ -152,6 +193,7 @@ const english: Record<string, string> = {
   'Есть недоставленные изменения данных': 'Metadata changes await delivery',
   'Координаты ожидают доставки': 'Coordinates await delivery',
   'Обновить получателей': 'Update recipients',
+  'Не удалось автоматически обновить получателей. Приложение повторит отправку после восстановления соединения.': 'Recipients could not be updated automatically. The app will retry after the connection is restored.',
   'Подключить с открытого устройства': 'Link from an unlocked device',
   'Откройте «Защиту фотографий» на другом устройстве этого аккаунта. Введите ID запроса и сверьте полный отпечаток.':
     'Open Photo protection on another device of this account. Enter the request ID and compare the full fingerprint.',
@@ -218,12 +260,15 @@ const english: Record<string, string> = {
   'Слишком много запросов. Подождите немного и повторите. Вход в аккаунт сохранён.': 'Too many requests. Wait briefly and retry. Your account stays signed in.',
   'Состав или правила задания изменились. Подготовьте защиту заново.': 'Assignment members or rules changed. Prepare protection again.',
   'Сервер временно недоступен. Проверьте связь и повторите; ключи сохранены на устройстве.': 'The server is temporarily unavailable. Check your connection and retry; your keys remain on this device.',
+  'Не удалось обновить задания с сервера. Локальные задания и изменения сохранены на устройстве.': 'Assignments could not be refreshed from the server. Local assignments and changes remain saved on this device.',
+  'Не удалось удалить выбранное задание. Откройте «Статус» для подробностей и повторите.': 'The selected assignment could not be deleted. Open Status for details and retry.',
+  'Открыть статус': 'Open status',
 
 }
-// Never show an untranslated Russian source key in English. Static audit
-// checks q('literal') call sites against the complete English catalogue.
+// Missing catalogue entries must remain understandable instead of rendering a
+// broken placeholder. The static audit still reports untranslated call sites.
 export const q = (message: string): string =>
-  locale.value === 'ru' ? message : (english[message] ?? 'Translation unavailable')
+  locale.value === 'ru' ? message : (english[message] ?? message)
 export const roleLabel = (role: string) =>
   q(
     (
@@ -253,18 +298,14 @@ export function securityError(error: unknown): string {
   const messages: Record<string, string> = {
     'crypto.migrate_first':
       'Сначала перенесите этот снимок в разделе «Фотографии и резервная копия». Старый оригинал сохранён.',
-    'crypto.review_required':
-      'Сверьте состав участников, права и новые отпечатки ниже, затем подтвердите.',
-    'crypto.review_changed':
-      'Состав изменился во время проверки. Подготовьте камеру заново и повторите сверку.',
     'crypto.owner_must_prepare':
-      'Владелец задания должен обновить защиту участников.',
+      'План съёмки ещё синхронизируется. Приложение повторит подготовку автоматически.',
     'crypto.participants_not_ready':
-      'Все участники должны сначала включить защиту фотографий в своём Профиле.',
+      'Не удалось автоматически подготовить доступ к снимкам. Приложение повторит попытку после синхронизации.',
     'crypto.key_changed':
-      'Ключ участника изменился или сервер вернул устаревшие данные. Повторная сверка необходима; отправка остановлена.',
+      'Получены противоречивые данные ключа. Отправка безопасно приостановлена до автоматической синхронизации.',
     'crypto.rollback':
-      'Ключ участника изменился или сервер вернул устаревшие данные. Повторная сверка необходима; отправка остановлена.',
+      'Получены устаревшие данные ключа. Отправка безопасно приостановлена до автоматической синхронизации.',
     'crypto.invalid_pin': 'Неверный PIN. После пяти попыток потребуется PB4.',
     'crypto.strong_required': 'Разблокируйте фотографии ключом PB4.',
     'crypto.storage_failed':

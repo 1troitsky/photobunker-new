@@ -24,6 +24,7 @@ it('grants only a thumbnail before upload when the task limits viewing', () => {
   expect(pendingGrant(photo)).toMatchObject({ read: false, thumbnail: true, edit: false, shareExternal: false })
 })
 it('distinguishes internal references from external file export', () => {
+  taskGrants.value[0]!.rules.participantsOnly = true
   expect(pendingGrant(photo)).toMatchObject({ read: true, share: true, shareExternal: false })
   taskGrants.value[0]!.rules.participantsOnly = false
   expect(pendingGrant(photo).shareExternal).toBe(true)

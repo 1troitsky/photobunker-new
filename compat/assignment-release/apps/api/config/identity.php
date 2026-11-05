@@ -5,9 +5,18 @@ $configuredOrigins = array_map(
     explode(',', (string) env('IDENTITY_ORIGINS', '')),
 );
 $applicationOrigin = rtrim((string) env('APP_URL', ''), '/');
-$localOrigins = in_array((string) env('APP_ENV', 'production'), ['local', 'testing'], true)
-    ? ['http://localhost:8080', 'http://127.0.0.1:8080', 'http://photobunker.orb.local', 'https://photobunker.orb.local']
-    : [];
+$localOrigins = [];
+if (in_array((string) env('APP_ENV', 'production'), ['local', 'testing'], true)) {
+    $localScheme = parse_url($applicationOrigin, PHP_URL_SCHEME) ?: 'http';
+    $localPort = parse_url($applicationOrigin, PHP_URL_PORT);
+    $localPortSuffix = $localPort ? ':'.$localPort : '';
+    $localOrigins = [
+        $localScheme.'://localhost'.$localPortSuffix,
+        $localScheme.'://127.0.0.1'.$localPortSuffix,
+        'http://photobunker.orb.local',
+        'https://photobunker.orb.local',
+    ];
+}
 
 return [
     'enabled' => env('IDENTITY_ENABLED', true),

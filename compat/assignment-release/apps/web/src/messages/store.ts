@@ -35,6 +35,7 @@ import { summarizeReactions, isReactionKey, type ReactionKey, type ReactionRecor
 export type Peer = {
   username?: string | null
   publicId: string
+  userId?: string | null
   matrixUserId: string
   ready: boolean
   fields: { name?: string; username?: string }

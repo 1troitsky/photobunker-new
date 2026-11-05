@@ -3,7 +3,11 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import type { Photo } from '../src/local/photos'
 vi.mock('../src/identity/store', () => ({ account: ref<{id: string} | undefined>({id: 'synthetic-account'}) }))
-vi.mock('../src/crypto/store', () => ({ protectionEnabled: ref(false), protectionReady: ref(true), photoReadAllowed: () => true }))
+vi.mock('../src/app/lock', () => ({ appLockReady: ref(true), appLocked: ref(false) }))
+vi.mock('../src/crypto/store', () => ({
+  protectionEnabled: ref(false), protectionReady: ref(true),
+  strongUnlocked: ref(true), warmLocked: ref(false), photoReadAllowed: () => true,
+}))
 vi.mock('../src/workspace/api', () => ({ photoIndex: vi.fn() }))
 vi.mock('../src/crypto/photos', () => ({ index: vi.fn() }))
 vi.mock('../src/local/photos', () => ({ localPrototype: true, listPhotos: vi.fn(), deletePhoto: vi.fn(async () => {}), patchPhoto: vi.fn(async () => ({})) }))

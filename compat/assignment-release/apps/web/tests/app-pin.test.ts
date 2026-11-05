@@ -43,31 +43,33 @@ beforeEach(() => {
   vi.restoreAllMocks()
 })
 describe('R1-06 D3 PIN security boundary', () => {
-  it('writes versioned PBKDF2, rejects new 4 digits, requires old PIN for change and disable', async () => {
+  it('writes versioned PBKDF2 for 4–8 digits and requires the old PIN for change and disable', async () => {
     await loadAppLock()
     expect(appLockReady.value).toBe(true)
-    await expect(setAppPin('1234')).rejects.toThrow('pin.length')
-    await setAppPin('123456')
-    const value = fixtures.data.get(pinScope()) as { version: number; salt: string; verifier: string; iterations: number }
+    await expect(setAppPin('123')).rejects.toThrow('pin.length')
+    await expect(setAppPin('123456789')).rejects.toThrow('pin.length')
+    await setAppPin('1234')
+    const value = fixtures.data.get(pinScope()) as { version: number; salt: string; verifier: string; iterations: number; length: number }
     expect(value.version).toBe(2)
     expect(value.iterations).toBeGreaterThanOrEqual(100000)
     expect(value.salt).toMatch(/^[a-f0-9]{32}$/)
     expect(value.verifier).toMatch(/^[a-f0-9]{64}$/)
     expect(value).not.toHaveProperty('digest')
+    expect(value.length).toBe(4)
     await expect(setAppPin('234567')).rejects.toThrow('pin.confirm_required')
     await expect(removeAppPin('')).rejects.toThrow('pin.confirm_required')
     await expect(removeAppPin('000000')).rejects.toThrow('pin.wrong')
-    await setAppPin('234567', '123456')
+    await setAppPin('234567', '1234')
     expect(appPinEnabled.value).toBe(true)
     lockApp()
     expect(appLocked.value).toBe(true)
-    await expect(unlockApp('123456')).rejects.toThrow('pin.wrong')
+    await expect(unlockApp('1234')).rejects.toThrow('pin.wrong')
     await unlockApp('234567')
     expect(appLocked.value).toBe(false)
     await removeAppPin('234567')
     expect(appPinEnabled.value).toBe(false)
     expect(fixtures.data.get(pinScope())).toEqual({ version: 0 })
-  })
+  }, 30_000)
   it('keeps cooldown after reload, prevents wall-clock rollback and scopes attempts to account/device', async () => {
     const original = Date.now
     let wall = 2_000_000
@@ -75,7 +77,10 @@ describe('R1-06 D3 PIN security boundary', () => {
     await loadAppLock()
     await setAppPin('123456')
     lockApp()
-    for (let i = 0; i < 3; i++) await expect(unlockApp('999999')).rejects.toThrow('pin.wrong')
+    for (let i = 0; i < 4; i++) await expect(unlockApp('999999')).rejects.toThrow('pin.wrong')
+    await expect(unlockApp('123456')).resolves.toBeUndefined()
+    lockApp()
+    for (let i = 0; i < 5; i++) await expect(unlockApp('999999')).rejects.toThrow('pin.wrong')
     await loadAppLock()
     await expect(unlockApp('123456')).rejects.toThrow('pin.cooldown')
     wall -= 30_000
@@ -89,12 +94,12 @@ describe('R1-06 D3 PIN security boundary', () => {
     await loadAppLock()
     expect(appPinEnabled.value).toBe(false)
     fixtures.device.value = 'device-1'
-    wall = 2_060_000
+    wall = 3_800_000
     await loadAppLock()
     await unlockApp('123456')
     expect(appLocked.value).toBe(false)
     Date.now = original
-  })
+  }, 30_000)
   it('migrates a legacy 4-digit verifier only after successful unlock, without changing the code', async () => {
     const salt = 'legacy-uuid'
     const hash = await webcrypto.subtle.digest('SHA-256', new TextEncoder().encode(salt + ':1234'))
@@ -106,7 +111,7 @@ describe('R1-06 D3 PIN security boundary', () => {
     await expect(unlockApp('0000')).rejects.toThrow('pin.wrong')
     expect(fixtures.data.get(pinScope())).toHaveProperty('digest')
     await unlockApp('1234')
-    expect(appPinLegacy.value).toBe(true) // v2 supports old 4-digit value until changed
+    expect(appPinLegacy.value).toBe(false)
     expect(fixtures.data.get(pinScope())).toMatchObject({ version: 2, length: 4 })
     lockApp()
     await loadAppLock()

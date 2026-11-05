@@ -17,8 +17,8 @@ export type PhotoMetadata = { locationEditedAt?: number; date?: string; time?: s
 
 export function defaultRules(): ProfileRules {
   return { retentionSeconds: 1209600, resolution: 'maximum', width: 1600, height: 1200, aspect: 'native', aspectWidth: 4, aspectHeight: 3,
-    fit: 'crop', quality: 0.94, metadata: 'selected', keepDate: true, keepCamera: false,
-    location: 'off', accuracy: 20, locationWindow: 15, descriptionRequired: false, descriptionEditable: true,
+    fit: 'crop', quality: 0.70, metadata: 'selected', keepDate: true, keepCamera: false,
+    location: 'optional', accuracy: 20, locationWindow: 15, descriptionRequired: false, descriptionEditable: true,
     categoryRequired: false, categories: [], shotList: [], idPrefix: '' }
 }
 export function aspectRatio(rules: ProfileRules): number | undefined {

@@ -17,6 +17,7 @@ function worker() {
   const fetch = vi.fn().mockRejectedValue(new TypeError('Offline'))
   const self = {
     location: { origin: 'https://photobunker.orb.local' },
+    skipWaiting: vi.fn().mockResolvedValue(undefined),
     clients: { claim: vi.fn().mockResolvedValue(undefined) },
     addEventListener: (name: string, listener: typeof listeners[string]) => { listeners[name] = listener },
   }
@@ -57,6 +58,7 @@ describe('public app shell cache boundary', () => {
     listeners.install!(event)
     await event.waitUntil.mock.calls[0]![0]
     expect(cache.addAll).toHaveBeenCalledWith(['/', '/assets/app-abc.js', '/icons/icon.svg'])
+    expect(self.skipWaiting).toHaveBeenCalledOnce()
 
     event.waitUntil.mockClear()
     listeners.activate!(event)
@@ -74,7 +76,7 @@ describe('public app shell cache boundary', () => {
 
   it('opens profile pages offline without caching account or profile data', async () => {
     const { request, shell } = worker()
-    for (const path of ['/profiles', '/profiles/new', '/profiles/81fc0686-b3b5-4d98-b59e-09ab1920398b', '/camera/presets', '/camera/presets/new', '/camera/presets/81fc0686-b3b5-4d98-b59e-09ab1920398b', '/profile', '/profile/account', '/profile/edit', '/profile/contacts', '/profile/security', '/messages', '/assignments', '/assignments/new', '/assignments/81fc0686-b3b5-4d98-b59e-09ab1920398b/edit', '/gallery/81fc0686-b3b5-4d98-b59e-09ab1920398b/edit', '/profile/teams', '/join']) {
+    for (const path of ['/profiles', '/profiles/new', '/profiles/81fc0686-b3b5-4d98-b59e-09ab1920398b', '/camera/presets', '/camera/presets/new', '/camera/presets/81fc0686-b3b5-4d98-b59e-09ab1920398b', '/profile', '/profile/account', '/profile/edit', '/profile/contacts', '/profile/security', '/messages', '/assignments', '/assignments/new', '/assignments/81fc0686-b3b5-4d98-b59e-09ab1920398b/edit', '/gallery/81fc0686-b3b5-4d98-b59e-09ab1920398b/edit', '/photo-cards/81fc0686-b3b5-4d98-b59e-09ab1920398b', '/profile/teams', '/join']) {
       expect(await request(path, 'navigate').mock.calls[0]![0]).toBe(shell)
     }
   })

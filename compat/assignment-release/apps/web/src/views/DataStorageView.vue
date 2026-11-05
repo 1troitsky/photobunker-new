@@ -41,7 +41,7 @@ onMounted(() => void refresh())
 </script>
 <template>
   <section class="native-screen settings-screen">
-    <ScreenHeader :title="q('Данные и хранилище')" back="/settings" />
+    <ScreenHeader :title="q('Данные и хранилище')" back="/profile" />
     <div class="screen-body native-form">
       <section class="form-card">
         <h2>{{ q('Хранилище') }}</h2>

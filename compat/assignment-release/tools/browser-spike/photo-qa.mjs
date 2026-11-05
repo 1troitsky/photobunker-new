@@ -14,7 +14,7 @@ export async function unlockPhotos(f,assignment){
 
 // Legacy protocol drills prepare explicit assignment plans; normal camera QA does
 // not invoke this helper and must prepare itself from its public user interface.
-export async function preparePhotos(f){await f.page.evaluate(async()=>{const s=await import('/src/crypto/store.ts');const assignment=new URL(location.href).searchParams.get('assignment')||undefined;try{await s.prepareContext(assignment)}catch(e){if(e.message!=='crypto.review_required')throw new Error('capture_prepare_failed');await s.prepareContext(assignment,true)}})}
+export async function preparePhotos(f){await f.page.evaluate(async()=>{const s=await import('/src/crypto/store.ts');const assignment=new URL(location.href).searchParams.get('assignment')||undefined;await s.prepareContext(assignment)})}
 
 export async function capture(f){await f.page.locator('a.nav-item[href="/camera"]').click();await button(f.page,'Попробовать без камеры').click();await button(f.page,'Снять фото').click();await expect.poll(()=>f.page.evaluate(async()=>{const p=await import('/src/crypto/photos.ts');return(await p.jobs()).length}),{timeout:30000}).toBeGreaterThan(0)}
 export async function jobs(f){return f.page.evaluate(async()=>{const p=await import('/src/crypto/photos.ts');return(await p.jobs()).map(j=>({id:j.id,received:j.received,epoch:j.submission.epoch,expiresAt:j.expiresAt,pending:!!j.objects.original.pending,hash:j.objects.original.packet.statement.ciphertextHash,encryptionEpoch:j.objects.original.packet.statement.descriptor.encryption_epoch,recipients:j.objects.original.packet.envelopes.map(e=>e.accountId)}))})}

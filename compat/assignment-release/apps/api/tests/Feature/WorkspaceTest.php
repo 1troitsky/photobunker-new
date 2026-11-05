@@ -274,7 +274,7 @@ final class WorkspaceTest extends TestCase
         $this->assertDatabaseHas('photo_name_codes', ['photo_id' => $photoId, 'code' => $code]);
     }
 
-    public function test_team_acceptance_does_not_grant_assignment_or_photo_access_and_actor_binding_is_enforced(): void
+    public function test_team_membership_is_immediate_but_does_not_grant_assignment_or_photo_access(): void
     {
         $owner = $this->fixture();
         $member = $this->fixture();
@@ -282,9 +282,7 @@ final class WorkspaceTest extends TestCase
         $this->contact($owner, $member);
         $id = (string) Str::uuid();
         $team = $this->actor($owner)->putJson('/api/v1/identity/workspace/team/'.$id, ['revision' => 0, 'name' => 'Synthetic team', 'participants' => [$this->participant($member)]])->assertOk()->json();
-        $this->actor($member)->getJson('/api/v1/identity/workspace')->assertOk()->assertJsonCount(0, 'teams')->assertJsonCount(1, 'invitations');
-        $this->accept($member, $team);
-        $this->getJson('/api/v1/identity/workspace')->assertOk()->assertJsonCount(1, 'teams');
+        $this->actor($member)->getJson('/api/v1/identity/workspace')->assertOk()->assertJsonCount(1, 'teams')->assertJsonCount(0, 'invitations');
         $task = $this->saveTask($owner, $this->task());
         $photo = $this->upload($owner, $task)->assertOk()->json('photo');
         $this->actor($member)->getJson('/api/v1/identity/workspace/task/'.$task['id'])->assertNotFound();
@@ -310,15 +308,13 @@ final class WorkspaceTest extends TestCase
         ])->assertOk()->assertJsonPath('description', 'A private description')->json();
 
         $this->actor($outsider)->getJson($url)->assertNotFound();
-        $this->actor($member)->getJson($url)->assertNotFound();
-        $this->accept($member, $team);
         $this->actor($member)->getJson($url)->assertOk()->assertJsonPath('description', 'A private description');
         $this->putJson($url, [...$team, 'description' => 'Not allowed'])->assertNotFound();
 
         $current = $this->actor($owner)->getJson($url)->assertOk()->json();
         $updated = $this->putJson($url, [
             ...$current, 'description' => 'Updated description',
-        ])->assertOk()->assertJsonPath('revision', 3)
+        ])->assertOk()->assertJsonPath('revision', 2)
             ->assertJsonPath('description', 'Updated description')->json();
         $this->getJson($url)->assertOk()->assertJsonPath('description', 'Updated description');
         $this->putJson($url, [...$updated, 'description' => str_repeat('x', 1001)])
@@ -357,24 +353,28 @@ final class WorkspaceTest extends TestCase
         $this->actor($drop)->getJson('/api/v1/identity/workspace/photos')->assertOk()->assertJsonCount(0, 'receipts');
     }
 
-    public function test_invitation_expiry_decline_block_and_reentry_do_not_implicitly_grant_access(): void
+    public function test_direct_membership_removal_block_and_reentry_enforce_access(): void
     {
         $owner = $this->fixture();
         $person = $this->fixture();
         $this->contact($owner, $person);
         $task = $this->saveTask($owner, $this->task([$this->participant($person)]));
         $member = DB::table('workspace_members')->where('record_id', $task['id'])->first();
-        DB::table('workspace_members')->where('id', $member->id)->update(['expires_at' => Retention::milliseconds() - 1]);
-        $this->actor($person)->patchJson('/api/v1/identity/workspace/invitations/'.$member->id, ['accept' => true])->assertGone();
-        $this->patchJson('/api/v1/identity/workspace/invitations/'.$member->id, ['accept' => false])->assertOk();
-        $this->getJson('/api/v1/identity/workspace/task/'.$task['id'])->assertNotFound();
+        $this->assertSame('accepted', $member->state);
+        $this->actor($person)->getJson('/api/v1/identity/workspace/task/'.$task['id'])->assertOk();
         $current = $this->actor($owner)->getJson('/api/v1/identity/workspace/task/'.$task['id'])->json();
-        $fresh = $this->putJson('/api/v1/identity/workspace/task/'.$task['id'], $current)->assertOk()->json();
-        $invite = DB::table('workspace_members')->where('record_id', $task['id'])->first();
-        $this->assertNotSame($member->id, $invite->id);
+        $withoutMember = $this->putJson('/api/v1/identity/workspace/task/'.$task['id'], [...$current, 'participants' => []])->assertOk()->json();
+        $this->actor($person)->getJson('/api/v1/identity/workspace/task/'.$task['id'])->assertNotFound();
+        $this->actor($owner)->putJson('/api/v1/identity/workspace/task/'.$task['id'], [...$withoutMember, 'participants' => [$this->participant($person)]])->assertOk();
+        $restored = DB::table('workspace_members')->where('record_id', $task['id'])->first();
+        $this->assertSame($member->id, $restored->id);
+        $this->assertSame('accepted', $restored->state);
+        $this->actor($person)->getJson('/api/v1/identity/workspace/task/'.$task['id'])->assertOk();
+        $current = $this->actor($owner)->getJson('/api/v1/identity/workspace/task/'.$task['id'])->json();
+        $withoutMember = $this->putJson('/api/v1/identity/workspace/task/'.$task['id'], [...$current, 'participants' => []])->assertOk()->json();
         DB::table('identity_blocks')->insert(['account_id' => $owner['id'], 'blocked_id' => $person['id'], 'created_at' => now()]);
-        $this->actor($person)->patchJson('/api/v1/identity/workspace/invitations/'.$invite->id, ['accept' => true])->assertForbidden();
-        $this->patchJson('/api/v1/identity/workspace/invitations/'.$invite->id, ['accept' => false])->assertOk();
+        $this->actor($owner)->putJson('/api/v1/identity/workspace/task/'.$task['id'], [...$withoutMember, 'participants' => [$this->participant($person)]])->assertUnprocessable();
+        $this->actor($person)->getJson('/api/v1/identity/workspace/task/'.$task['id'])->assertNotFound();
     }
 
     public function test_revision_immutable_original_expiry_and_cleanup_are_enforced(): void

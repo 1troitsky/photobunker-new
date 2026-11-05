@@ -7,6 +7,7 @@ import { clone, type Participant } from '../studio/model'
 import { account, type Person } from '../identity/store'
 import { identityRequest } from '../identity/api'
 import { a } from '../identity/text'
+import { inAppId, personLabel } from '../identity/display'
 import { avatarColor, initials } from '../messages/presentation'
 import { w } from '../workspace/text'
 import { s } from '../studio/text'
@@ -41,11 +42,11 @@ const availableContacts = computed(() => contacts.value.filter(person =>
   person.publicId.toLowerCase() === draft.value.id.toLowerCase(),
 ))
 function contactName(person: Person) {
-  return person.fields.name || (person.username ? '@' + person.username : person.fields.username || person.publicId)
+  return personLabel(person)
 }
 function chooseContact(person: Person) {
   draft.value.id = person.publicId
-  draft.value.name = person.fields.name || person.fields.username || person.username || ''
+  draft.value.name = contactName(person)
   error.value = ''
 }
 async function loadContacts() {
@@ -73,14 +74,15 @@ watch(
   },
 )
 function save() {
+  const selected = contacts.value.find(person => person.publicId === draft.value.id)
+  if (index.value < 0 && !selected) {
+    error.value = a('chooseContact')
+    return
+  }
   const item = {
     ...draft.value,
-    id: draft.value.id.trim(),
-    name: draft.value.name.trim(),
-  }
-  if (item.id.length < 3 || item.id.length > 120 || /\s/.test(item.id)) {
-    error.value = s('required')
-    return
+    id: draft.value.id,
+    name: (selected ? contactName(selected) : draft.value.name).trim(),
   }
   if (
     props.modelValue.some(
@@ -105,7 +107,7 @@ function save() {
       ><span
         ><strong>{{
           ownerPublicId && ownerPublicId !== account?.publicId
-            ? ownerPublicId
+            ? inAppId(ownerPublicId)
             : s('you')
         }}</strong
         ><small>{{ s('owner') }}</small></span
@@ -122,12 +124,12 @@ function save() {
           (item.name || item.id).slice(0, 1).toUpperCase()
         }}</span
         ><span
-          ><strong>{{ item.name || item.id }}</strong
+          ><strong>{{ item.name || inAppId(item.id) }}</strong
           ><small
             >{{ s(item.role)
             }}<template v-if="account && item.state">
               · {{ w(item.state) }}</template
-            ><template v-if="item.name"> · {{ item.id }}</template></small
+            ><template v-if="item.name"> · {{ inAppId(item.id) }}</template></small
           ></span
         ><AppIcon name="chevron" /></button
       ><button
@@ -163,7 +165,7 @@ function save() {
     @close="open = false"
     ><form class="native-form" @submit.prevent.stop="save">
       <div v-if="account && index < 0" class="participant-contact-picker">
-        <span class="field-hint">{{ a('contacts') }}</span>
+        <strong>{{ a('chooseContact') }}</strong>
         <p v-if="contactsBusy" class="field-hint" role="status">{{ a('contacts') }}…</p>
         <button
           v-for="person in availableContacts"
@@ -174,29 +176,20 @@ function save() {
           @click="chooseContact(person)"
         >
           <span :class="['chat-avatar', avatarColor(person.publicId)]">{{ initials(contactName(person)) }}</span>
-          <span class="participant-contact-copy"><strong>{{ contactName(person) }}</strong><small v-if="contactName(person) !== person.publicId">{{ person.publicId }}</small></span>
+          <span class="participant-contact-copy"><strong>{{ contactName(person) }}</strong><small>{{ inAppId(person.publicId, person.userId) }}</small></span>
           <AppIcon :name="draft.id === person.publicId ? 'check' : 'chevron'" />
         </button>
-        <p v-if="!contactsBusy && !contactsFailed && !availableContacts.length" class="field-hint">{{ a('emptyContacts') }}</p>
+        <div v-if="!contactsBusy && !contactsFailed && !availableContacts.length" class="participant-contact-empty">
+          <p class="field-hint">{{ a('addContactFirst') }}</p>
+          <RouterLink to="/people" class="secondary-button">{{ a('contacts') }}</RouterLink>
+        </div>
         <p v-if="contactsFailed" class="form-error" role="alert">{{ a('failed') }}</p>
       </div>
+      <div v-else-if="index >= 0" class="participant-selected-contact">
+        <span class="person-avatar">{{ (draft.name || draft.id).slice(0, 1).toUpperCase() }}</span>
+        <strong>{{ draft.name || a('contacts') }}</strong>
+      </div>
       <label
-        >{{ s('participantId')
-        }}<input
-          v-model="draft.id"
-          required
-          minlength="3"
-          maxlength="120"
-          autocapitalize="off"
-          spellcheck="false"
-          :aria-label="s('participantId')" /></label
-      ><label
-        >{{ s('participantName')
-        }}<input
-          v-model="draft.name"
-          maxlength="80"
-          :placeholder="s('optional')" /></label
-      ><label
         >{{ s('role')
         }}<select :aria-label="s('role')" v-model="draft.role">
           <option

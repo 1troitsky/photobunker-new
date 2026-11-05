@@ -43,7 +43,7 @@ export function bindIdentity(id: string) {
   for (const [controller, request] of requests)
     if (request.owner && request.owner !== id) controller.abort()
 }
-export async function identityRequest<T>(
+async function performIdentityRequest<T>(
   path: string,
   method = 'GET',
   body?: unknown,
@@ -94,7 +94,9 @@ export async function identityRequest<T>(
         response.status === 401 &&
         binding === expectedAccount &&
         expectedAccount &&
-        !['/challenges', '/sessions', '/me'].includes(path)
+        !['/challenges', '/sessions', '/me'].includes(path) &&
+        !path.startsWith('/secure/') &&
+        !path.startsWith('/workspace/photos')
       )
         window.dispatchEvent(new Event('photobunker-identity-expired'))
       const payload = await response.json().catch(() => ({}))
@@ -123,4 +125,29 @@ export async function identityRequest<T>(
     if (typeof window !== 'undefined')
       window.removeEventListener('pagehide', cancel)
   }
+}
+
+// Views and background services often ask for the same immutable snapshot in
+// the same render turn. Share only concurrent JSON GETs; mutations, blobs and
+// later ACL checks always reach the server independently.
+const sharedReads = new Map<string, Promise<unknown>>()
+export function identityRequest<T>(
+  path: string,
+  method = 'GET',
+  body?: unknown,
+  accountBinding?: string,
+  format: 'json' | 'blob' = 'json',
+): Promise<T> {
+  if (method !== 'GET' || body !== undefined || format !== 'json')
+    return performIdentityRequest<T>(path, method, body, accountBinding, format)
+  const binding = accountBinding ?? expectedAccount
+  const key = `${binding}:${readGeneration}:${path}`
+  const running = sharedReads.get(key)
+  if (running) return running as Promise<T>
+  const request = performIdentityRequest<T>(path, method, body, accountBinding, format)
+  sharedReads.set(key, request)
+  void request.finally(() => {
+    if (sharedReads.get(key) === request) sharedReads.delete(key)
+  }).catch(() => {})
+  return request
 }

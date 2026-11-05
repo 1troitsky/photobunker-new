@@ -19,6 +19,8 @@
              Override both sources, so dotenv cannot select the working DB. -->
         <server name="APP_ENV" value="testing" force="true"/>
         <server name="APP_DEBUG" value="false" force="true"/>
+        <server name="APP_URL" value="http://localhost:8080" force="true"/>
+        <server name="IDENTITY_ORIGINS" value="" force="true"/>
         <server name="LOG_CHANNEL" value="null" force="true"/>
         <server name="DB_CONNECTION" value="sqlite" force="true"/>
         <server name="DB_DATABASE" value=":memory:" force="true"/>
@@ -28,6 +30,8 @@
         <server name="SESSION_DRIVER" value="array" force="true"/>
         <env name="APP_ENV" value="testing" force="true"/>
         <env name="APP_DEBUG" value="false" force="true"/>
+        <env name="APP_URL" value="http://localhost:8080" force="true"/>
+        <env name="IDENTITY_ORIGINS" value="" force="true"/>
         <env name="LOG_CHANNEL" value="null" force="true"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>

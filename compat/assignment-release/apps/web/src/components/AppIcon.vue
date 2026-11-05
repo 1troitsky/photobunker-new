@@ -5,6 +5,7 @@ defineProps<{
     | 'video'
     | 'mic'
     | 'send'
+    | 'sync'
     | 'profiles'
     | 'camera'
     | 'gallery'
@@ -76,6 +77,10 @@ defineProps<{
       <path d="M8 8h8M8 12h5M8 16h8" />
     </template>
     <path v-else-if="name === 'send'" d="m3 3 18 9-18 9 4-9-4-9Zm4 9h14" />
+    <template v-else-if="name === 'sync'">
+      <path d="M20 7v5h-5M4 17v-5h5" />
+      <path d="M6.1 9a7 7 0 0 1 11.7-2L20 9M4 15l2.2 2a7 7 0 0 0 11.7-2" />
+    </template>
     <path v-else-if="name === 'plus'" d="M12 5v14M5 12h14" />
     <template v-else-if="name === 'more'">
       <circle cx="12" cy="5" r="1" fill="currentColor" />

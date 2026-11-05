@@ -2,7 +2,7 @@ import { locale } from '../i18n'
 const copy = {
   retention: ['Хранение фотографий', 'Photo retention'], duration: ['Удалять после съёмки через', 'Delete after capture in'],
   hour: ['1 час', '1 hour'], day: ['1 день', '1 day'], week: ['7 дней', '7 days'], fortnight: ['14 дней', '14 days'],
-  retentionHint: ['Отправка начинается автоматически. Срок считается от съёмки и не продлевается при потере сети. Максимум в этой версии — 14 дней.', 'Upload starts automatically. Retention begins at capture and does not restart after a network interruption. This version allows up to 14 days.'],
+  retentionHint: ['Отправка начинается автоматически. Срок считается от съёмки, не продлевается при потере сети и ограничивается текущим тарифом.', 'Upload starts automatically. Retention begins at capture, does not restart after a network interruption, and is capped by the current plan.'],
   clockHint: ['Без сети время удаления — оценка. Срок на сервере может быть короче из-за последней проверки времени. Закрытое приложение очистит местные файлы при следующем открытии.', 'Offline deletion time is an estimate. The server deadline can be earlier because of the last time check. A closed app clears local files when next opened.'],
   expires: ['Удаление', 'Deletion'], noExpiry: ['Срок не задан — прежний снимок', 'No deadline — earlier photo'],
   shorten: ['Сократить срок хранения', 'Shorten retention'], deadline: ['Новая дата удаления', 'New deletion date'], apply: ['Применить срок', 'Apply deadline'],

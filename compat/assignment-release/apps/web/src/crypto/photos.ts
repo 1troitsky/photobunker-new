@@ -127,6 +127,22 @@ export type Remote = {
 const key = (id: string) => `job:${account.value?.id}:${id}`
 const memo = new Map<string, Remote>()
 
+async function mapLimit<T, R>(
+  values: T[],
+  limit: number,
+  worker: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const result = new Array<R>(values.length)
+  let next = 0
+  await Promise.all(Array.from({ length: Math.min(limit, values.length) }, async () => {
+    while (next < values.length) {
+      const index = next++
+      result[index] = await worker(values[index]!)
+    }
+  }))
+  return result
+}
+
 function guard(id: string, generation: number) {
   if (
     !checkLifetime() ||
@@ -335,7 +351,7 @@ async function trustedOwner(packet: Packet) {
       pin.fingerprint !== hash(unb64(owner.authorityKey, 32)) ||
       pin.rootKey !== packet.plan.authority.rootKey
     )
-      throw new Error('Сначала проверьте ключ владельца в защите задания.')
+      throw new Error('crypto.key_changed')
   }
   return hash(unb64(owner.authorityKey, 32))
 }
@@ -373,13 +389,12 @@ export async function index() {
     ).removeFor({ id: deleted, accountId: id, encrypted: true } as Photo)
   }
   memo.clear()
-  const photos: Photo[] = []
-  for (const remote of response.photos) {
+  const remotePhotos = await mapLimit(response.photos, 4, async remote => {
     await verifyRemote(remote)
     memo.set(remote.id, remote)
     const own = (kind: string) =>
       remote.objects[kind]?.packet.envelopes.some((e) => e.accountId === id)
-    if (!own('metadata') && !own('restricted-metadata')) continue
+    if (!own('metadata') && !own('restricted-metadata')) return undefined
     if (!own('metadata'))
       remote.access = {
         ...remote.access,
@@ -388,17 +403,18 @@ export async function index() {
         share: false,
         shareExternal: false,
       }
-    photos.push(await metadata(remote))
-  }
-  for (const pending of await jobs()) {
+    return metadata(remote)
+  })
+  const photos: Photo[] = remotePhotos.filter((photo): photo is Photo => !!photo)
+  const pendingPhotos = await mapLimit<Job, Photo | undefined>(await jobs(), 4, async pending => {
     if (pending.deleted || pending.received || pending.expiresAt <= now())
-      continue
+      return undefined
     const object = pending.objects.metadata?.packet.envelopes.some(
       (e) => e.accountId === id,
     )
       ? pending.objects.metadata
       : pending.objects['restricted-metadata']
-    if (!object?.packet.envelopes.some((e) => e.accountId === id)) continue
+    if (!object?.packet.envelopes.some((e) => e.accountId === id)) return undefined
     const photo = JSON.parse(
       await (
         await decrypt(object, {
@@ -408,20 +424,20 @@ export async function index() {
       ).text(),
     ) as Photo
     const name = pending.needsName ? await localName(pending.id).catch(() => undefined) : undefined
-    photos.push({
+    return {
       ...photo,
       ...(name ? { shortId: name, title: photo.title || name } : {}),
       encrypted: true,
       uploadRequested: !!pending.submission.retentionSeconds,
       remoteRevision: undefined,
-    })
-  }
-  const receipts = []
-  for (const remote of response.receipts) {
+    } satisfies Photo
+  })
+  photos.push(...pendingPhotos.filter((photo): photo is Photo => !!photo))
+  const receipts = await mapLimit(response.receipts, 4, async remote => {
     await verifyRemote(remote)
     memo.set(remote.id, remote)
     const comments = await feedback(remote)
-    receipts.push({
+    return {
       id: remote.id,
       assignmentId: remote.assignmentId ?? '',
       expiresAt: remote.expiresAt,
@@ -429,8 +445,8 @@ export async function index() {
       reviewState: remote.reviewState,
       reviewRevision: remote.reviewRevision,
       ...comments,
-    })
-  }
+    }
+  })
   guard(id, generation)
   return { photos, receipts, deleted: response.deleted }
 }
@@ -643,25 +659,22 @@ async function metadata(remote: Remote): Promise<Photo> {
     capture = remote.captureMetadata
   if (!capture || capture.packet.statement.descriptor.kind !== kind)
     throw new Error('crypto.capture_metadata_missing')
+  const captureText = remoteObject(
+    { ...remote, objects: { ...remote.objects, [kind]: capture } }, kind,
+  ).then(blob => blob.text())
+  const sameMetadata = remote.objects[kind]?.packet.statement.descriptor.object_id ===
+    capture.packet.statement.descriptor.object_id
+  const latestText = sameMetadata ? captureText : remoteObject(remote, kind).then(blob => blob.text())
+  const gpsText = remote.access.read && remote.objects.gps
+    ? remoteObject(remote, 'gps').then(blob => blob.text()) : Promise.resolve<string | undefined>(undefined)
+  const [capturedValue, latestValue, gpsValue, comments] = await Promise.all([
+    captureText, latestText, gpsText, feedback(remote),
+  ])
   const captured = decodePhoto(
-    JSON.parse(
-      await (
-        await remoteObject(
-          { ...remote, objects: { ...remote.objects, [kind]: capture } },
-          kind,
-        )
-      ).text(),
-    ),
+    JSON.parse(capturedValue),
     remote.id,
   )
-  const latest =
-    remote.objects[kind]?.packet.statement.descriptor.object_id ===
-    capture.packet.statement.descriptor.object_id
-      ? captured
-      : decodePhoto(
-          JSON.parse(await (await remoteObject(remote, kind)).text()),
-          remote.id,
-        )
+  const latest = sameMetadata ? captured : decodePhoto(JSON.parse(latestValue), remote.id)
   const resolved = isNameId(remote.nameId) ? remote.nameId : undefined
   const value: Photo = {
     ...captured,
@@ -684,8 +697,8 @@ async function metadata(remote: Remote): Promise<Photo> {
       locationEditedAt: m.locationEditedAt,
     }
   }
-  if (remote.access.read && remote.objects.gps) {
-    const gps = JSON.parse(await (await remoteObject(remote, 'gps')).text())
+  if (gpsValue) {
+    const gps = JSON.parse(gpsValue)
     if (!metadata?.locationEditedAt && metadata?.location?.source !== 'manual')
       metadata = {
         ...metadata,
@@ -711,7 +724,6 @@ async function metadata(remote: Remote): Promise<Photo> {
       ...value.captureContext,
       author: { kind: 'account', publicId: remote.captureKey.record.publicId },
     }
-  const comments = await feedback(remote)
   guard(id, generation)
   return {
     ...value,

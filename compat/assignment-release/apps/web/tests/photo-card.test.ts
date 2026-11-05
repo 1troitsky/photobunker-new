@@ -31,10 +31,11 @@ function photo(overrides: Partial<Photo> = {}): Photo {
   }
 }
 describe('R1-03A / private Photo Card', () => {
-  it('has a stable private route by UUID, separate from gallery photo and editor', () => {
+  it('has a stable card route by UUID, separate from the private gallery photo and editor', () => {
     const id = photo().id
     const router = createAppRouter(createMemoryHistory())
     expect(router.resolve(photoCardPath(id)).name).toBe('photo-card')
+    expect(photoCardPath(id)).toBe('/photo-cards/' + id)
     expect(router.resolve('/gallery/' + id).name).toBe('photo')
     expect(router.resolve('/gallery/' + id + '/edit').name).toBe('photo-editor')
     expect(profileReturnTo(photoCardPath(id))).toBe(photoCardPath(id))

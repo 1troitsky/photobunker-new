@@ -75,6 +75,8 @@ services:
 
   api:
     <<: *api
+    environment:
+      PHP_CLI_SERVER_WORKERS: ${API_WORKERS:-4}
     healthcheck:
       test: [CMD, php, -r, "exit(@file_get_contents('http://127.0.0.1:8000/api/v1/ready') === false ? 1 : 0);"]
       interval: 5s

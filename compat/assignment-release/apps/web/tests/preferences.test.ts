@@ -10,7 +10,7 @@ describe('application preferences', () => {
     setTheme('light'); setStartup('last'); rememberSection('/gallery/81fc0686-b3b5-4d98-b59e-09ab1920398b')
     expect(document.documentElement.dataset.theme).toBe('light')
     initializePreferences()()
-    expect(theme.value).toBe('light'); expect(launchPath()).toBe('/gallery')
+    expect(theme.value).toBe('light'); expect(launchPath()).toBe('/browser')
     expect(localStorage.getItem('photobunker.app-preferences.v1')).not.toContain('81fc0686')
   })
 

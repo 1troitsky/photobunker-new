@@ -1,5 +1,5 @@
 import { watch } from 'vue'
-import { account, loadIdentity } from '../identity/store'
+import { account } from '../identity/store'
 import { loadStudio } from '../studio/store'
 import { refreshLibrary } from '../local/library'
 import { deliver } from './photos'
@@ -33,13 +33,11 @@ export function startWorkspace() {
   const wake = () => {
     void refresh()
   }
-  const timer = setInterval(wake, 15000)
+  const timer = setInterval(wake, 60000)
   window.addEventListener('photobunker-outbox', wake)
   window.addEventListener('online', wake)
   window.addEventListener('focus', wake)
   document.addEventListener('visibilitychange', wake)
-  void loadIdentity()
-  wake()
   return () => {
     stopped = true
     stop()

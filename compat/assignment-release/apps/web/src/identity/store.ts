@@ -13,6 +13,7 @@ import {
   type DeviceCredential,
 } from './keys'
 export type ProfileField =
+  | 'avatar'
   | 'name'
   | 'username'
   | 'email'
@@ -22,6 +23,7 @@ export type ProfileField =
 export type Account = {
   id: string
   publicId: string
+  userId?: string | null
   rootKey?: string
   username?: string | null
   fields: Record<ProfileField, string>
@@ -32,6 +34,7 @@ export type Account = {
 type Session = { account: Account; deviceId: string; expiresAt: number | null }
 export type Person = {
   publicId: string
+  userId?: string | null
   username?: string | null
   fields: Partial<Record<ProfileField, string>>
   self: boolean
@@ -144,13 +147,26 @@ function scheduleRetry() {
   cancelRetry()
   retryTimer = setTimeout(() => {
     retryTimer = undefined
-    if (!signingOut.value && (sessionState.value === 'unavailable' || sessionState.value === 'offline'))
+    if (!signingOut.value && (
+      sessionState.value === 'unavailable' ||
+      sessionState.value === 'offline' ||
+      sessionState.value === 'authenticated' && identityUnavailable.value
+    ))
       void loadIdentity(true)
   }, Math.min(2000 * 2 ** index, 12000))
 }
 async function markTemporaryFailure(epoch: number) {
   if (epoch !== generation) return
   identityUnavailable.value = true
+  // A temporary transport failure is not evidence that an already proven
+  // account session has ended. Keep the usable shell and retry in the
+  // background; protected requests still fail closed on their own.
+  if (hasConfirmedIdentity()) {
+    sessionState.value = 'authenticated'
+    identityReady.value = true
+    scheduleRetry()
+    return
+  }
   try {
     const device = await knownDevice()
     if (epoch !== generation) return

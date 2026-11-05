@@ -7,6 +7,7 @@ const copy = {
     'After permission is granted, PhotoBunker checks your location while the app is open. Coordinates remain private and are used for photos only under the selected preset or assignment rules.',
   ],
   enable: ['Разрешить геолокацию', 'Allow location'],
+  retry: ['Повторить запрос', 'Try location again'],
   disable: ['Отключить GPS', 'Turn off GPS'],
   permission: ['Чтобы добавить координаты, включите геолокацию по нажатию. Без неё съёмка доступна.', 'Allow location with a tap to add coordinates. You can still take photos without it.'],
   denied: ['Геолокация недоступна или отклонена. Проверьте разрешение в браузере; съёмка работает без координат.', 'Location is unavailable or denied. Check browser permissions; photos still work without coordinates.'],

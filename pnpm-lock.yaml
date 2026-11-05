@@ -11,6 +11,9 @@ importers:
       '@eslint/js':
         specifier: 10.0.1
         version: 10.0.1(eslint@10.13.0)
+      '@playwright/mcp':
+        specifier: 0.0.41
+        version: 0.0.41
       '@playwright/test':
         specifier: 1.56.1
         version: 1.56.1
@@ -871,6 +874,11 @@ packages:
     engines: {node: ^22.20 || ^24.12 || >=25}
     cpu: [x64]
     os: [linux]
+
+  '@playwright/mcp@0.0.41':
+    resolution: {integrity: sha512-johVxuGGtT5DeFMLnNw5pq+oEjNCHNckNOkh8xipnReHoRPuUDp5jpalXcz2p6vKEA6E98q3+Hyt0RXo1gwoJg==}
+    engines: {node: '>=18'}
+    hasBin: true
 
   '@playwright/test@1.56.1':
     resolution: {integrity: sha512-vSMYtL/zOcFpvJCW71Q/OEGQb7KYBPAdKh35WNSkaZA75JlAO8ED8UN6GUNTm3drWomcbcqRPFqQbLae8yBTdg==}
@@ -2104,8 +2112,18 @@ packages:
       typescript:
         optional: true
 
+  playwright-core@1.56.0-alpha-2025-10-01:
+    resolution: {integrity: sha512-/n6Wa2cksUAj+thJhZpR1PvnK0E3WHhNBMTxr1G6XgdhhvUdX7y4Y6aU9FaJPa5S0P8tcX3jyBXLCYIv/pYlJA==}
+    engines: {node: '>=18'}
+    hasBin: true
+
   playwright-core@1.56.1:
     resolution: {integrity: sha512-hutraynyn31F+Bifme+Ps9Vq59hKuUCz7H1kDOcBs+2oGguKkWTU50bBWrtz34OUWmIwpBTWDxaRPXrIXkgvmQ==}
+    engines: {node: '>=18'}
+    hasBin: true
+
+  playwright@1.56.0-alpha-2025-10-01:
+    resolution: {integrity: sha512-fB26N0+NZyITpUIKBlJjA3CoFqBfNlhns/6urmK50nY6DgaHptCfKSJJLDhd37nsjQJ1ysV4n6WXSL8ifaEK6g==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -3590,6 +3608,11 @@ snapshots:
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
 
+  '@playwright/mcp@0.0.41':
+    dependencies:
+      playwright: 1.56.0-alpha-2025-10-01
+      playwright-core: 1.56.0-alpha-2025-10-01
+
   '@playwright/test@1.56.1':
     dependencies:
       playwright: 1.56.1
@@ -4938,7 +4961,15 @@ snapshots:
     optionalDependencies:
       typescript: 5.9.3
 
+  playwright-core@1.56.0-alpha-2025-10-01: {}
+
   playwright-core@1.56.1: {}
+
+  playwright@1.56.0-alpha-2025-10-01:
+    dependencies:
+      playwright-core: 1.56.0-alpha-2025-10-01
+    optionalDependencies:
+      fsevents: 2.3.2
 
   playwright@1.56.1:
     dependencies:

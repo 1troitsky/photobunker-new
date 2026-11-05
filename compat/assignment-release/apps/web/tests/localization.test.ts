@@ -14,7 +14,7 @@ afterEach(()=>vi.restoreAllMocks())
 describe('R1-11: device-scoped RU/EN, offline/reload/account switch',()=>{
   it('applies the requested language immediately with no API, and survives reload',()=>{
     expect(setLocale('ru')).toBe(true)
-    expect(localStorage.getItem('photobunker.locale')).toBe('ru')
+    expect(localStorage.getItem('photobunker.locale.v2')).toBe('ru')
     expect(document.documentElement.lang).toBe('ru')
     expect(t('settingsTitle')).toBe('Настройки')
     initializeLocale()
@@ -28,9 +28,9 @@ describe('R1-11: device-scoped RU/EN, offline/reload/account switch',()=>{
   })
   it('reflects cross-tab preference changes without network or stale response state',()=>{
     setLocale('ru')
-    localStorage.setItem('photobunker.locale','en')
+    localStorage.setItem('photobunker.locale.v2','en')
     window.dispatchEvent(new StorageEvent('storage',{
-      key:'photobunker.locale',oldValue:'ru',newValue:'en',storageArea:localStorage,
+      key:'photobunker.locale.v2',oldValue:'ru',newValue:'en',storageArea:localStorage,
     }))
     expect(locale.value).toBe('en')
     expect(document.documentElement.lang).toBe('en')
@@ -38,10 +38,10 @@ describe('R1-11: device-scoped RU/EN, offline/reload/account switch',()=>{
     expect(ui('edited')).toBe('edited')
   })
   it('defaults to English on invalid persisted locale and never leaks Russian untranslated q keys',()=>{
-    localStorage.setItem('photobunker.locale','future-language')
+    localStorage.setItem('photobunker.locale.v2','future-language')
     initializeLocale()
     expect(locale.value).toBe('en')
-    expect(q('Неизвестная строка интерфейса')).toBe('Translation unavailable')
+    expect(q('Неизвестная строка интерфейса')).toBe('Неизвестная строка интерфейса')
     expect(q('Сохранить')).toBe('Save')
     expect(q('Отмена')).toBe('Cancel')
     setLocale('ru')

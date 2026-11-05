@@ -51,6 +51,7 @@ if (!apiExists) {
   const settings = {
     APP_NAME: 'PhotoBunker', APP_ENV: 'local', APP_KEY: `base64:${randomBytes(32).toString('base64')}`,
     APP_DEBUG: 'false', APP_URL: `http://localhost:${appPort}`, APP_LOCALE: 'ru', APP_FALLBACK_LOCALE: 'en',
+    IDENTITY_ORIGINS: `http://127.0.0.1:${appPort}`,
     DB_CONNECTION: 'pgsql', DB_HOST: 'postgres', DB_PORT: '5432', DB_DATABASE: env.POSTGRES_DB,
     DB_USERNAME: env.POSTGRES_USER, DB_PASSWORD: env.POSTGRES_PASSWORD,
     QUEUE_CONNECTION: 'database', CACHE_STORE: 'database', SESSION_DRIVER: 'file', LOG_CHANNEL: 'stderr',

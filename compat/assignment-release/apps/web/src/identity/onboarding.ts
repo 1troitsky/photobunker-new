@@ -2,8 +2,6 @@ import { ref } from 'vue'
 import { account, deviceId } from './store'
 import { accountKey } from './vault'
 import { ensureAccountPhotos } from './setup'
-import { ensureNewAccountMessaging } from './messaging-setup'
-import { identityRequest } from './api'
 
 type Stage = 'idle' | 'pending' | 'ready' | 'error'
 export const onboarding = ref<{
@@ -17,9 +15,9 @@ const currentScope = () => account.value && deviceId.value ? `${account.value.id
 let running: { scope: string; promise: Promise<void> } | undefined
 
 /**
- * Deferred best-effort preparation. Nothing here grants photo read access or
- * marks Matrix as ready without its own cryptographic confirmation.
- * Each operation is independently retryable on returning to Profile / online.
+ * Deferred best-effort photo preparation. Messaging/Matrix is deliberately
+ * not provisioned as part of account creation: it is outside the product
+ * baseline and must never slow down the camera and photo library.
  */
 export function startOnboarding(): Promise<void> {
   const scope = currentScope()
@@ -42,25 +40,12 @@ export function startOnboarding(): Promise<void> {
     if (!current()) return
     onboarding.value = { ...onboarding.value, key: key ? 'ready' : 'missing' }
     if (!key) return
-    const tasks: Promise<void>[] = []
     if (onboarding.value.photos !== 'ready') {
       update('photos', 'pending')
-      tasks.push(ensureAccountPhotos()
+      await ensureAccountPhotos()
         .then(() => update('photos', 'ready'))
-        .catch(() => update('photos', 'error')))
+        .catch(() => update('photos', 'error'))
     }
-    if (onboarding.value.messaging !== 'ready') {
-      update('messaging', 'pending')
-      const owner = account.value!.id
-      tasks.push(identityRequest('/matrix/provision', 'POST', undefined, owner)
-        .then(() => {
-          if (!current()) return
-          return ensureNewAccountMessaging()
-        })
-        .then(() => { if (current()) update('messaging', 'ready') })
-        .catch(() => update('messaging', 'error')))
-    }
-    await Promise.all(tasks)
   })().finally(() => { if (running?.scope === scope) running = undefined })
   running = { scope, promise }
   return promise

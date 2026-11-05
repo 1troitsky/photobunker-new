@@ -1,13 +1,14 @@
 import { ref } from 'vue'
 import { account,deviceId,hasConfirmedIdentity } from '../identity/store'
 import { identityRequest } from '../identity/api'
-import { appLocked,appLockReady,appPinEnabled,confirmAppPinForLocalDelete,matchesAppPinForLocalDelete } from './lock'
-import { matchesLocalDeletePin,provePB1Locally } from './local-delete-pin'
+import { appLocked,appLockReady,appPinLength,conflictsWithAppPinPrefix } from './lock'
 import { generateEmergencyKey,openEmergencyKey,matchesEmergencyPin as matchesSealed,signEmergencyIntent,type SealedEmergencyKey,type EmergencyIntent } from './emergency-crypto'
 import { readEmergency,changeEmergency,type EmergencyRow,type EmergencyPending } from './emergency-store'
 
 export const emergencyReady=ref(false)
 export const emergencyActive=ref(false)
+export const emergencyPinLength=ref(0)
+export const emergencyManualEntry=ref(false)
 export const emergencyFailure=ref('')
 export const emergencyBusy=ref(false)
 const uuid=()=>crypto.randomUUID()
@@ -120,7 +121,17 @@ async function reconcilePending(s:ReturnType<typeof scope>,generation:number) {
 }
 export function clearEmergencyView() {
   epoch++
-  emergencyReady.value=false;emergencyActive.value=false;emergencyFailure.value=''
+  emergencyReady.value=false;emergencyActive.value=false;emergencyPinLength.value=0;emergencyManualEntry.value=false;emergencyFailure.value=''
+}
+export async function loadLockedEmergencyPinLength() {
+  const s=scope()
+  if(!s.owner||!s.device){emergencyPinLength.value=0;emergencyManualEntry.value=false;return}
+  try{
+    const row=good(await readEmergency(s.owner,s.device),s)
+    emergencyPinLength.value=row?.confirmed?.sealed.pinLength??0
+    emergencyManualEntry.value=!!row?.confirmed &&
+      (row.confirmed.sealed.manualEntry === true || row.confirmed.sealed.pinLength === undefined)
+  }catch{emergencyPinLength.value=0;emergencyManualEntry.value=false}
 }
 export async function loadEmergencyRegistration() {
   const generation=++epoch,s=scope()
@@ -132,6 +143,9 @@ export async function loadEmergencyRegistration() {
     // Server controls readiness; a locally confirmed record alone is NOT proof.
     emergencyActive.value=!!(remote.active&&row?.confirmed&&
       row.confirmed.keyId===remote.keyId&&row.confirmed.revision===remote.revision)
+    emergencyPinLength.value=emergencyActive.value ? row?.confirmed?.sealed.pinLength??0 : 0
+    emergencyManualEntry.value=!!emergencyActive.value &&
+      (row?.confirmed?.sealed.manualEntry === true || row?.confirmed?.sealed.pinLength === undefined)
     emergencyReady.value=true
     if(remote.active&&!emergencyActive.value)emergencyFailure.value='emergency.unavailable'
   }catch(error){
@@ -145,19 +159,9 @@ async function exclusive<T>(s:ReturnType<typeof scope>,run:()=>Promise<T>):Promi
   if(!navigator.locks?.request)throw new Error('emergency.storage')
   return navigator.locks.request('photobunker-emergency:'+s.owner+':'+s.device,run)
 }
-async function proveSettings(s:ReturnType<typeof scope>,generation:number,pb1:string,appPin:string) {
-  assertScope(s,generation)
-  if(appPinEnabled.value){
-    if(!appPin)throw new Error('emergency.appPin')
-    await confirmAppPinForLocalDelete(appPin)
-  }
-  assertScope(s,generation)
-  await provePB1Locally(pb1,account.value?.rootKey??'')
-  assertScope(s,generation)
-}
-export async function configureEmergencyPin(next:string,repeat:string,pb1:string,appPin:string,oldPin='') {
+export async function configureEmergencyPin(next:string,repeat:string,oldPin='') {
   const s=scope(),generation=epoch
-  if(next!==repeat||!/^(?:\d{6}|\d{8})$/.test(next))throw new Error('emergency.pin')
+  if(next!==repeat||!/^\d{6,10}$/.test(next))throw new Error('emergency.pin')
   assertScope(s,generation)
   emergencyBusy.value=true
   try {await exclusive(s,async()=>{
@@ -168,22 +172,22 @@ export async function configureEmergencyPin(next:string,repeat:string,pb1:string
       if(!oldPin)throw new Error('emergency.oldPin')
       await openWithThrottle(s,generation,oldPin,row.confirmed.sealed)
     }
-    await proveSettings(s,generation,pb1,appPin)
-    if(await matchesAppPinForLocalDelete(next) || await matchesLocalDeletePin(next))
+    const prefixConflict=await conflictsWithAppPinPrefix(next)
+    if(prefixConflict && next.length === appPinLength.value)
       throw new Error('emergency.samePin')
     assertScope(s,generation)
     if(row && row.revision!==remote.revision)throw new Error('emergency.conflict')
     const keyId=uuid(),operationId=uuid()
-    const sealed=await generateEmergencyKey(next,keyId)
+    const sealed=await generateEmergencyKey(next,keyId,prefixConflict)
     assertScope(s,generation)
     await mutate(s,{action:'register',keyId,operationId,expectedRevision:remote.revision,sealed},remote.revision)
     // A durable local commit PRECEDES any remote mutation.
     await reconcilePending(s,generation)
     assertScope(s,generation)
-    emergencyActive.value=true;emergencyReady.value=true;emergencyFailure.value=''
+    emergencyActive.value=true;emergencyPinLength.value=next.length;emergencyManualEntry.value=prefixConflict;emergencyReady.value=true;emergencyFailure.value=''
   })}finally{emergencyBusy.value=false}
 }
-export async function disableEmergencyPin(oldPin:string,pb1:string,appPin:string) {
+export async function disableEmergencyPin(oldPin:string) {
   const s=scope(),generation=epoch
   assertScope(s,generation)
   emergencyBusy.value=true
@@ -192,14 +196,13 @@ export async function disableEmergencyPin(oldPin:string,pb1:string,appPin:string
     const current=row?.confirmed
     if(!current||row?.pending)throw new Error('emergency.unavailable')
     await openWithThrottle(s,generation,oldPin,current.sealed)
-    await proveSettings(s,generation,pb1,appPin)
     const remote=await onlineStatus(s,generation)
     if(!remote.active||remote.keyId!==current.keyId||remote.revision!==current.revision)
       throw new Error('emergency.conflict')
     await mutate(s,{action:'disable',keyId:current.keyId,revision:current.revision,operationId:uuid()},row!.revision)
     await reconcilePending(s,generation)
     assertScope(s,generation)
-    emergencyActive.value=false;emergencyReady.value=true;emergencyFailure.value=''
+    emergencyActive.value=false;emergencyPinLength.value=0;emergencyManualEntry.value=false;emergencyReady.value=true;emergencyFailure.value=''
   })}finally{emergencyBusy.value=false}
 }
 /** Comparison only; no authentication against the deletion key, no unlock.
@@ -215,6 +218,26 @@ export async function matchesConfiguredEmergencyPin(candidate:string) {
     assertScope(s,generation)
   }
   return false
+}
+export async function hasConfiguredEmergencyPin() {
+  const s=scope(),generation=epoch
+  if(!s.owner||!s.device||!globalThis.indexedDB)return false
+  const row=good(await readEmergency(s.owner,s.device),s)
+  assertScope(s,generation)
+  return !!(row?.confirmed||row?.pending?.action==='register')
+}
+export async function markEmergencyManualEntry() {
+  const s=scope()
+  if(!s.owner||!s.device)return
+  await changeEmergency(s.owner,s.device,row=>{
+    if(!row)return row
+    const mark=(sealed:SealedEmergencyKey):SealedEmergencyKey=>({...sealed,manualEntry:true})
+    return {...row,
+      confirmed:row.confirmed?{...row.confirmed,sealed:mark(row.confirmed.sealed)}:undefined,
+      pending:row.pending?.action==='register'
+        ? {...row.pending,sealed:mark(row.pending.sealed)} : row.pending}
+  })
+  emergencyManualEntry.value=true
 }
 /** R1-08A crypto primitive only. R1-08B alone will wire emergency trigger,
  * journal, offline delivery and local credential destruction.

@@ -44,7 +44,7 @@ final class IdentityController extends Controller
         $account = $this->accounts->current($request);
         $rules = ['accountId' => 'required|uuid', 'revision' => 'required|integer|min:1', 'fields' => 'required|array:'.implode(',', Accounts::FIELDS), 'visibility' => 'required|array:'.implode(',', Accounts::FIELDS)];
         foreach (Accounts::FIELDS as $field) {
-            $rules['fields.'.$field] = 'present|nullable|string|max:'.(in_array($field, ['links', 'about']) ? 1000 : 120);
+            $rules['fields.'.$field] = 'present|nullable|string|max:'.($field === 'avatar' ? 220000 : (in_array($field, ['links', 'about']) ? 1000 : 120));
             $rules['visibility.'.$field] = 'required|in:private,contacts,public';
         }
         $data = $request->validate($rules);
@@ -53,8 +53,10 @@ final class IdentityController extends Controller
             $value = trim($value ?? '');
         } unset($value);
         $username = strtolower(ltrim($data['fields']['username'], '@'));
-        abort_if($username !== '' && ! preg_match('/^[a-z][a-z0-9_-]{2,31}$/D', $username), 422);
+        abort_if($username !== '' && ! preg_match('/^[a-z][a-z0-9_-]{2,14}$/D', $username), 422);
         $data['fields']['username'] = $username;
+        $avatar = $data['fields']['avatar'];
+        abort_if($avatar !== '' && ! preg_match('/^data:image\/(?:webp|jpeg);base64,[A-Za-z0-9+\/=]+$/D', $avatar), 422);
         if ($username !== '') {
             $data['visibility']['username'] = 'public';
         }

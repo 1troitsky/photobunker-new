@@ -5,21 +5,19 @@ import { checkCapture } from './protocol'
 
 // A valid offline plan works immediately. Missing/expired plans are renewed here,
 // before the shutter becomes available, without navigating away from the camera.
-export async function cameraContext(assignmentId?: string, approve = false) {
+export async function cameraContext(assignmentId?: string) {
   const owner = account.value?.id
   if (!owner) throw new Error('crypto.account_required')
   let context
-  if (!approve) {
-    try { context = await cachedContext(assignmentId) } catch { /* Prepare below. */ }
-  }
+  try { context = await cachedContext(assignmentId) } catch { /* Prepare below. */ }
   if (!context) {
     await loadProtection()
     if (!protectionEnabled.value) await ensureAccountPhotos()
-    try { context = await prepareContext(assignmentId, approve) }
+    try { context = await prepareContext(assignmentId) }
     catch (error) {
       if (error instanceof Error && error.message === 'crypto.strong_required') {
         await ensureAccountPhotos()
-        context = await prepareContext(assignmentId, approve)
+        context = await prepareContext(assignmentId)
       } else throw error
     }
   }

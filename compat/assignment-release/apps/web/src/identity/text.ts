@@ -17,6 +17,16 @@ const copy = {
     'Проверьте заполненные поля. Изменения ещё не сохранены.',
     'Check the fields. Your changes have not been saved yet.',
   ],
+  invalidUsername: [
+    'Псевдоним должен содержать 3–15 латинских букв, цифр, дефисов или подчёркиваний и начинаться с буквы.',
+    'Username must be 3–15 Latin letters, digits, hyphens or underscores and start with a letter.',
+  ],
+  usernameTaken: [
+    'Этот @username уже занят. Выберите другой.',
+    'This @username is already taken. Choose another one.',
+  ],
+  savingProfile: ['Сохраняем изменения…', 'Saving changes…'],
+  profileSavedNow: ['Изменения сохранены', 'Changes saved'],
   saveUnavailable: [
     'Нет связи с сервером. Изменения остались в форме; попробуйте сохранить ещё раз.',
     'The server is unavailable. Changes remain in this form; try saving again.',
@@ -108,6 +118,10 @@ const copy = {
     'Account service unavailable',
   ],
   editProfile: ['Изменить анкету', 'Edit profile'],
+  avatar: ['Фото профиля', 'Profile photo'],
+  chooseAvatar: ['Выбрать фото', 'Choose photo'],
+  removeAvatar: ['Удалить фото', 'Remove photo'],
+  avatarInvalid: ['Не удалось обработать изображение. Выберите JPEG, PNG или WebP до 12 МБ.', 'Could not process this image. Choose a JPEG, PNG or WebP up to 12 MB.'],
   name: ['Имя', 'Name'],
   username: ['Псевдоним', 'Username'],
   email: ['Email', 'Email'],
@@ -150,6 +164,11 @@ const copy = {
   unblock: ['Разблокировать', 'Unblock'],
   remove: ['Удалить контакт', 'Remove contact'],
   emptyContacts: ['Контактов пока нет', 'No contacts yet'],
+  chooseContact: ['Выберите контакт', 'Choose a contact'],
+  addContactFirst: [
+    'Сначала добавьте пользователя в контакты, затем вернитесь к команде.',
+    'Add the person to Contacts first, then return to the team.',
+  ],
   self: ['Это вы', 'This is you'],
   matrixProvisioning: [
     'Подключаем сервис общения. Камера и аккаунт работают независимо от него.',

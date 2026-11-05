@@ -26,6 +26,14 @@ import { cleanupVersions } from './versions'
 export const localPresets = ref<Preset[]>([]),
   localTasks = ref<Task[]>([]),
   teams = ref<Team[]>([])
+function defaultStandardPreset(): Preset {
+  const preset = newPreset('Standard')
+  preset.id = 'standard-local'
+  preset.options.retention = 0
+  preset.rules.quality = .70
+  return preset
+}
+export const standardPreset = ref<Preset>(defaultStandardPreset())
 export const cachedTeamTasks = ref<TeamTaskSummary[]>([])
 export const pendingTeamIds = ref<string[]>([])
 export const teamSyncErrors = ref<string[]>([])
@@ -149,16 +157,23 @@ const changed = () => {
 }
 let channel: BroadcastChannel | undefined
 let loadingStudio: { owner: string; promise: Promise<void> } | undefined
-export async function loadStudio(): Promise<void> {
-  const owner = scope()
+let recentStudio: { owner: string; at: number } | undefined
+export async function loadStudio(force = false): Promise<void> {
+  let owner = scope()
   if (account.value) await restoreTeamsFromDevice(owner).catch(() => {})
   await loadIdentity()
+  owner = scope()
+  if (account.value) await restoreTeamsFromDevice(owner).catch(() => {})
   if (loadingStudio?.owner === owner) return loadingStudio.promise
+  if (!force && studioReady.value && !studioError.value &&
+      recentStudio?.owner === owner && Date.now() - recentStudio.at < 10_000) return
   const promise = loadStudioData()
   loadingStudio = { owner, promise }
-  void promise.finally(() => {
+  void promise.then(() => {
+    if (owner === scope() && !studioError.value) recentStudio = { owner, at: Date.now() }
+  }).finally(() => {
     if (loadingStudio?.promise === promise) loadingStudio = undefined
-  })
+  }).catch(() => {})
   return promise
 }
 async function loadStudioData() {
@@ -430,7 +445,36 @@ function persistSession() {
     /* Capture works; context may need selecting after reload. */
   }
 }
+function standardKey() { return `photobunker-standard-preset:${scope()}` }
+function readStandardPreset() {
+  standardPreset.value = defaultStandardPreset()
+  try {
+    const saved = JSON.parse(localStorage.getItem(standardKey()) ?? 'null') as Preset | null
+    if (saved && saved.id === 'standard-local' && !validatePreset(saved))
+      standardPreset.value = clone(saved)
+  } catch { /* Invalid or unavailable storage falls back to the audited default. */ }
+}
+export function saveStandardPreset(value: Preset): Preset {
+  if (validatePreset(value)) throw new Error('workspace.invalid_preset')
+  const saved = clone(value)
+  saved.id = 'standard-local'
+  saved.uiOnly = true
+  saved.originServer = false
+  saved.hidden = false
+  saved.archived = false
+  saved.revision = standardPreset.value.revision + 1
+  saved.version = standardPreset.value.version + 1
+  localStorage.setItem(standardKey(), JSON.stringify(saved))
+  standardPreset.value = saved
+  if (studioSession.value?.preset?.id === 'standard-local' && !studioSession.value.taskId) {
+    studioSession.value.preset = clone(saved)
+    persistSession()
+  }
+  changed()
+  return clone(saved)
+}
 function readSession() {
+  readStandardPreset()
   studioSession.value = null
   try {
     selectedCategory.value =
@@ -462,11 +506,11 @@ export function startStudio() {
   if ('BroadcastChannel' in window) {
     channel = new BroadcastChannel('photobunker-ui-workspace')
     channel.onmessage = () => {
-      void loadStudio()
+      void loadStudio(true)
     }
   }
   const focus = () => {
-    void loadStudio()
+    void loadStudio(true)
   }
   window.addEventListener('focus', focus)
   window.addEventListener('online', focus)

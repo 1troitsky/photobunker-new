@@ -201,7 +201,23 @@ export function renderEdits(
       1,
       shape.width * Math.min(output.width, output.height),
     )
-    if (shape.kind === 'redact') {
+    if (shape.kind === 'arrow') {
+      const start = outputPoint(shape.from, originalWidth, originalHeight, edits)
+      const end = outputPoint(shape.to, originalWidth, originalHeight, edits)
+      const x1 = start.x * output.width, y1 = start.y * output.height
+      const x2 = end.x * output.width, y2 = end.y * output.height
+      const angle = Math.atan2(y2 - y1, x2 - x1)
+      const head = Math.max(10, Math.min(36, Math.hypot(x2 - x1, y2 - y1) * 0.22))
+      context.lineCap = context.lineJoin = 'round'
+      context.beginPath()
+      context.moveTo(x1, y1)
+      context.lineTo(x2, y2)
+      context.moveTo(x2, y2)
+      context.lineTo(x2 - head * Math.cos(angle - Math.PI / 6), y2 - head * Math.sin(angle - Math.PI / 6))
+      context.moveTo(x2, y2)
+      context.lineTo(x2 - head * Math.cos(angle + Math.PI / 6), y2 - head * Math.sin(angle + Math.PI / 6))
+      context.stroke()
+    } else if (shape.kind === 'redact') {
       context.fillStyle = '#000000'
       context.fillRect(
         Math.floor(x) - 1,
@@ -212,6 +228,24 @@ export function renderEdits(
     } else if (shape.kind === 'ellipse') {
       context.beginPath()
       context.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2)
+      if (shape.filled === true) {
+        context.fillStyle = shape.color
+        context.fill()
+      }
+      context.stroke()
+    } else if (shape.kind === 'star') {
+      const cx = x + w / 2, cy = y + h / 2
+      const outerX = w / 2, outerY = h / 2
+      context.beginPath()
+      for (let point = 0; point < 10; point++) {
+        const angle = -Math.PI / 2 + point * Math.PI / 5
+        const radius = point % 2 ? 0.42 : 1
+        const px = cx + Math.cos(angle) * outerX * radius
+        const py = cy + Math.sin(angle) * outerY * radius
+        if (point === 0) context.moveTo(px, py)
+        else context.lineTo(px, py)
+      }
+      context.closePath()
       if (shape.filled === true) {
         context.fillStyle = shape.color
         context.fill()

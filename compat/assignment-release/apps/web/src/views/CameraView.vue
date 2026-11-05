@@ -19,16 +19,15 @@ import { account, deviceId, identityReady, offlineCaptureIdentity, publicCapture
 import { appLockReady, appLocked } from '../app/lock'
 import { checkCapture } from '../crypto/protocol'
 import * as encryptedPhotos from '../crypto/photos'
-import { protectionEnabled, protectionReady, photoReadAllowed, cachedContext, planReview, untrustedKeys } from '../crypto/store'
+import { protectionEnabled, protectionReady, photoReadAllowed, cachedContext } from '../crypto/store'
 import { cameraContext } from '../crypto/camera'
 import { pendingAccess } from '../workspace/access'
 import { sessionFor } from '../studio/model'
 import { captureRetention } from '../delivery/clock'
 import { warmNames } from '../local/photo-names'
-import { nameText } from '../local/photo-name-text'
 import { delivery, refreshClock, retryDelivery } from '../delivery/queue'
 import { d } from '../delivery/text'
-import { t, formatNumber, locale } from '../i18n'
+import { t, formatNumber } from '../i18n'
 import { q } from '../crypto/text'
 import { p } from '../profiles/text'
 import {
@@ -46,6 +45,7 @@ import {
   loadStudio,
   localTasks,
   presetChoices,
+  standardPreset,
   studioReady,
   studioSession,
   updateSessionCategory,
@@ -67,7 +67,7 @@ import {
   type PhotoMetadata,
 } from '../profiles/model'
 import { applyProfile, ResolutionError } from '../profiles/image'
-import { locationAt, locationState, locationEnabled, requestLocation, subscribeLocation } from '../profiles/location'
+import { latestLocation, locationAt, locationState, locationEnabled, requestLocation, subscribeLocation } from '../profiles/location'
 import { locationText } from '../profiles/location-text'
 import {
   cameraController,
@@ -84,7 +84,8 @@ import {
 } from '../local/photos'
 import { updatePhoto } from '../server/photos'
 import { accessLibraryId } from '../server/api'
-import { libraryChanged } from '../local/library'
+import { cacheCapturedPhoto, libraryChanged } from '../local/library'
+import { recordDiagnostic } from '../app/status'
 
 const router = useRouter()
 const route = useRoute()
@@ -122,11 +123,16 @@ const presetOpen = ref(false),
 const activeAssignment = computed(() =>
   account.value || studioSession.value ? undefined : legacyAssignment.value,
 )
+const effectiveSession = computed(() => {
+  const current = studioSession.value ?? sessionFor()
+  if (current.preset) return current
+  return { ...current, preset: clone(standardPreset.value) }
+})
 const activeProfile = computed(() =>
   account.value
-    ? captureProfile(studioSession.value ?? sessionFor(), s('standard'))
+    ? captureProfile(effectiveSession.value, s('standard'))
     : studioSession.value
-      ? captureProfile(studioSession.value, s('standard'))
+      ? captureProfile(effectiveSession.value, s('standard'))
       : legacyProfile.value,
 )
 const uiOnly = computed(
@@ -135,6 +141,9 @@ const uiOnly = computed(
     !!studioSession.value ||
     (!activeProfile.value && !activeAssignment.value),
 )
+// The production account path persists every capture through crypto/photos.
+// localPrototype gates only the old plaintext library, never camera hardware.
+const cameraRuntimeAvailable = computed(() => !!account.value || localPrototype)
 let pendingPreset: Preset | null = null
 let observer: ResizeObserver | undefined
 const mode = ref<'off' | 'live' | 'demo'>('off')
@@ -152,29 +161,40 @@ const sizeError = ref<ResolutionError>()
 const category = ref(studioSession.value?.category ?? selectedCategory.value)
 const shot = ref('')
 const locationStatus = ref<'pending' | 'unavailable'>()
+const locationLabel = computed(() => {
+  const location = latestLocation.value
+  if (location)
+    return `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)} ±${Math.round(location.accuracy)} m`
+  return s(locationStatus.value === 'unavailable' ? 'gpsUnavailable' : 'gpsPending')
+})
 const savedWithoutGps = ref(false)
-const requiredGpsError = ref(false)
 const lastPhoto = ref<Photo>()
 const sourceRatio = ref(4 / 3)
 const rules = computed(() => activeProfile.value?.rules ?? defaultRules())
 const offlineCaptureReady=ref(false)
-const cameraPreparing = ref(false), cameraError = ref(''), cameraReview = ref(false), cameraNeedsReview = ref(false)
+const cameraPreparing = ref(false), cameraError = ref('')
 let preparation = 0
-function participantRole(role: string) { return c(role === 'owner' || role === 'curator' || role === 'contributor' ? role : 'viewer') }
-async function prepareCamera(approve = false) {
+async function prepareCamera() {
+  const startedAt = performance.now()
   const generation = ++preparation, owner = account.value?.id
-  offlineCaptureReady.value = false; cameraError.value = ''; cameraReview.value = false; cameraNeedsReview.value = false
+  offlineCaptureReady.value = false; cameraError.value = ''
   if (!owner) return
   cameraPreparing.value = true
   try {
-    await cameraContext(studioSession.value?.taskId || undefined, approve)
-    if (alive && generation === preparation) offlineCaptureReady.value = true
+    await cameraContext(studioSession.value?.taskId || undefined)
+    if (alive && generation === preparation) {
+      offlineCaptureReady.value = true
+      recordDiagnostic('Camera', 'Capture context ready', { durationMs: performance.now() - startedAt })
+      if (mode.value === 'off') void start()
+    }
   } catch (error) {
     if (!alive || generation !== preparation) return
     const code = error instanceof Error ? error.message : ''
-    cameraReview.value = code === 'crypto.review_required' || code === 'crypto.review_changed'
-    cameraNeedsReview.value = cameraReview.value
-    cameraError.value = q(code === 'crypto.participants_not_ready' ? 'Участник задания ещё не подключил фотографии. Попросите его открыть приложение.' : code === 'crypto.owner_must_prepare' ? 'Владелец задания должен подтвердить участников перед общей съёмкой.' : cameraReview.value ? 'Подтвердите участников задания перед общей съёмкой.' : 'Не удалось подготовить съёмку. Проверьте соединение и повторите.')
+    recordDiagnostic('Camera error', 'Capture context could not be prepared', {
+      durationMs: performance.now() - startedAt,
+      tone: 'error',
+    })
+    cameraError.value = q(code === 'crypto.participants_not_ready' ? 'Не удалось автоматически подготовить доступ к снимкам. Повторите после подключения к сети.' : code === 'crypto.owner_must_prepare' ? 'План съёмки ещё синхронизируется. Повторите через несколько секунд.' : 'Не удалось подготовить съёмку. Проверьте соединение и повторите.')
   } finally { if (generation === preparation) cameraPreparing.value = false }
 }
 const captureAllowed = computed(() =>
@@ -227,7 +247,7 @@ function measure() {
 }
 function choose(item?: Parameters<typeof selectProfile>[0]) {
   stop()
-  if (!item) choosePreset(null)
+  if (!item) choosePreset(clone(standardPreset.value))
   else if (
     presetChoices.value.find((value) => value.id === item && 'uiOnly' in value)
   )
@@ -415,7 +435,7 @@ function releasePending() {
 async function start() {
   if (
     starting.value ||
-    !localPrototype ||
+    !cameraRuntimeAvailable.value ||
     !captureAllowed.value ||
     (activeProfile.value && !canCapture(activeProfile.value))
   )
@@ -425,6 +445,7 @@ async function start() {
     return
   }
   starting.value = true
+  const startedAt = performance.now()
   status.value = undefined
   stop()
   const settings = rules.value
@@ -437,10 +458,15 @@ async function start() {
     )
     if (alive) {
       mode.value = 'live'
+      recordDiagnostic('Camera', 'Camera stream ready', { durationMs: performance.now() - startedAt })
       hardware.value = controller!.features?.()
       startLocation()
     }
   } catch (error) {
+    recordDiagnostic('Camera permission', 'Camera stream was not opened', {
+      durationMs: performance.now() - startedAt,
+      tone: 'warning',
+    })
     if (alive && error instanceof DOMException)
       status.value =
         error.name === 'NotAllowedError'
@@ -477,6 +503,11 @@ async function persist() {
   status.value = 'saving'
   try {
     const photo = await savePhoto(pending.value, details)
+    // crypto/photos has already bound and verified this capture against the
+    // live account. Preserve that owner explicitly in the UI projection too;
+    // older capture metadata may omit the redundant accountId field.
+    if (account.value)
+      await cacheCapturedPhoto({ ...photo, accountId: account.value.id }).catch(() => {})
     captureDescription.value=''
     lastPhoto.value = !account.value || photoReadAllowed() ? photo : undefined
     savedWithoutGps.value = !!(photo.profile && photo.profile.rules.location !== 'off' && !photo.metadata?.location)
@@ -583,37 +614,23 @@ async function capture() {
   }
   taking.value = true
   status.value = undefined
-  requiredGpsError.value = false
   const captureOwner = account.value?.id
   const profile = activeProfile.value
     ? snapshot(activeProfile.value)
     : undefined
   const settings = profile?.rules ?? defaultRules()
   const createdAt = Date.now()
-  // Assignment Release: require a fresh <=30m real GPS fix at capture time.
-  // Never claim a GPS-secured assignment when coordinates are missing/stale.
-  const assignmentCapture = !!studioSession.value?.taskId || !!activeAssignment.value
-  const candidate = assignmentCapture
-    ? locationAt(createdAt, 30, 30)
-    : settings.location === 'off'
-      ? undefined : locationAt(createdAt, settings.locationWindow, settings.accuracy)
+  const candidate = settings.location === 'off'
+    ? undefined
+    : locationAt(createdAt, settings.locationWindow, settings.accuracy)
   const location =
     candidate &&
     Math.abs(candidate.measuredAt - createdAt) <= settings.locationWindow * 1000
       ? candidate
       : undefined
-  if (assignmentCapture && (!location || location.accuracy > 30 || mode.value !== 'live')) {
-    requiredGpsError.value = !location || location.accuracy > 30
-    if (requiredGpsError.value) enableCameraLocation()
-    status.value = mode.value === 'live' ? undefined : 'captureFailed'
-    taking.value = false
-    return
-  }
   const metadata: PhotoMetadata = {}
   if (settings.keepDate) metadata.capturedAt = createdAt
-  pendingPreset = studioSession.value?.preset
-    ? clone(studioSession.value.preset)
-    : null
+  pendingPreset = clone(effectiveSession.value.preset!)
   if (pendingPreset) {
     const time = new Date(createdAt)
     if (pendingPreset.options.date)
@@ -626,17 +643,17 @@ async function capture() {
       mode.value === 'demo'
         ? 'PhotoBunker DEMO'
         : controller?.source() || 'Camera'
-  if (assignmentCapture || settings.location !== 'off') {
+  if (settings.location !== 'off') {
     if (location) metadata.location = location
     metadata.locationStatus =
-      location && location.accuracy <= (assignmentCapture ? 30 : settings.accuracy)
+      location && location.accuracy <= settings.accuracy
         ? undefined
         : !locationEnabled.value || locationStatus.value === 'unavailable'
           ? 'unavailable'
           : 'pending'
   }
-  const seconds = studioSession.value
-    ? retentionSeconds(studioSession.value.preset)
+  const seconds = studioSession.value || account.value
+    ? retentionSeconds(pendingPreset)
     : (settings.retentionSeconds ?? 1209600)
   const retention = uiOnly.value
     ? seconds
@@ -667,7 +684,7 @@ async function capture() {
       ? {
           presetName: profile?.name || s('standard'),
           presetVersion: profile?.version,
-          standard: !studioSession.value?.preset,
+          standard: pendingPreset?.id === 'standard-local',
           teamId: studioSession.value?.teamId,
           teamName: studioSession.value?.teamName,
           author: account.value
@@ -751,6 +768,9 @@ onMounted(async () => {
   window.addEventListener('beforeunload', beforeUnload)
   void refreshClock(true).catch(() => {})
   await Promise.all([refreshProfiles(), refreshAssignments(), loadStudio()])
+  // Entering Camera is the explicit user action that re-arms both sensors.
+  // Already granted permissions resolve without another browser prompt.
+  if (alive) enableCameraLocation()
   if (alive) void prepareCamera()
   if (
     route.query.shot &&
@@ -800,8 +820,18 @@ watch(
 )
 watch([()=>account.value?.id,()=>studioSession.value?.taskId], () => { void prepareCamera() })
 watch(photoReadAllowed, (allowed) => { if (!allowed) lastPhoto.value = undefined })
-onBeforeRouteLeave(() => {
-  if (saving.value || taking.value) return false
+async function waitForCaptureIdle() {
+  for (let attempt = 0; attempt < 600; attempt++) {
+    if (!saving.value && !taking.value) return true
+    await new Promise(resolve => setTimeout(resolve, 25))
+  }
+  return false
+}
+onBeforeRouteLeave(async () => {
+  // A dock tap made during the final local commit must continue as soon as the
+  // durable save finishes. Silently cancelling the navigation made the dock
+  // look broken on slower devices.
+  if (!await waitForCaptureIdle()) return false
   return !(pending.value || rawPending.value) || confirm(t('discardQuestion'))
 })
 onBeforeUnmount(() => {
@@ -882,16 +912,12 @@ onBeforeUnmount(() => {
       ><span
         v-if="mode !== 'off' && rules.location !== 'off' && locationEnabled"
         class="camera-gps-state"
-        >{{
-          locationStatus
-            ? s(locationStatus === 'pending' ? 'gpsPending' : 'gpsUnavailable')
-            : 'GPS'
-        }}</span
+        >{{ locationLabel }}</span
       ><button
         v-if="mode !== 'off' && rules.location !== 'off' && locationEnabled &&
-          locationState === 'permission' && !!account"
+          ['permission','denied','unavailable'].includes(locationState) && !!account"
         type="button" class="quiet-button" @click="enableCameraLocation"
-        >{{ locationText('enable') }}</button
+        >{{ locationText('retry') }}</button
       >
     </div>
     <div ref="stage" class="camera-preview-stage">
@@ -931,10 +957,10 @@ onBeforeUnmount(() => {
           <span class="camera-emblem"><AppIcon name="camera" /></span>
           <p class="supporting-copy">
             {{
-              localPrototype ? t('cameraDescription') : t('prototypeDisabled')
+              cameraRuntimeAvailable ? t('cameraDescription') : t('prototypeDisabled')
             }}
           </p>
-          <div v-if="localPrototype" class="camera-start-actions">
+          <div v-if="cameraRuntimeAvailable" class="camera-start-actions">
             <button
               class="primary-button"
               :disabled="starting || saving || taking || !captureAllowed"
@@ -942,6 +968,7 @@ onBeforeUnmount(() => {
             >
               {{ t(starting ? 'cameraStarting' : 'enableCamera') }}</button
             ><button
+              v-if="localPrototype"
               class="quiet-button"
               :disabled="starting || saving || taking || !captureAllowed"
               @click="showDemo"
@@ -989,7 +1016,7 @@ onBeforeUnmount(() => {
         ><button
           class="shutter"
           :disabled="
-            !localPrototype ||
+            !cameraRuntimeAvailable ||
             (activeProfile && !canCapture(activeProfile)) ||
             !captureAllowed ||
             mode === 'off' ||
@@ -1016,26 +1043,13 @@ onBeforeUnmount(() => {
           }}</span>
         </button>
       </div>
-      <p v-if="requiredGpsError" class="capture-feedback" role="alert">
-        {{ locale === 'ru' ? 'Для задания необходимы свежие координаты GPS с точностью до 30 м. Разрешите геолокацию и повторите съёмку.' : 'Assignment capture needs a fresh GPS fix accurate to 30 m. Enable location and try again.' }}
-        <button type="button" class="quiet-button" @click="enableCameraLocation">{{ locale === 'ru' ? 'Включить GPS' : 'Enable GPS' }}</button>
-      </p>
       <p v-if="cameraPreparing" class="capture-feedback" role="status">{{ q('Готовим съёмку…') }}</p>
       <div v-if="cameraError" class="form-error" role="alert">
         <p>{{ cameraError }}</p>
         <button class="secondary-button" :disabled="cameraPreparing" @click="prepareCamera()">{{ t('retry') }}</button>
-        <button v-if="cameraNeedsReview" class="secondary-button" @click="cameraReview = true">{{ q('Проверить участников') }}</button>
       </div>
-      <p v-if="status" class="capture-feedback" role="status">
-        {{ t(status)
-        }}<span v-if="status === 'saved' && lastPhoto">
-          · {{ lastPhoto.shortId || nameText('pending') }}</span
-        ><span v-if="status === 'saved' && savedWithoutGps">
-          · {{ locationText('photoWithoutGps') }}</span
-        >
-      </p>
-      <p v-else class="capture-note">
-        {{ account ? q('Снимок сохраняется на устройстве и синхронизируется с аккаунтом при наличии сети.') : uiOnly ? s('localShort') : t('captureNote') }}
+      <p v-if="status && status !== 'saved'" class="capture-feedback" role="status">
+        {{ t(status) }}
       </p>
       <div v-if="pending && !saving" class="inline-actions">
         <button class="primary-button" @click="persist">{{ t('retry') }}</button
@@ -1044,12 +1058,6 @@ onBeforeUnmount(() => {
         </button>
       </div>
     </div>
-    <AppSheet :open="cameraReview && !!planReview" :title="q('Участники общей съёмки')" :busy="cameraPreparing" @close="cameraReview = false">
-      <p>{{ q('Эти участники получат доступ к снимкам в соответствии с правами задания. Сверьте их перед подтверждением.') }}</p>
-      <p v-for="member in planReview?.members" :key="member.accountId"><strong>{{ member.publicId }}</strong> · {{ participantRole(member.role) }}</p>
-      <p v-for="key in untrustedKeys" :key="key.publicId"><strong>{{ key.publicId }}</strong><br /><code>{{ key.fingerprint }}</code></p>
-      <button class="primary-button" :disabled="cameraPreparing" @click="prepareCamera(true)">{{ q('Подтвердить участников') }}</button>
-    </AppSheet>
     <AppSheet
       :open="hardwareOpen"
       :title="s('cameraSettings')"
@@ -1110,6 +1118,12 @@ onBeforeUnmount(() => {
       >
         <AppIcon name="settings" /><span>{{ preset.name }}</span
         ><AppIcon v-if="activeProfile?.id === preset.id" name="check" /></button
+      ><button
+        class="row-add"
+        @click="presetOpen = false; router.push('/camera/presets/standard')"
+      >
+        <AppIcon name="edit" />{{ s('edit') }} · {{ s('standard') }}
+      </button
       ><button
         class="row-add"
         @click="

@@ -3,6 +3,8 @@ import {
   appLockReady,
   appLockFailure,
   appLocked,
+  appPinEnabled,
+  appPinLength,
   loadAppLock,
   lockApp,
   unlockApp,
@@ -14,6 +16,7 @@ import { q } from './crypto/text'
 import { deletionBlocked, deletionFailure, deletionPhase, resumeLocalDeletion } from './app/local-delete-run'
 import { localDeleteText } from './app/local-delete-text'
 import { emergencyBlocked,emergencyChecked,tryEmergencyOnLockedScreen } from './app/emergency-run'
+import { emergencyManualEntry, emergencyPinLength, loadLockedEmergencyPinLength } from './app/emergency'
 import AccountPhotoAccess from './components/AccountPhotoAccess.vue'
 import {
   startProtection,
@@ -23,23 +26,21 @@ import {
   strongUnlocked,
   warmLocked,
 } from './crypto/store'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { c } from './collaboration/text'
-import { startCollaboration } from './collaboration/store'
 import { account } from './identity/store'
 import { profileReturnTo } from './identity/person'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from './components/AppIcon.vue'
+import PasscodeInput from './components/PasscodeInput.vue'
 import { locale, t } from './i18n'
 import { localPrototype } from './local/photos'
-import { startLibrary } from './local/library'
-import { refreshProfiles } from './profiles/store'
+import { libraryError, libraryLoading, serverError, startLibrary } from './local/library'
 import { p } from './profiles/text'
-import { delivery, startDelivery, retryDelivery } from './delivery/queue'
-import { d } from './delivery/text'
+import { delivery, startDelivery } from './delivery/queue'
 import { accessCode, accessSaved } from './server/api'
 import { u } from './app/text'
-import { rememberSection } from './app/preferences'
+import { lockDelayMs, rememberSection } from './app/preferences'
 import { a } from './identity/text'
 import { s } from './studio/text'
 import { startWorkspace } from './workspace/service'
@@ -48,17 +49,15 @@ import {
   queueBusy as workspaceBusy,
   queueError as workspaceError,
 } from './workspace/state'
-import { deliver as workspaceDeliver } from './workspace/photos'
-import { w } from './workspace/text'
 import { startStudio } from './studio/store'
 import { startActivity } from './identity/activity'
-import { selected as selectedConversation, pendingConversationUi, stopMessaging } from './messages/store'
 import { purgeAccountFromDevice } from './identity/storage'
 import { locationEnabled, startGrantedLocation, stopLocation } from './profiles/location'
 import { warmNames } from './local/photo-names'
 import { flushCardShares } from './crypto/card-share-outbox'
 import { initializePresencePreference, refreshPresenceHeartbeat, stopPresenceHeartbeat,
   stopPresencePreference } from './profiles/presence'
+import { appStatusKey, type AppStatus } from './app/status'
 
 const route = useRoute(),
   router = useRouter()
@@ -74,14 +73,21 @@ function reconnectCardShares() {
       navigator.onLine) void flushCardShares().catch(() => {})
 }
 watch([sessionState, appLocked, protectionReady, strongUnlocked, warmLocked], reconnectCardShares)
-const privatePhotoRoute = computed(() => route.path.startsWith('/gallery'))
+// Gallery and Browser always render their own stable shell and skeletons.
+// Only a concrete private photo needs the blocking decryption gate.
+const privatePhotoRoute = computed(() =>
+  ['photo', 'photo-card', 'photo-editor'].includes(String(route.name)),
+)
 const openRoute = computed(() =>
   ['shared-photo', 'shared-card', 'welcome', 'profile', 'account-auth', 'person-profile'].includes(String(route.name)),
 )
 const offlineLocalRoute = computed(() =>
   // A known non-extractable device may display its own encrypted outbox, but
   // this offline scope NEVER grants an API/Matrix session or bypasses PIN.
-  ['camera', 'gallery', 'photo', 'photo-card', 'photo-editor', 'photo-browser', 'photo-browser-new', 'profiles', 'profile-edit', 'messages', 'team-profile', 'settings'].includes(String(route.name)),
+  ['assignments', 'assignment', 'camera', 'gallery', 'photo', 'photo-card',
+    'photo-editor', 'photo-browser', 'photo-browser-new', 'people', 'teams',
+    'team-profile', 'contacts', 'profiles', 'profile-edit', 'messages',
+    'profile', 'settings', 'payment', 'status'].includes(String(route.name)),
 )
 const privatePending = computed(() =>
   !openRoute.value && !hasConfirmedIdentity() &&
@@ -101,10 +107,28 @@ const privateMessage = computed(() =>
 )
 
 const appPin = ref(''),
-  appPinError = ref('')
+  appPinError = ref(''),
+  appPinOpening = ref(false)
+const pinDigits = ['1','2','3','4','5','6','7','8','9','0'] as const
+let passcodeSubmitTimer: number | undefined
+function clearPasscodeSubmit() {
+  if (passcodeSubmitTimer !== undefined) window.clearTimeout(passcodeSubmitTimer)
+  passcodeSubmitTimer = undefined
+}
+function appendPin(digit: string) {
+  if (!appPinOpening.value && appPin.value.length < 10) {
+    appPin.value += digit
+    appPinError.value = ''
+  }
+}
+function removePinDigit() {
+  if (!appPinOpening.value) appPin.value = appPin.value.slice(0, -1)
+}
 async function openApp() {
+  if (appPinOpening.value || appPin.value.length < 4) return
   const pin = appPin.value
   appPinError.value = ''
+  appPinOpening.value = true
   try {
     await unlockApp(pin)
   } catch (error) {
@@ -112,6 +136,7 @@ async function openApp() {
     if(!triggered)appPinError.value = pinError(error)
   } finally {
     appPin.value = ''
+    appPinOpening.value = false
   }
 }
 watch(
@@ -121,36 +146,126 @@ watch(
   },
   { immediate: true },
 )
+watch([() => account.value?.id, deviceId, appLocked], ([owner, device, locked]) => {
+  if (owner && device && locked) void loadLockedEmergencyPinLength()
+}, { immediate: true })
+watch([appPin, appPinLength, emergencyPinLength, emergencyManualEntry], ([value, normalLength, emergencyLength, manual]) => {
+  clearPasscodeSubmit()
+  if (manual || appPinOpening.value || !appLocked.value) return
+  const length = value.length
+  if (length !== normalLength && (!emergencyLength || length !== emergencyLength)) return
+  // A short pause lets a longer emergency PIN continue past the normal PIN
+  // length. Known prefix conflicts use explicit neutral confirmation instead.
+  const delay = emergencyLength && length === emergencyLength ? 180 : 520
+  passcodeSubmitTimer = window.setTimeout(() => {
+    passcodeSubmitTimer = undefined
+    void openApp()
+  }, delay)
+})
 watch([appLockReady, appLocked], ([ready, locked]) => {
   if (!ready || locked) {
     // Synchronous cleanup before any protected Vue view can paint.
     hardLock()
-    stopMessaging()
+    void import('./messages/store').then(module => module.stopMessaging())
     appPin.value = ''
-  } else resumeTrustedPhotos()
+  } else { clearPasscodeSubmit(); resumeTrustedPhotos() }
 }, { flush: 'sync' })
 function updatePrivatePresence() {
-  if (hasConfirmedIdentity() && appLockReady.value && !appLocked.value && !hidden.value &&
+  if (backgroundReady.value && hasConfirmedIdentity() && appLockReady.value &&
+      !appLocked.value && !hidden.value &&
       !['welcome','shared-photo','shared-card','account-auth'].includes(String(route.name)))
     refreshPresenceHeartbeat()
   else stopPresenceHeartbeat()
 }
-function backgroundLock() {
-  if (document.hidden) lockApp()
+const hiddenAtKey = 'photobunker.app-hidden-at.v1'
+let appLockTimer: number | undefined
+function clearAppLockTimer() {
+  if (appLockTimer !== undefined) window.clearTimeout(appLockTimer)
+  appLockTimer = undefined
 }
+function clearHiddenAt() {
+  try { sessionStorage.removeItem(hiddenAtKey) } catch { /* unavailable storage must not block locking */ }
+}
+function savedHiddenAt(): number {
+  try { return Number(sessionStorage.getItem(hiddenAtKey) ?? 0) || 0 } catch { return 0 }
+}
+function lockAfterBackground() {
+  clearAppLockTimer()
+  clearHiddenAt()
+  lockApp()
+}
+function scheduleBackgroundLock() {
+  if (!appPinEnabled.value || appLocked.value) return
+  const now = Date.now(), delay = lockDelayMs.value
+  try { sessionStorage.setItem(hiddenAtKey, String(now)) } catch { /* timer remains authoritative */ }
+  clearAppLockTimer()
+  if (delay === 0) lockAfterBackground()
+  else appLockTimer = window.setTimeout(lockAfterBackground, delay)
+}
+function resumeBackgroundLock() {
+  if (!appPinEnabled.value || appLocked.value) { clearAppLockTimer(); clearHiddenAt(); return }
+  const hiddenAt = savedHiddenAt()
+  clearAppLockTimer()
+  if (hiddenAt && Date.now() - hiddenAt >= lockDelayMs.value) lockAfterBackground()
+  else clearHiddenAt()
+}
+function backgroundLock() {
+  if (document.hidden) scheduleBackgroundLock()
+  else resumeBackgroundLock()
+}
+function pageHidden() { scheduleBackgroundLock() }
+function pageShown() { resumeBackgroundLock(); locationPageShow() }
 function retrySession() { void loadIdentity(true) }
 const offline = ref(!navigator.onLine)
+const appStatus = computed<AppStatus>(() => {
+  const ru = locale.value === 'ru'
+  if (offline.value) return {
+    label: ru ? 'Офлайн' : 'Offline',
+    detail: ru ? 'Работаем с данными на устройстве' : 'Using data stored on this device',
+    tone: 'warning',
+  }
+  if (sessionState.value === 'checking') return {
+    label: ru ? 'Подключение' : 'Connecting',
+    detail: ru ? 'Проверяем защищённое подключение' : 'Checking the secure connection',
+    tone: 'progress',
+  }
+  if (libraryError.value || serverError.value || workspaceError.value || delivery.value.storageFailed)
+    return {
+      label: ru ? 'Нужна проверка' : 'Check status',
+      detail: ru ? 'Часть данных не удалось обновить' : 'Some data could not be refreshed',
+      tone: 'error',
+    }
+  if (libraryLoading.value) return {
+    label: ru ? 'Обновление' : 'Updating',
+    detail: ru ? 'Обновляем библиотеку в фоне' : 'Refreshing the library in the background',
+    tone: 'progress',
+  }
+  const pending = delivery.value.pending + delivery.value.deleting + workspacePending.value
+  if (delivery.value.busy || workspaceBusy.value) return {
+    label: ru ? 'Отправка' : 'Syncing',
+    detail: ru ? `В очереди: ${pending}` : `Queued: ${pending}`,
+    tone: 'progress',
+  }
+  if (pending) return {
+    label: ru ? `В очереди ${pending}` : `Queued ${pending}`,
+    detail: ru ? 'Фотографии сохранены на устройстве и будут отправлены автоматически' : 'Photos are safe on this device and will upload automatically',
+    tone: 'warning',
+  }
+  return null
+})
+provide(appStatusKey, appStatus)
 const main = ref<HTMLElement>()
 let stopDelivery: (() => void) | undefined
-let stopCollaboration: (() => void) | undefined
 let stopProtection: (() => void) | undefined
 let stopLibrary: (() => void) | undefined
 let stopWorkspace: (() => void) | undefined
 let stopStudio: (() => void) | undefined
 let stopActivity: (() => void) | undefined
+let backgroundTimer: number | undefined
 let mounted = false
 let runtimeStarted = false
 const hidden = ref(false)
+const backgroundReady = ref(false)
 const locationVisible = ref(!document.hidden)
 const locationResumeEpoch = ref(0)
 function locationVisibilityChanged() { locationVisible.value = !document.hidden }
@@ -175,8 +290,9 @@ watch(
 )
 // Warm the next NAME-ID lease before Camera is opened. This never requests
 // permission and never blocks normal capture or the Welcome screen.
-watch([() => account.value?.id, deviceId, sessionState, appLockReady, appLocked], () => {
-  if (hasConfirmedIdentity() && !appLocked.value)
+watch([() => account.value?.id, deviceId, sessionState, appLockReady, appLocked,
+  () => route.name], () => {
+  if (hasConfirmedIdentity() && !appLocked.value && route.name === 'camera')
     void warmNames().catch(() => {})
 }, { immediate: true })
 function reconnectPhotoNames() {
@@ -197,6 +313,9 @@ const native = computed(() =>
     'assignment',
     'assignment-edit',
     'assignment-new',
+    'photo-browser',
+    'photo-browser-new',
+    'people',
     'teams',
     'team-profile',
     'profile',
@@ -210,6 +329,8 @@ const native = computed(() =>
     'account-security',
     'photo-security',
     'data-storage',
+    'status',
+    'payment',
   ].includes(String(route.name)),
 )
 const editor = computed(() =>
@@ -224,18 +345,33 @@ const editor = computed(() =>
 )
 const navigation = [
   { name: 'assignments', to: '/assignments', icon: 'profiles' },
+  { name: 'browser', to: '/browser', icon: 'gallery' },
   { name: 'camera', to: '/camera', icon: 'camera' },
-  { name: 'gallery', to: '/gallery', icon: 'gallery' },
+  { name: 'people', to: '/people', icon: 'users' },
+  { name: 'profile', to: '/profile', icon: 'settings' },
 ] as const
 const immersive = computed(() => route.name === 'camera')
+const navigationSection: Record<string, 'assignments' | 'browser' | 'camera' | 'people' | 'profile'> = {
+  assignments: 'assignments',
+  assignment: 'assignments',
+  browser: 'browser',
+  gallery: 'browser',
+  photo: 'browser',
+  'photo-card': 'browser',
+  'photo-editor': 'browser',
+  'photo-browser': 'browser',
+  'photo-browser-new': 'browser',
+  camera: 'camera',
+  people: 'people',
+  teams: 'people',
+  contacts: 'people',
+  profile: 'profile',
+  settings: 'profile',
+  payment: 'profile',
+}
 function label(name: string) {
-  return u(
-    name === 'gallery'
-      ? 'photos'
-      : name === 'assignments' || name === 'messages' || name === 'profile'
-        ? name
-        : 'camera',
-  )
+  if (name === 'people') return u('peopleDock')
+  return u(navigationSection[name] ?? 'camera')
 }
 const identityTitle = computed(
   () =>
@@ -270,6 +406,8 @@ const title = computed(
                 ? p('profiles')
                 : route.name === 'settings'
                   ? t('settings')
+                  : route.name === 'photo-card'
+                    ? u('photos')
                   : route.name === 'photo'
                     ? u('photos')
                     : label(String(route.name))),
@@ -283,10 +421,11 @@ function privacy(event: Event) {
   updatePrivatePresence()
 }
 watch([() => account.value?.id, deviceId, sessionState, appLockReady, appLocked,
-  hidden, () => route.name], updatePrivatePresence, { immediate: true })
-watch([() => account.value?.id, deviceId, sessionState, appLockReady, appLocked],
+  hidden, backgroundReady, () => route.name], updatePrivatePresence, { immediate: true })
+watch([() => account.value?.id, deviceId, sessionState, appLockReady, appLocked,
+  backgroundReady],
   ([id,device]) => {
-    if (id && device && appLockReady.value && !appLocked.value &&
+    if (backgroundReady.value && id && device && appLockReady.value && !appLocked.value &&
         (hasConfirmedIdentity() || (sessionState.value==='offline' && offlineCaptureIdentity.value)))
       void initializePresencePreference()
     else stopPresencePreference()
@@ -294,23 +433,50 @@ watch([() => account.value?.id, deviceId, sessionState, appLockReady, appLocked]
 function isActive(name: string) {
   return (
     route.name === name ||
-    (name === 'gallery' && route.name === 'photo') ||
+    (name === 'browser' && ['photo-browser', 'photo-browser-new', 'gallery',
+      'photo', 'photo-card', 'photo-editor'].includes(String(route.name))) ||
     (name === 'camera' &&
       ['profiles', 'profile-edit', 'team'].includes(String(route.name))) ||
+    (name === 'people' && ['people', 'teams', 'team-profile', 'contacts',
+      'person-profile'].includes(String(route.name))) ||
     (name === 'profile' &&
       [
         'settings',
         'join',
-        'teams',
-        'team-profile',
-        'contacts',
         'account-security',
         'photo-security',
         'account-auth',
         'account-edit',
       ].includes(String(route.name))) ||
-    (name === 'assignments' && ['assignment', 'photo-browser', 'photo-browser-new'].includes(String(route.name)))
+    (name === 'assignments' && ['assignment', 'assignment-edit', 'assignment-new'].includes(String(route.name)))
   )
+}
+function stopBackgroundRuntime() {
+  if (backgroundTimer !== undefined) window.clearTimeout(backgroundTimer)
+  backgroundTimer = undefined
+  backgroundReady.value = false
+  stopDelivery?.(); stopDelivery = undefined
+  stopWorkspace?.(); stopWorkspace = undefined
+  stopActivity?.(); stopActivity = undefined
+}
+function scheduleBackgroundRuntime() {
+  if (!runtimeStarted || backgroundTimer !== undefined || stopDelivery ||
+      !account.value || !appLockReady.value || appLocked.value ||
+      !(hasConfirmedIdentity() ||
+        (sessionState.value === 'offline' && offlineCaptureIdentity.value))) return
+  // Authentication, shell, assignments and the local photo index stay on the
+  // fast path. Sync, collaboration and activity start just after first paint.
+  backgroundTimer = window.setTimeout(() => {
+    backgroundTimer = undefined
+    if (!runtimeStarted || !account.value || !appLockReady.value || appLocked.value) return
+    backgroundReady.value = true
+    stopDelivery = startDelivery()
+    stopWorkspace = startWorkspace()
+    stopActivity = startActivity()
+    const deletedOwner = localStorage.getItem('pb-deleted-account-cleanup')
+    if (deletedOwner) void purgeAccountFromDevice(deletedOwner)
+      .then(() => localStorage.removeItem('pb-deleted-account-cleanup')).catch(() => {})
+  }, 5000)
 }
 function startPrivateRuntime() {
   if (runtimeStarted || emergencyBlocked.value || deletionBlocked.value ||
@@ -320,19 +486,13 @@ function startPrivateRuntime() {
   document.addEventListener('visibilitychange', locationVisibilityChanged)
   document.addEventListener('visibilitychange', updatePrivatePresence)
   window.addEventListener('pagehide', stopPresenceHeartbeat)
-  window.addEventListener('pagehide', lockApp)
+  window.addEventListener('pagehide', pageHidden)
   window.addEventListener('pagehide', stopLocation)
-  window.addEventListener('pageshow', locationPageShow)
+  window.addEventListener('pageshow', pageShown)
   stopProtection = startProtection()
   stopLibrary = startLibrary()
-  stopDelivery = startDelivery()
-  stopCollaboration = startCollaboration()
   stopStudio = startStudio()
-  stopWorkspace = startWorkspace()
-  stopActivity = startActivity()
-  const deletedOwner = localStorage.getItem('pb-deleted-account-cleanup')
-  if (deletedOwner) void purgeAccountFromDevice(deletedOwner).then(() => localStorage.removeItem('pb-deleted-account-cleanup')).catch(() => {})
-  void refreshProfiles()
+  scheduleBackgroundRuntime()
   window.addEventListener('online', updateConnection)
   window.addEventListener('online', reconnectPhotoNames)
   window.addEventListener('online', updatePrivatePresence)
@@ -350,17 +510,15 @@ function stopPrivateRuntime() {
   stopLocation()
   stopPresenceHeartbeat()
   stopPresencePreference()
+  stopBackgroundRuntime()
   window.removeEventListener('pagehide', stopPresenceHeartbeat)
-  window.removeEventListener('pagehide', lockApp)
+  window.removeEventListener('pagehide', pageHidden)
   window.removeEventListener('pagehide', stopLocation)
-  window.removeEventListener('pageshow', locationPageShow)
+  window.removeEventListener('pageshow', pageShown)
+  clearAppLockTimer()
   stopProtection?.(); stopProtection = undefined
   stopLibrary?.(); stopLibrary = undefined
-  stopDelivery?.(); stopDelivery = undefined
-  stopCollaboration?.(); stopCollaboration = undefined
   stopStudio?.(); stopStudio = undefined
-  stopWorkspace?.(); stopWorkspace = undefined
-  stopActivity?.(); stopActivity = undefined
   window.removeEventListener('online', updateConnection)
   window.removeEventListener('online', reconnectPhotoNames)
   window.removeEventListener('online', updatePrivatePresence)
@@ -369,6 +527,14 @@ function stopPrivateRuntime() {
   window.removeEventListener('offline', updatePrivatePresence)
   window.removeEventListener('photobunker-privacy-screen', privacy)
 }
+watch([() => account.value?.id, sessionState, offlineCaptureIdentity,
+  appLockReady, appLocked], () => {
+  if (runtimeStarted && account.value && appLockReady.value && !appLocked.value &&
+      (hasConfirmedIdentity() ||
+        (sessionState.value === 'offline' && offlineCaptureIdentity.value)))
+    scheduleBackgroundRuntime()
+  else stopBackgroundRuntime()
+}, { flush: 'post' })
 watch([emergencyBlocked,deletionBlocked, () => route.name], ([emergency,blocked]) => {
   if (!mounted) return
   if (emergency || blocked) stopPrivateRuntime()
@@ -407,8 +573,18 @@ watch(
   (path) => {
     hidden.value = false
     rememberSection(path)
-    main.value?.focus()
-    window.scrollTo?.(0, 0)
+    // The mobile workspace is its own scroll surface. Moving focus to it on
+    // every dock tap made iOS pan the visual viewport and visibly "jump" the
+    // fixed dock. Pointer navigation must only reset workspace scroll; the
+    // skip-link remains the explicit keyboard focus affordance.
+    const workspace = main.value
+    if (!workspace) return
+    if (typeof workspace.scrollTo === 'function')
+      workspace.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    else {
+      workspace.scrollTop = 0
+      workspace.scrollLeft = 0
+    }
   },
   { flush: 'post' },
 )
@@ -434,7 +610,7 @@ watch(
           'editor-shell': editor,
           'privacy-screen': hidden,
           'messenger-shell': route.matched.some(record => record.name === 'messages'),
-          'messenger-thread-open': (route.name === 'messages' && (!!selectedConversation || pendingConversationUi)) || route.name === 'conversation-profile',
+          'messenger-thread-open': route.name === 'conversation-profile',
         },
       ]"
     >
@@ -443,18 +619,20 @@ watch(
           ><span class="brand-mark"><AppIcon name="camera" /></span
           ><span>PhotoBunker</span></RouterLink
         ><span class="app-context">{{ title }}</span
+        ><RouterLink v-if="appStatus" to="/status" :class="['app-status-pill', `is-${appStatus.tone}`]"><span />{{ appStatus.label }}</RouterLink
         ><span v-if="localPrototype" class="app-mode">{{
           u('localMode')
         }}</span>
       </header>
 
       <nav
-        v-if="!deletionBlocked && account && (sessionState === 'authenticated' || sessionState === 'offline') && appLockReady && !appLocked && !editor && !hidden"
+        v-if="!deletionBlocked && account && (sessionState === 'authenticated' || sessionState === 'offline' || (sessionState === 'checking' && offlineCaptureIdentity)) && appLockReady && !appLocked && !editor && !hidden"
         class="navigation"
+        data-testid="app-dock"
         :aria-label="t('navigation')"
       >
         <RouterLink
-          v-for="item in navigation.filter(item => sessionState !== 'offline' || ['camera', 'gallery', 'messages', 'profile'].includes(item.name))"
+          v-for="item in navigation"
           :key="item.name"
           :to="item.to"
           :class="[
@@ -494,72 +672,6 @@ watch(
           {{ t('accessNotSaved') }}
           <RouterLink to="/settings">{{ t('settings') }}</RouterLink>
         </p>
-        <div
-          v-if="
-            showScopedLocal &&
-            appLockReady &&
-            !appLocked &&
-            !immersive &&
-            !hidden &&
-            (delivery.pending || delivery.deleting || delivery.storageFailed)
-          "
-          class="delivery-notice"
-          role="status"
-        >
-          <p v-if="delivery.storageFailed">{{ d('storage') }}</p>
-          <p v-if="delivery.pending">
-            {{ d(delivery.busy ? 'sending' : 'pending') }} ·
-            {{ delivery.pending }}
-          </p>
-          <p v-if="delivery.deleting">
-            {{ d('deleting') }} · {{ delivery.deleting }}
-          </p>
-          <button
-            class="quiet-button"
-            :disabled="delivery.busy"
-            @click="retryDelivery"
-          >
-            {{ d('retry') }}
-          </button>
-        </div>
-        <div
-          v-if="showScopedLocal && appLockReady && !appLocked && !immersive && !hidden && workspacePending"
-          class="delivery-notice"
-          role="status"
-        >
-          <p>
-            {{ w(workspaceBusy ? 'sending' : 'pendingPhotos') }} ·
-            {{ workspacePending }}
-          </p>
-          <p v-if="workspaceError">
-            {{
-              w(
-                workspaceError === 'keys'
-                  ? 'cryptoChanged'
-                  : workspaceError === 'quota'
-                    ? 'encryptedQuota'
-                    : workspaceError === 'retention'
-                      ? 'retention'
-                      : workspaceError === 'permission'
-                        ? 'accessChanged'
-                        : 'unavailable',
-              )
-            }}
-          </p>
-          <button
-            class="quiet-button"
-            :disabled="workspaceBusy"
-            @click="workspaceDeliver"
-          >
-            {{ w('retry') }}</button
-          ><button
-            v-if="workspaceError === 'keys'"
-            class="quiet-button"
-            @click="router.push('/profile/photos-security')"
-          >
-            {{ q('Фотографии и резервная копия') }}
-          </button>
-        </div>
         <section v-if="deletionBlocked" class="native-screen" aria-live="assertive">
           <div class="screen-body native-form">
             <h1>{{ localDeleteText('blocked') }}</h1>
@@ -571,7 +683,10 @@ watch(
           </div>
         </section>
         <section v-else-if="privatePending" class="native-screen" aria-live="polite">
-          <div class="screen-body">
+          <div v-if="sessionState === 'initial' || sessionState === 'checking'" class="screen-body app-route-skeleton" role="status" aria-label="Loading">
+            <span class="route-skeleton-title" /><span class="route-skeleton-card" /><span class="route-skeleton-card" />
+          </div>
+          <div v-else class="screen-body">
             <p role="status">{{ privateMessage }}</p>
             <button v-if="sessionState === 'unavailable' || sessionState === 'offline'"
               class="secondary-button" @click="retrySession">{{ a('sessionRetry') }}</button>
@@ -584,45 +699,58 @@ watch(
             (!appLockReady || appLocked) &&
             route.name !== 'account-auth'
           "
-          class="native-screen"
+          class="native-screen app-passcode-screen"
         >
-          <form class="native-form screen-body" @submit.prevent="openApp">
+          <form class="native-form screen-body app-passcode-form" @submit.prevent="openApp">
+            <span class="passcode-brand">PhotoBunker</span>
             <h1>
               {{ appLockReady ? pt('locked') : a('sessionChecking') }}
             </h1>
             <template v-if="appLockFailure"><p role="alert">{{ pt('storage') }}</p>
               <button type="button" class="secondary-button" @click="loadAppLock()">{{ pt('retry') }}</button>
             </template>
-            <template v-else-if="appLockReady"
-              ><label
-                >{{ pt('title') }}<input
-                  v-model="appPin"
-                  type="password"
-                  inputmode="numeric"
-                  autocomplete="off"
-                  maxlength="8"
-                  required /></label
-              ><button class="primary-button">{{ pt('unlock') }}</button
+            <template v-else-if="appLockReady">
+              <p class="passcode-prompt">{{ pt('title') }}</p>
+              <PasscodeInput v-model="appPin" :length="10" :label="pt('title')"
+                :disabled="appPinOpening" autofocus />
+              <div class="passcode-keypad" aria-label="PIN keypad">
+                <button v-for="digit in pinDigits.slice(0, 9)" :key="digit" type="button"
+                  :disabled="appPinOpening" @click="appendPin(digit)">{{ digit }}</button>
+                <span aria-hidden="true" />
+                <button type="button" :disabled="appPinOpening" @click="appendPin('0')">0</button>
+                <button type="button" class="passcode-delete" :disabled="appPinOpening || !appPin"
+                  :aria-label="q('Удалить цифру')" @click="removePinDigit"><AppIcon name="back" /></button>
+              </div>
+              <button v-if="emergencyManualEntry" class="primary-button passcode-submit"
+                :disabled="appPinOpening || appPin.length < 4">{{ pt('unlock') }}</button
               ><button
                 type="button"
-                class="quiet-button"
+                class="quiet-button passcode-recovery"
                 @click="router.push('/profile/account?mode=recover&pinReset=1')"
               >
                 {{ pt('forgot') }}
               </button>
-              <p class="field-hint">{{ pt('recovery') }}</p>
-              <p v-if="appPinError" role="alert">{{ appPinError }}</p></template
-            >
+              <p v-if="appPinError" class="form-error passcode-error" role="alert">{{ appPinError }}</p>
+            </template>
           </form>
         </section>
         <template v-else-if="account && privatePhotoRoute && (!protectionReady || !protectionEnabled || !photoReadAllowed())">
-          <section v-if="!protectionReady" class="native-screen"><div class="screen-body"><p>{{ q('Подключаем фотографии…') }}</p></div></section>
+          <section v-if="!protectionReady" class="native-screen app-loading-shell" aria-busy="true" aria-label="Loading">
+            <div class="screen-body"><span class="loading-heading" /><div class="photo-access-skeleton"><span /><span /><span /><span /></div></div>
+          </section>
           <AccountPhotoAccess v-else />
         </template>
-        <RouterView
-          v-else
-          :key="route.name === 'account-auth' ? 'account-auth' : account?.id"
-        />
+        <RouterView v-else v-slot="{ Component }">
+          <Suspense timeout="0">
+            <component :is="Component"
+              :key="route.name === 'account-auth' ? 'account-auth' : `${account?.id}:${String(route.name)}`" />
+            <template #fallback>
+              <section class="native-screen app-route-skeleton" role="status" aria-label="Loading">
+                <div class="screen-body"><span class="route-skeleton-title" /><span class="route-skeleton-card" /><span class="route-skeleton-card" /></div>
+              </section>
+            </template>
+          </Suspense>
+        </RouterView>
       </main>
     </div>
   </template>

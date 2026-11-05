@@ -134,20 +134,24 @@ function beginWatch(scope: string) {
   }
 }
 /**
- * Called by App.vue once the existing Identity + PIN gates permit private UI.
- * Permissions API is queried first so this path NEVER displays a system
- * permission prompt (including on Welcome or an untrusted device).
- * Browsers without Permission.query need an explicit user gesture instead.
+ * Called by App.vue once Identity + PIN gates permit the private application.
+ * The first private session requests permission immediately and then keeps one
+ * foreground watcher warm for the account/device. Route changes reuse it.
  */
 export function startGrantedLocation(scope: string) {
   if (!scope || !locationEnabled.value) { discard(); return }
-  if (activeScope === scope) return
+  if (activeScope === scope) {
+    // A denied or interrupted watcher may have been cleared while the
+    // account scope stayed the same. Re-entering the foreground must be able
+    // to arm it again without requiring a full application restart.
+    if (watchId === undefined && locationState.value !== 'denied') beginWatch(scope)
+    return
+  }
   discard()
   activeScope = scope
   const token = generation
   if (!navigator.permissions?.query) {
-    locationState.value = 'permission'
-    notify()
+    beginWatch(scope)
     return
   }
   void navigator.permissions.query({ name: 'geolocation' }).then(status => {
@@ -155,11 +159,11 @@ export function startGrantedLocation(scope: string) {
     permission = status
     const changed = () => {
       if (token !== generation || scope !== activeScope) return
-      if (status.state === 'granted') beginWatch(scope)
+      if (status.state === 'granted' || status.state === 'prompt') beginWatch(scope)
       else {
         clearWatcher()
         latestLocation.value = undefined
-        locationState.value = status.state === 'denied' ? 'denied' : 'permission'
+        locationState.value = 'denied'
         notify(undefined, status.state === 'denied')
       }
     }
@@ -167,10 +171,11 @@ export function startGrantedLocation(scope: string) {
     status.addEventListener('change', changed)
     changed()
   }).catch(() => {
-    if (token === generation && activeScope === scope) {
-      locationState.value = 'permission'
-      notify()
-    }
+    // Safari/iOS may expose Permissions.query but reject geolocation queries.
+    // getCurrentPosition/watchPosition is still the authoritative permission
+    // request there, so the signed-in foreground session must start it rather
+    // than silently leaving GPS cold until Camera is opened.
+    if (token === generation && activeScope === scope) beginWatch(scope)
   })
 }
 /**

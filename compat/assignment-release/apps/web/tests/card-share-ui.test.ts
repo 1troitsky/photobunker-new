@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { flushPromises, mount } from '@vue/test-utils'
 import { ref } from 'vue'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { locale } from '../src/i18n'
+
+beforeEach(() => { locale.value = 'ru' })
 
 vi.mock('../src/identity/store', () => ({
   account: ref({ id: 'account-1' }),

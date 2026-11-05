@@ -49,16 +49,16 @@ afterEach(async () => {
 })
 
 describe('R1-01 / a single private foreground GPS lifecycle', () => {
-  it('never calls geolocation without a previously granted permission', async () => {
+  it('requests and warms geolocation immediately in the first private session', async () => {
     const gps = await getService()
     gps.startGrantedLocation('account-a:device-a')
     await settled()
     expect(query).toHaveBeenCalledWith({ name: 'geolocation' })
-    expect(watchPosition).not.toHaveBeenCalled()
-    expect(gps.locationState.value).toBe('permission')
+    expect(watchPosition).toHaveBeenCalledTimes(1)
+    expect(gps.locationState.value).toBe('pending')
     permissionState = 'denied'
     for (const listener of permissionChanges) listener()
-    expect(watchPosition).not.toHaveBeenCalled()
+    expect(clearWatch).toHaveBeenCalledWith(14)
     expect(gps.latestLocation.value).toBeUndefined()
   })
   it('opens just one watch after prior permission and uses a bounded cached fix', async () => {
@@ -79,11 +79,11 @@ describe('R1-01 / a single private foreground GPS lifecycle', () => {
     expect(clearWatch).toHaveBeenCalledWith(14)
     expect(gps.locationAt(Date.now())).toBeUndefined()
   })
-  it('only prompts through explicit user action, not the automatic check', async () => {
+  it('reuses the automatic watch when Camera explicitly asks for location', async () => {
     const gps = await getService()
     gps.startGrantedLocation('account-a:device-a')
     await settled()
-    expect(watchPosition).not.toHaveBeenCalled()
+    expect(watchPosition).toHaveBeenCalledTimes(1)
     gps.requestLocation('account-a:device-a')
     expect(watchPosition).toHaveBeenCalledTimes(1)
     callback?.(fix())
@@ -170,14 +170,23 @@ describe('R1-01 / a single private foreground GPS lifecycle', () => {
     expect(gps.locationAt(Date.now())).toBeUndefined()
     expect(clearWatch).toHaveBeenCalledWith(14)
   })
-  it('does not trigger a permission prompt on browsers lacking Permissions API', async () => {
+  it('uses geolocation as the permission authority when Permissions API is absent', async () => {
     Object.defineProperty(navigator, 'permissions', { configurable: true, value: undefined })
     const gps = await getService()
     gps.startGrantedLocation('account-a:device-a')
     await settled()
-    expect(gps.locationState.value).toBe('permission')
-    expect(watchPosition).not.toHaveBeenCalled()
+    expect(gps.locationState.value).toBe('pending')
+    expect(watchPosition).toHaveBeenCalledTimes(1)
     gps.requestLocation('account-a:device-a')
     expect(watchPosition).toHaveBeenCalledTimes(1)
+  })
+
+  it('still warms GPS when Permissions.query itself is unsupported', async () => {
+    query.mockRejectedValueOnce(new TypeError('unsupported'))
+    const gps = await getService()
+    gps.startGrantedLocation('account-a:device-a')
+    await settled()
+    expect(watchPosition).toHaveBeenCalledTimes(1)
+    expect(gps.locationState.value).toBe('pending')
   })
 })

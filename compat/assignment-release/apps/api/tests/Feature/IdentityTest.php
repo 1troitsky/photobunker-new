@@ -216,12 +216,15 @@ final class IdentityTest extends TestCase
         $challenge = $this->postJson('/api/v1/identity/challenges', $payload)->assertOk()->json();
         $body = ['challengeId' => $challenge['id'], 'signature' => $this->signature($challenge['message'], $root)];
         $this->postJson('/api/v1/identity/sessions', [...$body, 'signature' => $this->signature($challenge['message'], $device)])->assertUnauthorized();
-        $this->postJson('/api/v1/identity/sessions', $body)->assertOk();
+        $created = $this->postJson('/api/v1/identity/sessions', $body)->assertOk();
+        $created->assertJsonPath('account.userId', '10000000');
         $this->postJson('/api/v1/identity/sessions', $body)->assertUnauthorized();
         $this->assertDatabaseCount('identity_accounts', 1);
         $this->assertDatabaseCount('identity_devices', 1);
-        $this->authenticate($payload, $root); // Same root/device cannot duplicate the identity.
+        $recovered = $this->authenticate($payload, $root); // Same root/device cannot duplicate the identity.
+        $this->assertSame('10000000', $recovered['account']['userId']);
         $this->assertDatabaseCount('identity_accounts', 1);
+        $this->assertSame(10000001, (int) DB::table('identity_counters')->where('name', 'user_number')->value('next_value'));
         $expired = $this->postJson('/api/v1/identity/challenges', $payload)->assertOk()->json();
         DB::table('identity_challenges')->where('id', $expired['id'])->update(['expires_at' => now()->subMinute()]);
         $this->postJson('/api/v1/identity/sessions', ['challengeId' => $expired['id'], 'signature' => $this->signature($expired['message'], $root)])->assertUnauthorized();
@@ -267,6 +270,7 @@ final class IdentityTest extends TestCase
         $visibility['about'] = 'contacts';
         $this->patchJson('/api/v1/identity/profile', ['accountId' => $second['account']['id'], 'revision' => 1, 'fields' => $fields, 'visibility' => $visibility])->assertOk();
         $this->withUnencryptedCookie('pb_identity', $first['token']);
+        $this->getJson('/api/v1/identity/people/'.$second['account']['userId'])->assertOk()->assertJsonPath('userId', '10000001');
         $this->getJson('/api/v1/identity/people/'.$second['account']['publicId'])->assertOk()->assertJsonPath('fields', ['name' => 'Public name'])->assertJsonMissing(['id' => $second['account']['id']]);
         $request = $this->postJson('/api/v1/identity/contacts', ['publicId' => $second['account']['publicId']])->assertOk()->json('relationship.id');
         $this->patchJson('/api/v1/identity/contacts/'.$request, ['accept' => true])->assertStatus(410);

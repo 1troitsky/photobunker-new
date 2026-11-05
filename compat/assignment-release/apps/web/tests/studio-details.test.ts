@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { locale } from '../src/i18n'
 import type { Photo } from '../src/local/photos'
 import { defaultRules, missingRequirements } from '../src/profiles/model'
 import { detailsChanges, detailsFor } from '../src/studio/details'
@@ -6,6 +7,8 @@ import { capturePresetLabel, externalPhotoData, internalAuthor } from '../src/st
 import { emptyEdits } from '../src/studio/versions'
 import { imagePoint, outputPoint, textCorners, textContains } from '../src/studio/geometry'
 function photo(extra: Partial<Photo> = {}): Photo { return { id: 'private-photo', title: '', note: '', favorite: false, uiOnly: true, profile: { id: 'private-preset', name: 'Private preset', description: '', version: 4, rules: { ...defaultRules(), categories: ['Facade'] } }, ...extra } as Photo }
+
+beforeEach(() => { locale.value = 'ru' })
 
 describe('category rules and manual photo details', () => {
   it('supports independent required and limited rules', () => {

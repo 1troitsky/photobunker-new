@@ -7,6 +7,7 @@ import { downloadFile } from '../studio/export'
 import { cardShareText as t } from '../studio/card-share-text'
 import { formatDate, formatNumber } from '../i18n'
 import { profilePath } from '../identity/person'
+import { inAppId } from '../identity/display'
 
 const route = useRoute()
 const id = String(route.params.id)
@@ -173,11 +174,13 @@ onBeforeUnmount(() => {
         <div class="photo-card-intro">
           <span class="photo-card-kicker">{{ t('title') }}</span>
           <h2>{{ card.title || t(card.namePending ? 'pendingId' : 'noTitle') }}</h2>
-          <p v-if="card.description" class="photo-card-description">{{ card.description }}</p>
         </div>
         <div class="photo-card-content">
           <section v-if="imageUrl" class="photo-card-section">
             <img :src="imageUrl" :alt="card.title" class="photo-card-safe-image" />
+            <div v-if="card.description" class="photo-card-caption">
+              <p class="photo-card-description">{{ card.description }}</p>
+            </div>
             <p class="field-hint">{{ t('pixelsHint') }}</p>
             <button v-if="manifestRef?.scopes.download" type="button" class="secondary-button"
               @click="save('photo')">{{ t('savePhoto') }}</button>
@@ -197,7 +200,7 @@ onBeforeUnmount(() => {
             <div><dt>{{ t('expiry') }}</dt><dd>{{ date(card.expiresAt) }}</dd></div>
             <div v-if="card.capturedAt"><dt>{{ t('capture') }}</dt><dd>{{ date(card.capturedAt) }}</dd></div>
             <div v-if="card.author"><dt>{{ t('author') }}</dt><dd>
-              <RouterLink :to="profilePath(card.author.publicId)">{{ card.author.publicId }}</RouterLink>
+              <RouterLink :to="profilePath(card.author.publicId)">{{ inAppId(card.author.publicId) }}</RouterLink>
             </dd></div>
           </dl></section>
           <section v-if="card.location" class="photo-card-section">

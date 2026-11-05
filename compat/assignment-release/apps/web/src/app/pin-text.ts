@@ -5,27 +5,40 @@ const entries = {
     'Необязательная блокировка интерфейса и ключей в памяти при reload или сворачивании. Это НЕ шифрование всей базы и НЕ замена ключу PB1/PB4, восстановлению или системной блокировке телефона. При копировании профиля браузера короткий PIN можно атаковать.',
     'Optional UI and in-memory key lock on reload or background. This does NOT encrypt the entire database or replace PB1/PB4 recovery keys or your phone lock. A copied browser profile is NOT securely protected by a short PIN.',
   ],
-  newPin: ['Новый PIN (6 или 8 цифр)', 'New PIN (6 or 8 digits)'],
+  newPin: ['Новый PIN (от 4 до 8 цифр)', 'New PIN (4 to 8 digits)'],
+  repeatPin: ['Повторите новый PIN', 'Repeat the new PIN'],
   oldPin: ['Текущий PIN для подтверждения', 'Current PIN to confirm'],
   enable: ['Включить PIN', 'Enable PIN'],
   change: ['Изменить PIN', 'Change PIN'],
   disable: ['Отключить PIN', 'Disable PIN'],
   lock: ['Заблокировать приложение', 'Lock app'],
-  unlock: ['Разблокировать', 'Unlock'],
+  unlock: ['Продолжить', 'Continue'],
   locked: ['PhotoBunker заблокирован', 'PhotoBunker is locked'],
-  legacy: ['Используется старый 4-значный PIN. Рекомендуем заменить его на 6 или 8 цифр.', 'A legacy 4-digit PIN is in use. We recommend switching to 6 or 8 digits.'],
+  legacy: ['PIN будет безопасно обновлён после следующего ввода.', 'The PIN record will be upgraded after the next successful entry.'],
   saved: ['PIN сохранён на этом устройстве', 'PIN saved on this device'],
   disabled: ['PIN отключён', 'PIN disabled'],
+  active: ['PIN включён', 'PIN is on'],
+  inactive: ['PIN не настроен', 'PIN is not set'],
+  activeHint: ['Приложение блокируется на этом устройстве', 'This device locks PhotoBunker with a PIN'],
+  inactiveHint: ['Можно включить в любой момент', 'You can enable it at any time'],
+  cancel: ['Отмена', 'Cancel'],
+  mismatch: ['PIN-коды не совпадают', 'PINs do not match'],
+  disableConfirm: ['Введите текущий PIN, чтобы отключить блокировку', 'Enter the current PIN to turn off the lock'],
   wrong: ['Неверный PIN', 'Incorrect PIN'],
-  cooldown: ['Слишком много попыток. Подождите и повторите.', 'Too many attempts. Wait before retrying.'],
+  cooldown: ['Устройство заблокировано на 30 минут', 'This device is locked for 30 minutes'],
   rollback: ['Время устройства изменилось назад. Верните правильное время для разблокировки.', 'Device clock moved backwards. Restore the correct time before unlocking.'],
   storage: ['Не удалось проверить локальный PIN. Доступ остаётся закрытым; проверьте хранилище и повторите.', 'Local PIN could not be verified. Access stays locked. Check storage and retry.'],
-  length: ['Введите 6 или 8 цифр', 'Enter 6 or 8 digits'],
+  length: ['Введите от 4 до 8 цифр', 'Enter 4 to 8 digits'],
   confirm: ['Введите текущий PIN перед изменением', 'Confirm your current PIN before changing it'],
   changed: ['PIN изменён в другой вкладке. Повторите после обновления.', 'PIN changed in another tab. Retry after refreshing.'],
   account: ['Аккаунт или устройство изменились', 'Account or device changed'],
-  forgot: ['Забыли PIN? Восстановить доступ с PB1', 'Forgot PIN? Recover with PB1'],
-  recovery: ['Сброс PIN возможен только после онлайн-проверки ключа PB1. Это не сбрасывает ключ аккаунта.', 'PIN reset requires online proof of the PB1 key. This does not reset the account key.'],
+  forgot: ['Восстановить или сменить аккаунт по ключу', 'Recover or change account with a key'],
+  lockAfter: ['Требовать PIN', 'Require PIN'],
+  immediately: ['Сразу', 'Immediately'],
+  after10s: ['Через 10 секунд', 'After 10 seconds'],
+  after30s: ['Через 30 секунд', 'After 30 seconds'],
+  after1m: ['Через 1 минуту', 'After 1 minute'],
+  after5m: ['Через 5 минут', 'After 5 minutes'],
   retry: ['Повторить проверку хранилища', 'Retry storage check'],
 } as const
 export type PinText = keyof typeof entries
@@ -36,6 +49,7 @@ export function pinError(error: unknown) {
   if (msg === 'pin.cooldown') return pt('cooldown')
   if (msg === 'pin.clock_rollback') return pt('rollback')
   if (msg === 'pin.length') return pt('length')
+  if (msg === 'pin.mismatch') return pt('mismatch')
   if (msg === 'pin.confirm_required') return pt('confirm')
   if (msg === 'pin.changed') return pt('changed')
   if (msg === 'pin.account_changed') return pt('account')

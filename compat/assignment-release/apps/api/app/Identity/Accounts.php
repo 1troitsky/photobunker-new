@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 
 final class Accounts
 {
-    public const FIELDS = ['name', 'username', 'email', 'phone', 'links', 'about'];
+    public const FIELDS = ['avatar', 'name', 'username', 'email', 'phone', 'links', 'about'];
 
     public function current(Request $request): object
     {
@@ -25,12 +25,44 @@ final class Accounts
 
     public function profile(object $account): array
     {
-        return json_decode(Crypt::decryptString($account->profile), true, flags: JSON_THROW_ON_ERROR);
+        $profile = json_decode(Crypt::decryptString($account->profile), true, flags: JSON_THROW_ON_ERROR);
+        // Existing encrypted profiles predate some optional fields. Always
+        // return the current typed shape without requiring a data migration.
+        $profile['fields'] = array_replace(array_fill_keys(self::FIELDS, ''), $profile['fields'] ?? []);
+        $profile['visibility'] = array_replace(array_fill_keys(self::FIELDS, 'private'), $profile['visibility'] ?? []);
+
+        return $profile;
     }
 
     public function own(object $account): array
     {
-        return ['rootKey' => $account->public_key, 'id' => $account->id, 'publicId' => $account->public_id, ...$this->profile($account), 'username' => $account->username, 'revision' => $account->revision, 'matrix' => ['state' => $account->matrix_state, 'userId' => $account->matrix_state === 'ready' ? app(MatrixBridge::class)->mxid($account->id) : null]];
+        return ['rootKey' => $account->public_key, 'id' => $account->id, 'publicId' => $account->public_id, 'userId' => $this->userId($account), ...$this->profile($account), 'username' => $account->username, 'revision' => $account->revision, 'matrix' => ['state' => $account->matrix_state, 'userId' => $account->matrix_state === 'ready' ? app(MatrixBridge::class)->mxid($account->id) : null]];
+    }
+
+    private function userId(object $account): ?string
+    {
+        return isset($account->user_number) && $account->user_number !== null
+            ? str_pad((string) $account->user_number, 8, '0', STR_PAD_LEFT)
+            : null;
+    }
+
+    private function registerAccount(array $payload): object
+    {
+        $counter = DB::table('identity_counters')->where('name', 'user_number')->lockForUpdate()->first();
+        abort_unless($counter, 503);
+        $fingerprint = hash('sha256', $payload['rootKey']);
+        $existing = DB::table('identity_accounts')->where('key_fingerprint', $fingerprint)->lockForUpdate()->first();
+        if ($existing) {
+            return $existing;
+        }
+        $number = (int) $counter->next_value;
+        abort_if($number < 10000000 || $number > 99999999, 503);
+        DB::table('identity_counters')->where('name', 'user_number')->update(['next_value' => $number + 1]);
+        $id = (string) Str::uuid();
+        $profile = ['fields' => array_fill_keys(self::FIELDS, ''), 'visibility' => array_fill_keys(self::FIELDS, 'private')];
+        DB::table('identity_accounts')->insert(['id' => $id, 'public_id' => 'pb_'.strtolower(Str::random(16)), 'user_number' => $number, 'key_fingerprint' => $fingerprint, 'public_key' => $payload['rootKey'], 'profile' => Crypt::encryptString(json_encode($profile)), 'revision' => 1, 'matrix_password' => Crypt::encryptString(bin2hex(random_bytes(32))), 'matrix_state' => 'pending', 'created_at' => now(), 'updated_at' => now()]);
+
+        return DB::table('identity_accounts')->find($id) ?? abort(503);
     }
 
     public function challenge(Request $request): array
@@ -72,11 +104,7 @@ final class Accounts
             abort_unless($key && Proof::verify($key, $challenge->message, $data['signature']), 401);
             if (! $account) {
                 abort_unless($challenge->purpose === 'register', 401);
-                $id = (string) Str::uuid();
-                $profile = ['fields' => array_fill_keys(self::FIELDS, ''), 'visibility' => array_fill_keys(self::FIELDS, 'private')];
-                DB::table('identity_accounts')->insertOrIgnore(['id' => $id, 'public_id' => 'pb_'.strtolower(Str::random(16)), 'key_fingerprint' => hash('sha256', $payload['rootKey']), 'public_key' => $payload['rootKey'], 'profile' => Crypt::encryptString(json_encode($profile)), 'revision' => 1, 'matrix_password' => Crypt::encryptString(bin2hex(random_bytes(32))), 'matrix_state' => 'pending', 'created_at' => now(), 'updated_at' => now()]);
-                $account = DB::table('identity_accounts')->where('key_fingerprint', hash('sha256', $payload['rootKey']))->lockForUpdate()->first();
-                abort_unless($account, 409);
+                $account = $this->registerAccount($payload);
             }
             abort_if(AccountLifecycle::unavailable($account), 410);
             app(AccountLifecycle::class)->activity($account->id);
@@ -127,6 +155,10 @@ final class Accounts
             return DB::table('identity_accounts')->find(substr($hex, 0, 8).'-'.substr($hex, 8, 4).'-'.substr($hex, 12, 4).'-'.substr($hex, 16, 4).'-'.substr($hex, 20));
         }
 
+        if (preg_match('/^[0-9]{8}$/D', $handle)) {
+            return DB::table('identity_accounts')->where('user_number', (int) $handle)->first();
+        }
+
         return str_starts_with($handle, '@')
             ? DB::table('identity_accounts')->where('username', strtolower(substr($handle, 1)))->first()
             : DB::table('identity_accounts')->where('public_id', $handle)->first();
@@ -148,6 +180,6 @@ final class Accounts
             }
         }
 
-        return ['publicId' => $account->public_id, 'username' => $account->username, 'fields' => $fields, 'self' => $account->id === $viewer, 'blocked' => $ownBlock, 'relationship' => $relation ? ['id' => $relation->id, 'state' => 'accepted', 'incoming' => false] : null];
+        return ['publicId' => $account->public_id, 'userId' => $this->userId($account), 'username' => $account->username, 'fields' => $fields, 'self' => $account->id === $viewer, 'blocked' => $ownBlock, 'relationship' => $relation ? ['id' => $relation->id, 'state' => 'accepted', 'incoming' => false] : null];
     }
 }

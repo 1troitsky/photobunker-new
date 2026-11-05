@@ -1,7 +1,7 @@
 import { locale } from '../i18n'
 
 const copy = {
-  assignments: ['Задания', 'Assignments'], messages: ['Сообщения', 'Messages'], camera: ['Камера', 'Camera'], photos: ['Фото', 'Photos'], profile: ['Профиль', 'Profile'],
+  assignments: ['Задания', 'Assignments'], messages: ['Сообщения', 'Messages'], camera: ['Камера', 'Camera'], photos: ['Фото', 'Photos'], browser: ['Браузер', 'Browser'], people: ['Команды и контакты', 'Teams and contacts'], peopleDock: ['Контакты', 'Contacts'], profile: ['Профиль', 'Profile'],
   presets: ['Пресеты камеры', 'Camera presets'], standard: ['Стандартная съёмка', 'Standard capture'],
   presetHint: ['Пресет сохраняет настройки камеры. Для обычной съёмки создавать его не нужно.', 'A preset saves your camera settings. You can take photos without creating one.'],
   appearance: ['Оформление', 'Appearance'], dark: ['Тёмное', 'Dark'], light: ['Светлое', 'Light'], system: ['Как на устройстве', 'Use device setting'],

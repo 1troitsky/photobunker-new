@@ -2,7 +2,6 @@ import { ref } from 'vue'
 import { account,deviceId,invalidateLocalDeleteSession } from '../identity/store'
 import { lockApp } from './lock'
 import { hardLock } from '../crypto/store'
-import { stopMessaging } from '../messages/store'
 import { signFromLockedScreen } from './emergency'
 import { readEmergencyCommand,commitEmergencyCommand,advanceEmergencyCommand,
   type EmergencyCommand } from './emergency-command'
@@ -24,7 +23,7 @@ function stopPrivateAccess() {
   emergencyBlocked.value=true
   lockApp()
   hardLock()
-  stopMessaging()
+  void import('../messages/store').then(module => module.stopMessaging())
 }
 function signedOut() {
   localStorage.setItem('pb-emergency-locked','true')
@@ -138,7 +137,7 @@ export function resumeEmergency():Promise<boolean> {
  * wrong app PIN must NEVER call this method (no destructive side effects).
  */
 export async function tryEmergencyOnLockedScreen(pin:string):Promise<boolean> {
-  if(!/^(?:\d{6}|\d{8})$/.test(pin) || !navigator.locks?.request)return false
+  if(!/^\d{6,10}$/.test(pin) || !navigator.locks?.request)return false
   if(await readEmergencyCommand()){stopPrivateAccess();return true}
   const scope={owner:account.value?.id??'',device:deviceId.value}
   if(!scope.owner||!scope.device)return false

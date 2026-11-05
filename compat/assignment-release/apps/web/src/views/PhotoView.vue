@@ -15,6 +15,7 @@ import { locale, t, formatNumber } from '../i18n'
 import {
   deletePhoto,
   readPhoto,
+  readThumbnail,
   saveOnServer,
   updatePhoto,
   reloadFromServer,
@@ -36,17 +37,11 @@ import { photos } from '../local/library'
 import { p, type ProfileText } from '../profiles/text'
 import ScreenHeader from '../components/ScreenHeader.vue'
 import AppSheet from '../components/AppSheet.vue'
-import { account } from '../identity/store'
+import { account, deviceId } from '../identity/store'
+import { readOrganizer } from '../photo-browser/cache'
 import { photo as workspacePhoto } from '../workspace/api'
 import { w } from '../workspace/text'
 import { s } from '../studio/text'
-import PhotoDetailsFields from '../components/PhotoDetailsFields.vue'
-import {
-  detailsFor,
-  detailsDirty,
-  detailsChanges,
-  PhotoDetailsError,
-} from '../studio/details'
 import {
   capturePresetLabel,
   internalAuthor,
@@ -56,9 +51,10 @@ import { downloadFile, externalPhotoFile, shareFile } from '../studio/export'
 import { nameText } from '../local/photo-name-text'
 import { photoCardText } from '../studio/photo-card-text'
 import { photoCardPath } from '../studio/private-photo-card'
+import { inAppId } from '../identity/display'
 import { listPhotoVersions, type PhotoVersion } from '../studio/versions'
+import { recordDiagnostic } from '../app/status'
 const infoOpen = ref(false),
-  editDataOpen = ref(false),
   shareOpen = ref(false),
   deleteOpen = ref(false),
   versionsOpen = ref(false),
@@ -119,15 +115,44 @@ async function shorten() {
 const selectedVersion = computed(() =>
   versions.value.find((item) => item.id === versionId.value),
 )
+const assignmentScope = computed(() =>
+  typeof route.query.assignment === 'string' ? route.query.assignment : '',
+)
+const folderScope = computed(() =>
+  typeof route.query.folder === 'string' ? route.query.folder : '',
+)
+const personalScope = computed(() => route.query.personal === '1')
+const folderPhotoIds = ref<Set<string>>(new Set())
+watch([folderScope, () => account.value?.id, deviceId], async ([folder, owner, device]) => {
+  if (!folder || !owner || !device) { folderPhotoIds.value = new Set(); return }
+  const scope = `${owner}:${device}:${folder}`
+  try {
+    const item = (await readOrganizer(owner, device)).folders.find(value => value.id === folder)
+    if (`${account.value?.id}:${deviceId.value}:${folderScope.value}` === scope)
+      folderPhotoIds.value = new Set(item?.photoIds ?? [])
+  } catch { folderPhotoIds.value = new Set() }
+}, { immediate: true })
+const photoAssignment = (item: Photo) =>
+  item.workspaceAssignmentId || item.uiAssignmentId || item.assignmentId || item.spaceId || ''
 const siblings = computed(() =>
-  photos.value.filter((item) => !item.uiVersionOf),
+  photos.value.filter((item) =>
+    !item.uiVersionOf &&
+    (!assignmentScope.value || photoAssignment(item) === assignmentScope.value) &&
+    (!folderScope.value || folderPhotoIds.value.has(item.id)) &&
+    (!personalScope.value || !photoAssignment(item)),
+  ),
 )
 const position = computed(() =>
   siblings.value.findIndex((item) => item.id === photo.value?.id),
 )
 function sibling(offset: number) {
   const item = siblings.value[position.value + offset]
-  if (item) void router.push(`/gallery/${item.id}`)
+  if (item) void router.push({
+    path: `/gallery/${item.id}`,
+    query: assignmentScope.value ? { assignment: assignmentScope.value }
+      : folderScope.value ? { folder: folderScope.value }
+        : personalScope.value ? { personal: '1' } : {},
+  })
 }
 async function syncVersions() {
   if (!photo.value || busy.value) return
@@ -150,22 +175,18 @@ function showVersion(id: string) {
   url.value = blob ? URL.createObjectURL(blob) : ''
   versionsOpen.value = false
 }
-function closeData() {
-  if (!busy.value && (!dirty.value || confirm(s('leave')))) {
-    if (photo.value) setPhoto(photo.value)
-    editDataOpen.value = false
-  }
-}
 const publicPreview = ref(false),
   publicUrl = ref(''),
-  publicFile = ref<File>(),
-  dataError = ref('')
+  publicFile = ref<File>()
 const publicDetails = computed(() =>
   photo.value ? externalPhotoData(photo.value) : undefined,
 )
-const author = computed(() =>
-  photo.value ? internalAuthor(photo.value) : undefined,
-)
+const author = computed(() => {
+  const value = photo.value ? internalAuthor(photo.value) : undefined
+  if (!value) return
+  if (value === account.value?.publicId) return locale.value === 'ru' ? 'Вы' : 'You'
+  return value.startsWith('pb_') ? inAppId(value) : value
+})
 async function share() {
   if (!photo.value || busy.value || !original.value || !canShare.value) return
   busy.value = true
@@ -222,12 +243,12 @@ const router = useRouter()
 const photo = ref<Photo>()
 const original = ref<Blob>()
 const url = ref('')
-const data = ref(detailsFor())
 const loading = ref(true)
+const loadFailure = ref(false)
+const loadAttempt = ref(0)
 const busy = ref(false)
 const deleted = ref(false)
 const status = ref<Parameters<typeof t>[0]>()
-const dirty = computed(() => detailsDirty(photo.value, data.value))
 const missing = computed(() =>
   photo.value ? missingRequirements(photo.value) : [],
 )
@@ -258,7 +279,6 @@ const canShare = computed(() =>
     ? photo.value.workspaceAccess.shareExternal
     : !photo.value?.thumbnailOnly,
 )
-const canReference = computed(() => !!photo.value?.workspaceAccess?.share)
 const metadataBusy = computed(() => busy.value || !canEdit.value)
 let generation = 0
 function release() {
@@ -272,21 +292,38 @@ function release() {
   zoom.value = false
 }
 watch(
-  () => route.params.id,
-  async (id) => {
+  () => [String(route.params.id), loadAttempt.value] as const,
+  async ([id]) => {
+    const startedAt = performance.now()
     const current = ++generation
     release()
     versionError.value = ''
     photo.value = undefined
     loading.value = true
+    loadFailure.value = false
     status.value = undefined
+    const known = photos.value.find(item => item.id === String(id))
+    if (known) {
+      photo.value = known
+      void readThumbnail(
+        known.id,
+        known.accountId ? `${known.remoteRevision}:${known.thumbnailOnly}` : 'current',
+        known.expiresAt,
+      ).then(blob => {
+        if (current !== generation || original.value) return
+        if (url.value) URL.revokeObjectURL(url.value)
+        url.value = URL.createObjectURL(blob)
+        loading.value = false
+      }).catch(() => {})
+    }
     try {
       const result = await readPhoto(String(id))
       if (current !== generation) return
       photo.value = result.photo
       original.value = result.blob
+      if (url.value) URL.revokeObjectURL(url.value)
       url.value = URL.createObjectURL(result.blob)
-      data.value = detailsFor(result.photo)
+      loading.value = false
       const availableVersions = await listPhotoVersions(result.photo).catch(
         () => {
           versionError.value = s('linkError')
@@ -296,8 +333,14 @@ watch(
       if (current !== generation) return
       versions.value = availableVersions
       showVersion(String(route.query.version ?? ''))
+      recordDiagnostic('Photo', 'Opened encrypted photo', { durationMs: performance.now() - startedAt })
     } catch {
       /* Missing/evicted/denied data must not be shown as an empty photo. */
+      loadFailure.value = true
+      recordDiagnostic('Photo error', 'Photo bytes could not be opened', {
+        durationMs: performance.now() - startedAt,
+        tone: 'error',
+      })
     } finally {
       if (current === generation) loading.value = false
     }
@@ -307,7 +350,6 @@ watch(
 
 function setPhoto(value: Photo) {
   photo.value = value
-  data.value = detailsFor(value)
 }
 watch(
   () => account.value?.id,
@@ -330,7 +372,6 @@ watch(photos, (rows) => {
     if (current.thumbnailOnly && !photo.value.thumbnailOnly) {
       const version = ++generation
       release()
-      editDataOpen.value = false
       infoOpen.value = false
       setPhoto(current)
       void readPhoto(current.id)
@@ -351,7 +392,7 @@ watch(photos, (rows) => {
         photo.value.expiresAt ?? Infinity,
         current.expiresAt,
       )
-    if (!dirty.value && !busy.value) setPhoto(current)
+    if (!busy.value) setPhoto(current)
   } else if (
     !libraryLoading.value &&
     !serverError.value &&
@@ -397,34 +438,6 @@ async function reload() {
   }
 }
 
-async function save() {
-  if (!photo.value || busy.value) return
-  busy.value = true
-  status.value = undefined
-  dataError.value = ''
-  try {
-    setPhoto(
-      await updatePhoto(
-        photo.value.id,
-        detailsChanges(photo.value, data.value),
-        photo.value.remoteRevision,
-        photo.value,
-      ),
-    )
-    libraryChanged()
-    status.value = 'changesSaved'
-    editDataOpen.value = false
-  } catch (error) {
-    dataError.value =
-      error instanceof ServerError
-        ? t(error.status === 409 ? 'changeConflict' : 'changeFailed')
-        : error instanceof PhotoDetailsError
-          ? error.message
-          : s('failed')
-  } finally {
-    busy.value = false
-  }
-}
 async function favorite() {
   if (!photo.value || busy.value) return
   busy.value = true
@@ -458,7 +471,10 @@ async function remove() {
     await deletePhoto(photo.value.id)
     deleted.value = true
     libraryChanged()
-    await router.replace('/gallery')
+    await router.replace(assignmentScope.value
+      ? { path: '/browser', query: { assignment: assignmentScope.value } }
+      : folderScope.value ? { path: '/browser', query: { folder: folderScope.value } }
+        : '/gallery')
   } catch {
     status.value = 'deleteFailed'
   } finally {
@@ -466,7 +482,7 @@ async function remove() {
   }
 }
 async function upload() {
-  if (!photo.value || busy.value || dirty.value) return
+  if (!photo.value || busy.value) return
   busy.value = true
   status.value = 'serverUploading'
   try {
@@ -503,21 +519,12 @@ async function download() {
   }
 }
 function canLeave() {
-  return (
-    deleted.value ||
-    (!busy.value &&
-      (!dirty.value ||
-        window.confirm(
-          locale.value === 'ru'
-            ? 'Изменения не сохранены. Уйти без сохранения?'
-            : 'Changes are not saved. Leave without saving?',
-        )))
-  )
+  return deleted.value || !busy.value
 }
 onBeforeRouteLeave(canLeave)
 onBeforeRouteUpdate(canLeave)
 function beforeUnload(event: BeforeUnloadEvent) {
-  if (dirty.value || busy.value) {
+  if (busy.value) {
     event.preventDefault()
     event.returnValue = ''
   }
@@ -559,13 +566,15 @@ onBeforeUnmount(() => {
       >
         <AppIcon name="copy" /></button
     ></ScreenHeader>
-    <p v-if="loading" class="loading-state screen-body" role="status">
-      {{ t('loading') }}
-    </p>
+    <div v-if="loading && !url" class="photo-view-loading screen-body" role="status" aria-label="Loading">
+      <span class="photo-view-loading-image" />
+      <span class="photo-view-loading-line" />
+    </div>
     <div v-else-if="!photo" class="native-empty">
       <AppIcon name="gallery" />
       <h2>{{ t('photoUnavailable') }}</h2>
       <p>{{ t('photoUnavailableHint') }}</p>
+      <button v-if="loadFailure" class="primary-button" @click="loadAttempt++">{{ t('retry') }}</button>
     </div>
     <template v-else
       ><div
@@ -641,43 +650,21 @@ onBeforeUnmount(() => {
           @click="
             () => {
               if (!photo) return
-              router.push(
-                `/gallery/${photo.id}/edit${versionId ? `?version=${versionId}` : ''}`,
-              )
+              router.push({
+                path: `/gallery/${photo.id}/edit`,
+                query: {
+                  ...(versionId ? { version: versionId } : {}),
+                  ...(assignmentScope ? { assignment: assignmentScope } : {}),
+                  ...(folderScope ? { folder: folderScope } : {}),
+                  ...(personalScope ? { personal: '1' } : {}),
+                },
+              })
             }
           "
         >
           <AppIcon name="edit" /><span>{{ s('edit') }}</span></button
         ><button v-if="canShare" :disabled="busy" @click="share">
           <AppIcon name="share" /><span>{{ s('share') }}</span></button
-        ><button
-          v-if="canEdit"
-          @click="
-            () => {
-              dataError = ''
-              editDataOpen = true
-            }
-          "
-        >
-          <AppIcon name="info" /><span>{{ s('photoData') }}</span></button
-        ><button
-          v-if="photo.workspaceAssignmentId && canReference"
-          @click="
-            () => {
-              if (!photo) return
-              router.push({
-                path: '/messages',
-                query: {
-                  assignment: photo.workspaceAssignmentId,
-                  photo: photo.id,
-                },
-              })
-            }
-          "
-        >
-          <AppIcon name="messages" /><span>{{
-            w('discussPhoto')
-          }}</span></button
         ><button @click="infoOpen = true">
           <AppIcon name="info" /><span>{{ s('info') }}</span></button
         ><button
@@ -833,17 +820,6 @@ onBeforeUnmount(() => {
         </p>
         <button
           v-if="canEdit"
-          class="secondary-button full-button"
-          @click="
-            () => {
-              infoOpen = false
-              editDataOpen = true
-            }
-          "
-        >
-          <AppIcon name="edit" />{{ s('editData') }}</button
-        ><button
-          v-if="canEdit"
           class="quiet-button full-button"
           @click="openShorten"
         >
@@ -868,7 +844,7 @@ onBeforeUnmount(() => {
           ><button
             v-if="!onServer && !photo.uploadRequested"
             class="quiet-button full-button"
-            :disabled="busy || dirty"
+            :disabled="busy"
             @click="upload"
           >
             {{ t('saveOnServer') }}
@@ -878,6 +854,7 @@ onBeforeUnmount(() => {
           v-if="photo.spaceId || photo.workspaceAssignmentId"
           class="photo-review"
         >
+          <h3>{{ c('review') }}</h3>
           <p class="review-state">{{ c(photo.reviewState ?? 'pending') }}</p>
           <p v-if="photo.reviewComment">{{ photo.reviewComment }}</p>
           <ReviewPanel
@@ -889,23 +866,6 @@ onBeforeUnmount(() => {
             @changed="refreshReview"
           /></section></template
     ></AppSheet>
-    <AppSheet
-      :open="editDataOpen && !!photo"
-      :title="s('editData')"
-      :busy="busy"
-      @close="closeData"
-      ><form v-if="photo" class="native-form" @submit.prevent="save">
-        <PhotoDetailsFields v-model="data" :photo="photo" :busy="busy" />
-        <p v-if="dataError" class="form-error" role="alert">{{ dataError }}</p>
-        <button
-          type="submit"
-          class="primary-button full-button"
-          :disabled="metadataBusy || !dirty"
-        >
-          {{ s(busy ? 'saving' : 'save') }}
-        </button>
-      </form></AppSheet
-    >
     <AppSheet :open="shareOpen" :title="s('share')" @close="shareOpen = false"
       ><p class="field-hint">{{ s('externalHint') }}</p>
       <p class="field-hint">{{ s('shareHint') }}</p>

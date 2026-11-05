@@ -19,7 +19,7 @@
     "check:calls": "node check-calls.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "1.64.0",
+    "@playwright/test": "1.56.1",
     "@types/node": "22.19.0",
     "libsodium-wrappers": "0.8.4",
     "typescript": "5.9.3",

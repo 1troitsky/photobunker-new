@@ -10,7 +10,7 @@ export type PinV2 = {
   salt: string
   verifier: string
   iterations: number
-  length: 4 | 6 | 8
+  length: 4 | 5 | 6 | 7 | 8
   failures: number
   until: number
   lastWall: number

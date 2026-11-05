@@ -16,32 +16,20 @@ import {
 import { a } from '../identity/text'
 import { profileReturnTo } from '../identity/person'
 import { onboarding, startOnboarding } from '../identity/onboarding'
-import WorkspaceImport from '../components/WorkspaceImport.vue'
 import AppIcon from '../components/AppIcon.vue'
 import ScreenHeader from '../components/ScreenHeader.vue'
 import AppSheet from '../components/AppSheet.vue'
 import { q } from '../crypto/text'
-import { formatNumber } from '../i18n'
 import { accountKey } from '../identity/vault'
 import { downloadFile } from '../studio/export'
 import { purgeAccountFromDevice, pendingDeviceCleanup as cleanupPending, accountDeletionNotice as deletionNotice } from '../identity/storage'
-import { photos } from '../local/library'
 import { delivery } from '../delivery/queue'
-import {
-  dockPaths,
-  preferencesSaved,
-  setStartup,
-  setTheme,
-  startup,
-  theme,
-  type Startup,
-  type Theme,
-} from '../app/preferences'
 import { u } from '../app/text'
 import { s } from '../studio/text'
 import { computed } from 'vue'
 import { usePeerPresence } from '../profiles/presence'
 import { presenceLabel } from '../profiles/presence-text'
+import { inAppId } from '../identity/display'
 const ownPresence=usePeerPresence(computed(()=>account.value?.publicId||''))
 const router = useRouter(), route = useRoute(),
   authBusy = ref(false),
@@ -81,19 +69,12 @@ async function signOut() {
 }
 async function copyId() {
   try {
-    await navigator.clipboard.writeText(account.value!.publicId)
+    await navigator.clipboard.writeText(inAppId(account.value!.publicId, account.value!.userId))
     copied.value = true
   } catch {
     authError.value = a('failed')
   }
 }
-const sections = [
-  'assignments',
-  'messages',
-  'camera',
-  'photos',
-  'profile',
-] as const
 </script>
 
 <template>
@@ -101,12 +82,12 @@ const sections = [
     <ScreenHeader :title="u('profile')" />
     <div class="screen-body">
       <section class="account-card">
-        <span class="account-avatar"><AppIcon name="user" /></span>
+        <span class="account-avatar"><img v-if="account?.fields.avatar" :src="account.fields.avatar" :alt="a('avatar')" /><AppIcon v-else name="user" /></span>
         <div v-if="account">
           <h2>
-            {{ account.fields.name || account.fields.username || a('account') }}
+            {{ account.fields.name || (account.fields.username ? `@${account.fields.username}` : q('Мой профиль')) }}
           </h2>
-          <p class="identity-public-id">{{ account.publicId }}</p>
+          <p class="account-user-id">{{ inAppId(account.publicId, account.userId) }}</p>
           <p class="field-hint presence-label" role="status">{{ presenceLabel(ownPresence) }}</p>
           <div class="inline-actions">
             <button class="quiet-button" @click="copyId">
@@ -181,86 +162,14 @@ const sections = [
       <div v-if="!account && cleanupPending" class="form-error" role="alert"><p>{{ q('Закройте другие окна приложения, чтобы завершить удаление локальных данных.') }}</p><button class="secondary-button" :disabled="authBusy" @click="retryCleanup">{{ q('Завершить очистку устройства') }}</button></div>
       <p v-if="authError" class="form-error" role="alert">{{ authError }}</p>
       <template v-if="account && !offlineCaptureIdentity">
-      <div class="account-stats">
-        <div>
-          <strong>{{ formatNumber(photos.length) }}</strong
-          ><span>{{ u('personalPhotos') }}</span>
-        </div>
-        <div>
-          <strong>{{ formatNumber(delivery.pending) }}</strong
-          ><span>{{ u('queued') }}</span>
-        </div>
-      </div>
-      <section class="preference-group" :aria-label="u('preferences')">
-        <h2>{{ u('preferences') }}</h2>
-        <label class="preference-row"
-          ><span><AppIcon name="appearance" />{{ u('appearance') }}</span
-          ><select
-            :aria-label="u('appearance')"
-            :value="theme"
-            @change="
-              ($event) => {
-                setTheme(($event.target as HTMLSelectElement).value as Theme)
-              }
-            "
-          >
-            <option value="dark">{{ u('dark') }}</option>
-            <option value="light">{{ u('light') }}</option>
-            <option value="system">{{ u('system') }}</option>
-          </select></label
-        >
-        <label class="preference-row"
-          ><span><AppIcon name="device" />{{ u('startup') }}</span
-          ><select
-            :aria-label="u('startup')"
-            :value="startup"
-            @change="
-              ($event) => {
-                setStartup(
-                  ($event.target as HTMLSelectElement).value as Startup,
-                )
-              }
-            "
-          >
-            <option
-              v-for="(path, index) in dockPaths"
-              :key="path"
-              :value="path"
-            >
-              {{ u(sections[index]!) }}
-            </option>
-            <option value="last">{{ u('last') }}</option>
-          </select></label
-        >
-        <p v-if="!preferencesSaved" class="preference-notice" role="status">
-          {{ u('saveFailed') }}
-        </p>
-        <RouterLink v-if="account" to="/profile/contacts" class="account-link"
-          ><AppIcon name="users" /><span
-            ><strong>{{ a('contacts') }}</strong></span
-          ><AppIcon name="chevron"
-        /></RouterLink>
-        <RouterLink v-if="account" to="/profile/security" class="account-link"
-          ><AppIcon name="lock" /><span
-            ><strong>{{ a('security') }}</strong
-            ><small>{{ a('devices') }} · {{ a('infrastructure') }}</small></span
-          ><AppIcon name="chevron"
-        /></RouterLink>
-        <RouterLink to="/settings" class="account-link"
-          ><AppIcon name="settings" /><span
-            ><strong>{{ u('settings') }}</strong
-            ><small>{{ u('settingsHint') }}</small></span
-          ><AppIcon name="chevron"
-        /></RouterLink>
-        <RouterLink to="/settings/data" class="account-link"><AppIcon name="device" /><span><strong>{{ q('Данные и хранилище') }}</strong><small>{{ q('Фотографии, занятое место и удаление аккаунта') }}</small></span><AppIcon name="chevron" /></RouterLink>
-        <RouterLink to="/profile/teams" class="account-link"
-          ><AppIcon name="users" /><span
-            ><strong>{{ s('teams') }}</strong
-            ><small>{{ s('participants') }}</small></span
-          ><AppIcon name="chevron"
-        /></RouterLink>
+      <section class="preference-group profile-settings" :aria-label="u('preferences')">
+        <h2 class="profile-section-title">{{ u('preferences') }}</h2>
+        <RouterLink to="/settings" class="account-link"><AppIcon name="settings" /><span><strong>{{ q('Настройки приложения') }}</strong><small>{{ q('Оформление, язык и экран при запуске') }}</small></span><AppIcon name="chevron" /></RouterLink>
+        <RouterLink to="/profile/security" class="account-link"><AppIcon name="lock" /><span><strong>{{ q('Конфиденциальность и безопасность') }}</strong><small>{{ q('Видимость профиля, PIN-коды и устройства') }}</small></span><AppIcon name="chevron" /></RouterLink>
+        <RouterLink to="/settings/data" class="account-link"><AppIcon name="device" /><span><strong>{{ q('Данные и хранилище') }}</strong><small>{{ q('Кэш, облако, очереди и резервные копии') }}</small></span><AppIcon name="chevron" /></RouterLink>
+        <RouterLink to="/payment" class="account-link"><AppIcon name="key" /><span><strong>{{ q('Тариф и оплата') }}</strong><small>{{ q('Лимиты плана и Web3-оплата') }}</small></span><AppIcon name="chevron" /></RouterLink>
+        <RouterLink to="/status" class="account-link"><AppIcon name="sync" /><span><strong>{{ q('Статус') }}</strong><small>{{ q('Подключение, отправка и процессы устройства') }}</small></span><AppIcon name="chevron" /></RouterLink>
       </section>
-      <WorkspaceImport v-if="account" />
       <p v-if="account" class="field-hint">{{ a('signOutHint') }}</p>
       <button
         v-if="account"
@@ -275,7 +184,7 @@ const sections = [
     <AppSheet :open="logoutOpen" :title="q('Выйти из аккаунта?')" :busy="authBusy || signingOut" @close="logoutOpen = false">
       <div class="logout-sheet-body">
         <div class="logout-sheet-copy">
-          <p>{{ q('Ключ аккаунта будет удалён с этого устройства. Чтобы снова открыть фотографии и сообщения, понадобится сохранённый ключ.') }}</p>
+          <p>{{ q('Ключ аккаунта будет удалён с этого устройства. Чтобы снова открыть данные, понадобится сохранённый ключ.') }}</p>
           <p class="logout-sheet-warning">{{ q('Потерянный ключ восстановить нельзя.') }}</p>
           <p v-if="delivery.pending" class="field-hint">{{ q('Сначала дождитесь отправки фотографий с этого устройства.') }}</p>
         </div>

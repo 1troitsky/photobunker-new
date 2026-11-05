@@ -23,6 +23,7 @@ beforeEach(() => {
     publicId: 'pb_qa',
     revision: 1,
     fields: {
+      avatar: '',
       name: '',
       username: '',
       email: '',
@@ -31,6 +32,7 @@ beforeEach(() => {
       about: '',
     },
     visibility: {
+      avatar: 'private',
       name: 'private',
       username: 'private',
       email: 'private',
@@ -81,26 +83,24 @@ describe('account edit feedback', () => {
   })
   it('keeps draft and exposes retry after a failed save', async () => {
     await open()
-    await wrapper.find('input').setValue('QA saved name')
+    await wrapper.find('input[type=text]').setValue('QA saved name')
     vi.mocked(saveProfile).mockRejectedValueOnce(new IdentityError(503))
     await wrapper.find('form').trigger('submit')
     await flushPromises()
     expect(wrapper.get('[role=alert]').text()).toContain(
       'Изменения остались в форме',
     )
-    expect((wrapper.find('input').element as HTMLInputElement).value).toBe(
+    expect((wrapper.find('input[type=text]').element as HTMLInputElement).value).toBe(
       'QA saved name',
     )
-    expect(
-      wrapper.find('button.primary-button').attributes('disabled'),
-    ).toBeUndefined()
-    await wrapper.find('form').trigger('submit')
+    expect(wrapper.find('button.primary-button').exists()).toBe(false)
+    await wrapper.get('button.profile-retry').trigger('click')
     await flushPromises()
     expect(saveProfile).toHaveBeenCalledTimes(2)
   })
-  it('saves a profile with optional email empty and confirms navigation', async () => {
+  it('saves a profile with optional email empty without a manual save screen', async () => {
     const router = await open()
-    await wrapper.find('input').setValue('QA name only')
+    await wrapper.find('input[type=text]').setValue('QA name only')
     await wrapper.find('form').trigger('submit')
     await flushPromises()
     expect(saveProfile).toHaveBeenCalledWith(
@@ -108,17 +108,18 @@ describe('account edit feedback', () => {
         fields: expect.objectContaining({ name: 'QA name only', email: '' }),
       }),
     )
-    expect(router.currentRoute.value.path).toBe('/profile')
+    expect(router.currentRoute.value.path).toBe('/profile/edit')
+    expect(wrapper.find('button.primary-button').exists()).toBe(false)
   })
   it('explains a revision conflict without discarding the edits', async () => {
     await open()
-    await wrapper.find('input').setValue('QA conflict')
+    await wrapper.find('input[type=text]').setValue('QA conflict')
     vi.mocked(saveProfile).mockRejectedValueOnce(new IdentityError(409))
     await wrapper.find('form').trigger('submit')
     await flushPromises()
     expect(wrapper.get('[role=alert]').text()).toContain('другом окне')
     expect(wrapper.text()).toContain('Обновить анкету')
-    expect((wrapper.find('input').element as HTMLInputElement).value).toBe(
+    expect((wrapper.find('input[type=text]').element as HTMLInputElement).value).toBe(
       'QA conflict',
     )
   })

@@ -13,6 +13,8 @@ export type PrivatePhotoCard = {
   nameId?: string
   namePending: boolean
   description?: string
+  tags?: string[]
+  assignmentId?: string
   expiresAt?: number
   capturedAt?: number
   metadata?: {
@@ -32,7 +34,7 @@ export type PrivatePhotoCard = {
 }
 
 export function photoCardPath(id: string): string {
-  return '/gallery/' + encodeURIComponent(id) + '/card'
+  return '/photo-cards/' + encodeURIComponent(id)
 }
 function locationValid(value: unknown): value is { latitude: number; longitude: number; accuracy?: number; source?: 'gps' | 'manual' } {
   if (!value || typeof value !== 'object') return false
@@ -80,6 +82,8 @@ export function privatePhotoCard(photo: Photo): PrivatePhotoCard {
     // This is the existing editable description field from PhotoDetailsFields.
     // Never copy separate private Notes or any unlisted Photo keys into a card.
     ...(full && photo.note ? { description: photo.note } : {}),
+    ...(full && photo.tags?.length ? { tags: [...photo.tags] } : {}),
+    ...(photo.workspaceAssignmentId ? { assignmentId: photo.workspaceAssignmentId } : {}),
     expiresAt: photo.expiresAt,
     ...(full && capturedAt ? { capturedAt } : {}),
     ...(full ? { metadata: {

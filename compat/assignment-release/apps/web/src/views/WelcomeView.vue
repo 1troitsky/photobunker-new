@@ -66,14 +66,14 @@ function toggleLanguage() { setLocale(locale.value === 'ru' ? 'en' : 'ru') }
     </header>
 
     <div v-if="checkingPreviousSession" class="welcome-resuming" role="status">
-      <img src="/icons/brand-logo.png" width="88" height="88" alt="" />
+      <img src="/icons/brand-logo-192.webp" width="88" height="88" alt="" />
       <h1 id="welcome-heading" class="welcome-resume-title">PhotoBunker</h1>
       <span>{{ text.restoring }}</span>
     </div>
 
     <div v-else class="welcome-content">
       <div class="welcome-intro">
-        <img class="welcome-logo" src="/icons/brand-logo.png" width="100" height="100" alt="" />
+        <img class="welcome-logo" src="/icons/brand-logo-192.webp" width="100" height="100" alt="" />
         <h1 id="welcome-heading">{{ text.brand }}</h1>
         <p>{{ text.lead }}</p>
       </div>

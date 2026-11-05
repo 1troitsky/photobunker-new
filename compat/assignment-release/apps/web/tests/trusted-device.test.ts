@@ -90,7 +90,7 @@ it('persists a cooldown after repeated invalid PIN attempts', async () => {
   await loadAppLock()
   await setAppPin('624817')
   await loadAppLock()
-  for (let i = 0; i < 3; i++)
+  for (let i = 0; i < 5; i++)
     await expect(unlockApp('000000')).rejects.toThrow()
   await loadAppLock()
   await expect(unlockApp('624817')).rejects.toThrow('pin.cooldown')

@@ -8,6 +8,8 @@ import { removePhotoVersions } from '../studio/versions'
 import { isExpired } from '../delivery/clock'
 import * as local from '../local/photos'
 import type { Photo, PhotoChanges } from '../local/photos'
+import { account as currentAccount } from '../identity/store'
+import { readCachedThumbnail, rememberThumbnail, removeCachedPhoto } from '../crypto/photo-cache'
 import {
   accessCode,
   accessLibraryId,
@@ -86,7 +88,31 @@ export async function readPhoto(
     blob: await serverContent(id, 'original', photo.mime, photo.bytes),
   }
 }
-export async function readThumbnail(id: string): Promise<Blob> {
+const thumbnailReads = new Map<string, Promise<Blob>>()
+export async function readThumbnail(
+  id: string,
+  accessKey = 'current',
+  expiresAt?: number,
+): Promise<Blob> {
+  const owner = currentAccount.value?.id ?? 'guest'
+  const requestKey = `${owner}:${id}:${accessKey}`
+  const running = thumbnailReads.get(requestKey)
+  if (running) return running
+  const task = (async () => {
+    if (currentAccount.value) {
+      const cached = await readCachedThumbnail(id, accessKey).catch(() => undefined)
+      if (cached) return cached
+    }
+    const blob = await readThumbnailSource(id)
+    if (currentAccount.value?.id === owner)
+      void rememberThumbnail(id, accessKey, blob, expiresAt).catch(() => {})
+    return blob
+  })().finally(() => thumbnailReads.delete(requestKey))
+  thumbnailReads.set(requestKey, task)
+  return task
+}
+
+async function readThumbnailSource(id: string): Promise<Blob> {
   const metadata = await local.readMetadata(id).catch(() => undefined)
   if (metadata?.accountId || (!metadata && !identityReady.value))
     await loadIdentity()
@@ -297,6 +323,7 @@ export async function deletePhoto(id: string): Promise<void> {
     const source = await local.readMetadata(id).catch(() => undefined) ?? await workspacePhoto(id).catch(() => undefined)
     await workspace.remove(id)
     if (source) await removePhotoVersions(source)
+    await removeCachedPhoto(id).catch(() => {})
     return
   }
   const current = await local.readMetadata(id).catch(() => undefined)
@@ -309,6 +336,7 @@ export async function deletePhoto(id: string): Promise<void> {
     await removePhotoVersions(current)
     await local.deletePhoto(id)
     await removePhotoVersions(current)
+    await removeCachedPhoto(id).catch(() => {})
     return
   }
   if (!current || (current.remoteLibraryId && !belongsToServer(current))) {
@@ -317,6 +345,7 @@ export async function deletePhoto(id: string): Promise<void> {
     await local.recordDeletion(photo)
   } else await local.revokePhoto(id)
   if (current) await removePhotoVersions(current).catch(() => {})
+  await removeCachedPhoto(id).catch(() => {})
   window.dispatchEvent(new Event('photobunker-outbox'))
 }
 

@@ -25,6 +25,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/mcp": "0.0.41",
     "@playwright/test": "1.56.1",
     "eslint": "10.13.0",
     "eslint-plugin-vue": "10.12.0",

@@ -3,6 +3,16 @@ import { captureProfile, imageRules, newPreset, newTask, retentionSeconds, sessi
 import { missingRequirements } from '../src/profiles/model'
 
 describe('local UI workspace contracts', () => {
+  it('uses the current time as the assignment start date', () => {
+    const now = Date.now()
+    const task = newTask('Inspect')
+    expect(task.startsAt).toBeGreaterThanOrEqual(now)
+    expect(task.startsAt).toBeLessThanOrEqual(Date.now())
+    expect(task.finishesAt).toBeNull()
+    expect(task.rules.sharingAllowed).toBe(true)
+    expect(task.rules.participantsOnly).toBe(false)
+  })
+
   it('keeps the capture snapshot independent from later preset and assignment edits', () => {
     const task = newTask('Inspect'), preset = newPreset('Square')
     task.preset = preset; task.shots = ['Entrance']; task.rules.categories = ['Facade']
@@ -26,7 +36,7 @@ describe('local UI workspace contracts', () => {
     expect(validatePreset(preset)).toBe('image')
   })
 
-  it('distinguishes no auto-delete, custom retention and invalid retention', () => {
+  it('keeps the plan-maximum choice uncapped locally and validates custom retention', () => {
     const preset = newPreset('Lifetime')
     preset.options.retention = 0; expect(retentionSeconds(preset)).toBe(0); expect(validatePreset(preset)).toBeUndefined()
     preset.options.retention = 'custom'; preset.options.customHours = 2.5; expect(retentionSeconds(preset)).toBe(9000)
@@ -37,7 +47,7 @@ describe('local UI workspace contracts', () => {
     const preset = newPreset('Date only'); preset.options.time = false
     const profile = captureProfile(sessionFor(undefined, preset), 'Standard')
     expect(profile.rules.keepDate).toBe(false)
-    expect(profile.rules.retentionSeconds).toBe(1209600)
+    expect(profile.rules.retentionSeconds).toBe(0)
   })
 
   it('caps resolution without upscaling the available crop', () => {

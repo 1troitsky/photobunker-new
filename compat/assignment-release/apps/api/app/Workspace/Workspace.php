@@ -79,7 +79,7 @@ final class Workspace
         }
         if ($kind === 'task') {
             $rules += ['instructions' => 'present|nullable|string|max:4000', 'startsAt' => 'present|nullable|integer|min:0', 'finishesAt' => 'present|nullable|integer|min:0',
-                'targetCount' => 'required|integer|min:1|max:999', 'shots' => 'present|array|max:100', 'shots.*' => 'required|string|max:80|distinct',
+                'targetCount' => 'required|integer|min:0|max:9999', 'shots' => 'present|array|max:100', 'shots.*' => 'required|string|max:80|distinct',
                 'teamId' => 'present|nullable|string|max:36', 'presetId' => 'present|nullable|string|max:120', 'preset' => 'present|nullable|array',
                 'completed' => 'required|boolean', 'rules' => 'required|array', 'rules.categories' => 'present|array|max:30', 'rules.categories.*' => 'required|string|max:80|distinct',
                 'rules.minLength' => 'required|integer|min:1|max:2000'];
@@ -172,9 +172,12 @@ final class Workspace
             DB::table('workspace_members')->where('record_id', $id)->whereNotIn('account_id', $ids)->update(['state' => 'revoked']);
             foreach ($resolved as [$person, $participant]) {
                 $existing = DB::table('workspace_members')->where('record_id', $id)->where('account_id', $person->id)->first();
-                $retain = $existing && in_array($existing->state, ['accepted', 'invited'], true) && ($existing->state === 'accepted' || $existing->expires_at > Retention::milliseconds());
-                DB::table('workspace_members')->updateOrInsert(['record_id' => $id, 'account_id' => $person->id], ['id' => $retain ? $existing->id : (string) Str::uuid(),
-                    'role' => $participant['role'], 'photo_scope' => $participant['photoScope'] ?? 'default', 'state' => $retain ? $existing->state : 'invited', 'expires_at' => $retain ? $existing->expires_at : Retention::milliseconds() + 604800000]);
+                // Choosing a known contact or an existing Team member and
+                // saving is the owner's explicit access grant. PhotoBunker
+                // does not add a second acceptance gate that leaves a Team or
+                // Assignment unusable after it was configured.
+                DB::table('workspace_members')->updateOrInsert(['record_id' => $id, 'account_id' => $person->id], ['id' => $existing?->id ?? (string) Str::uuid(),
+                    'role' => $participant['role'], 'photo_scope' => $participant['photoScope'] ?? 'default', 'state' => 'accepted', 'expires_at' => $existing?->expires_at ?? Retention::milliseconds() + 604800000]);
             }
             if ($kind === 'task' && ($row?->room_id || $row?->room_state !== 'none' && $row)) {
                 DB::table('workspace_records')->where('id', $id)->update(['room_state' => 'pending', 'room_retry_at' => null]);

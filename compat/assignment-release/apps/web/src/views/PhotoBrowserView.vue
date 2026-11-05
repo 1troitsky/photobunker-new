@@ -266,10 +266,7 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="native-screen protected-browser">
-    <ScreenHeader :title="bt('browser')" back="/assignments">
-      <RouterLink to="/browser" class="app-icon-button" :aria-label="bt('newCollection')">
-        <AppIcon name="plus" /></RouterLink>
-    </ScreenHeader>
+    <ScreenHeader :title="bt('browser')" back="/browser" />
     <div class="screen-body browser-body">
       <div v-if="status === 'loading'" class="native-empty" role="status">
         <AppIcon name="lock" /><p>{{ bt('waiting') }}</p>

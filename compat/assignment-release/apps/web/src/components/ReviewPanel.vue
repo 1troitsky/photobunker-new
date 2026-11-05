@@ -83,7 +83,6 @@ async function save() {
       }}<textarea
         v-model="comment"
         :aria-label="c('comment')"
-        :required="decision !== 'accepted'"
         maxlength="2000"
         rows="2"
         :disabled="busy"

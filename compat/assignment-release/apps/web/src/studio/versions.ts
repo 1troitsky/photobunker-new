@@ -28,7 +28,7 @@ export type TextLayer = {
 }
 export type ShapeLayer = {
   id: string
-  kind: 'rectangle' | 'ellipse' | 'redact'
+  kind: 'rectangle' | 'ellipse' | 'arrow' | 'star' | 'redact'
   from: Point
   to: Point
   color: string

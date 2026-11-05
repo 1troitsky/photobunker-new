@@ -37,8 +37,7 @@ async function answer(id: string, accept: boolean) {
     <article v-for="item in rows" :key="item.id" class="form-card">
       <strong>{{ item.name }}</strong>
       <p class="field-hint">
-        {{ item.ownerPublicId }} ·
-        {{ s(item.role as 'contributor' | 'curator' | 'viewer') }}
+        {{ s('owner') }} · {{ s(item.role as 'contributor' | 'curator' | 'viewer') }}
       </p>
       <p v-if="item.expiresAt <= Date.now()" class="field-hint">
         {{ w('expired') }}

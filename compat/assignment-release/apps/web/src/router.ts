@@ -1,37 +1,73 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouterHistory } from 'vue-router'
-import SharedPhotoView from './views/SharedPhotoView.vue'
-import SharedCardView from './views/SharedCardView.vue'
-import WelcomeView from './views/WelcomeView.vue'
-import AccountAuthView from './views/AccountAuthView.vue'
-import AccountEditView from './views/AccountEditView.vue'
-import ContactsView from './views/ContactsView.vue'
-import PersonProfileView from './views/PersonProfileView.vue'
-const CompatibilityPhotoBootstrap = () => import('./views/MessagesView.vue')
-import PhotoSecurityView from './views/PhotoSecurityView.vue'
-import AccountSecurityView from './views/AccountSecurityView.vue'
-import CameraView from './views/CameraView.vue'
-import GalleryView from './views/GalleryView.vue'
-import SettingsView from './views/SettingsView.vue'
-import DataStorageView from './views/DataStorageView.vue'
-import PhotoView from './views/PhotoView.vue'
-import PhotoCardView from './views/PhotoCardView.vue'
-import PhotoBrowserIndexView from './views/PhotoBrowserIndexView.vue'
-import PhotoBrowserView from './views/PhotoBrowserView.vue'
-import ProfilesView from './views/ProfilesView.vue'
-import ProfileEditView from './views/ProfileEditView.vue'
-import TeamView from './views/TeamView.vue'
-import JoinView from './views/JoinView.vue'
-import AssignmentsView from './views/AssignmentsView.vue'
-import AssignmentView from './views/AssignmentView.vue'
-import UserProfileView from './views/UserProfileView.vue'
 import { account, sessionState, offlineCaptureIdentity, hasConfirmedIdentity } from './identity/store'
 import { launchPath } from './app/preferences'
 import { profileReturnTo } from './identity/person'
-import AssignmentEditView from './views/AssignmentEditView.vue'
-import TeamsView from './views/TeamsView.vue'
-import TeamProfileView from './views/TeamProfileView.vue'
-import PhotoEditView from './views/PhotoEditView.vue'
+
+// Route-level chunks keep camera, editor, Browser and compatibility messaging
+// out of the first render. The shell and dock can paint without waiting for
+// Matrix, image editors or collection export code.
+const SharedPhotoView = () => import('./views/SharedPhotoView.vue')
+const SharedCardView = () => import('./views/SharedCardView.vue')
+const WelcomeView = () => import('./views/WelcomeView.vue')
+const AccountAuthView = () => import('./views/AccountAuthView.vue')
+const AccountEditView = () => import('./views/AccountEditView.vue')
+const ContactsView = () => import('./views/ContactsView.vue')
+const PersonProfileView = () => import('./views/PersonProfileView.vue')
+const CompatibilityPhotoBootstrap = () => import('./views/MessagesView.vue')
+const PhotoSecurityView = () => import('./views/PhotoSecurityView.vue')
+const AccountSecurityView = () => import('./views/AccountSecurityView.vue')
+const CameraView = () => import('./views/CameraView.vue')
+const GalleryView = () => import('./views/GalleryView.vue')
+const SettingsView = () => import('./views/SettingsView.vue')
+const DataStorageView = () => import('./views/DataStorageView.vue')
+const PhotoView = () => import('./views/PhotoView.vue')
+const PhotoCardView = () => import('./views/PhotoCardView.vue')
+const PhotoBrowserIndexView = () => import('./views/PhotoBrowserIndexView.vue')
+const PhotoBrowserView = () => import('./views/PhotoBrowserView.vue')
+const ProfilesView = () => import('./views/ProfilesView.vue')
+const ProfileEditView = () => import('./views/ProfileEditView.vue')
+const TeamView = () => import('./views/TeamView.vue')
+const JoinView = () => import('./views/JoinView.vue')
+const AssignmentsView = () => import('./views/AssignmentsView.vue')
+const AssignmentView = () => import('./views/AssignmentView.vue')
+const UserProfileView = () => import('./views/UserProfileView.vue')
+const AssignmentEditView = () => import('./views/AssignmentEditView.vue')
+const TeamsView = () => import('./views/TeamsView.vue')
+const PeopleView = () => import('./views/PeopleView.vue')
+const TeamProfileView = () => import('./views/TeamProfileView.vue')
+const PhotoEditView = () => import('./views/PhotoEditView.vue')
+const StatusView = () => import('./views/StatusView.vue')
+const PaymentView = () => import('./views/PaymentView.vue')
+
+// Warm the five dock destinations after the first paint. Navigation remains
+// local and synchronous even on a high-latency mobile connection; none of
+// these imports starts a server request or reads private data.
+export function warmPrimaryRoutes() {
+  const connection = Reflect.get(navigator, 'connection') as { saveData?: boolean } | undefined
+  // Parsing all dock chunks in parallel caused a severe CPU/memory spike on
+  // older phones. The service worker still caches production assets; runtime
+  // parsing is deliberately staggered and skipped on constrained devices.
+  if (connection?.saveData || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4))
+    return Promise.resolve([])
+  const pause = () => new Promise<void>(resolve => {
+    const idle = Reflect.get(window, 'requestIdleCallback') as
+      | ((callback: () => void, options?: { timeout: number }) => number)
+      | undefined
+    if (idle) idle(resolve, { timeout: 2500 })
+    else setTimeout(resolve, 1400)
+  })
+  return (async () => {
+    const results: PromiseSettledResult<unknown>[] = []
+    for (const load of [AssignmentsView, PhotoBrowserIndexView, CameraView, PeopleView, UserProfileView]) {
+      await pause()
+      if (document.visibilityState !== 'visible') break
+      try { results.push({ status: 'fulfilled', value: await load() }) }
+      catch (reason) { results.push({ status: 'rejected', reason }) }
+    }
+    return results
+  })()
+}
 
 export function createAppRouter(history: RouterHistory = createWebHistory()) {
   const router = createRouter({
@@ -64,8 +100,11 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         component: AccountSecurityView,
       },
       { path: '/profile', name: 'profile', component: UserProfileView },
+      { path: '/status', name: 'status', component: StatusView },
+      { path: '/payment', name: 'payment', component: PaymentView },
       { path: '/profile/teams', name: 'teams', component: TeamsView },
       { path: '/profile/teams/:id', name: 'team-profile', component: TeamProfileView },
+      { path: '/people', name: 'people', component: PeopleView },
       // Messenger is unavailable in Assignment Release. Matrix is retained only as a
       // compatibility dependency for the old account/security lifecycle.
       { path: '/messages', redirect: '/assignments' },
@@ -117,7 +156,12 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         name: 'photo-editor',
         component: PhotoEditView,
       },
-      { path: '/gallery/:id/card', name: 'photo-card', component: PhotoCardView },
+      {
+        path: '/photo-cards/:id',
+        alias: '/gallery/:id/card',
+        name: 'photo-card',
+        component: PhotoCardView,
+      },
       { path: '/gallery/:id', name: 'photo', component: PhotoView },
       { path: '/settings', name: 'settings', component: SettingsView },
       { path: '/settings/data', name: 'data-storage', component: DataStorageView },

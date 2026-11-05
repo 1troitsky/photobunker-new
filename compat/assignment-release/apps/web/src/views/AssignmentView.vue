@@ -33,9 +33,11 @@ const route = useRoute(),
 const task = computed(() =>
   localTasks.value.find((item) => item.id === route.params.id),
 )
+const photoAssignment = (photo: typeof photos.value[number]) =>
+  photo.workspaceAssignmentId || photo.uiAssignmentId || photo.assignmentId || ''
 const materials = computed(() =>
   photos.value.filter(
-    (photo) => photo.uiAssignmentId === task.value?.id && !photo.uiVersionOf,
+    (photo) => photoAssignment(photo) === task.value?.id && !photo.uiVersionOf,
   ),
 )
 const shots = computed(
@@ -107,7 +109,7 @@ onMounted(() => {
     <ScreenHeader
       :title="task.name"
       back="/assignments"
-      :subtitle="task.accountId ? w('account') : s('device')"
+      :subtitle="task.completed ? s('completed') : s('inProgress')"
       ><button
         v-if="task.canManage !== false"
         class="app-icon-button"
@@ -126,8 +128,8 @@ onMounted(() => {
                 .filter((item) => item.assignmentId === task?.id)
                 .map((item) => item.id),
             ]).size
-          }}<small> / {{ task.targetCount }}</small></strong
-        ><span>{{ s('progress') }}</span>
+          }}<small v-if="task.targetCount"> / {{ task.targetCount }}</small></strong
+        ><span>{{ task.targetCount ? s('progress') : s('photos') }}</span>
       </div>
       <div>
         <span class="state-pill">{{
@@ -147,28 +149,12 @@ onMounted(() => {
       </div>
     </div>
     <div v-if="task.accountId" class="screen-body">
-      <button
-        class="secondary-button full-button"
-        @click="
-          () => {
-            if (!task) return
-            router.push({ path: '/messages', query: { assignment: task.id } })
-          }
-        "
-      >
-        <AppIcon name="messages" />{{ w('discussion') }}
-      </button>
-      <p v-if="task.discussion?.state === 'pending'" class="field-hint">
-        {{ w('discussionPending') }}
-      </p>
-    </div>
-    <div v-if="task.accountId" class="screen-body">
       <RouterLink :to="{ path: '/browser', query: { assignment: task.id } }"
         class="secondary-button full-button">
         <AppIcon name="folder" />{{ s('photoBrowser') }}</RouterLink>
     </div>
     <FormTabs v-model="tab" :items="tabs" />
-    <div class="screen-body"><button v-if="account" class="secondary-button" @click="router.push({path:'/profile/photos-security',query:{assignment:String(route.params.id)}})">{{ q('Защита задания') }}</button>
+    <div class="screen-body">
       <p v-if="failed" class="form-error" role="alert">{{ s('failed') }}</p>
       <template v-if="tab === 'materials'"
         ><WorkspaceReceipts v-if="task.accountId" :assignment-id="task.id" />
@@ -178,7 +164,7 @@ onMounted(() => {
             :key="photo.id"
             class="native-photo-tile"
             :aria-label="`${s('preview')}: ${photo.shortId}`"
-            @click="router.push(`/gallery/${photo.id}`)"
+            @click="router.push({ path: `/gallery/${photo.id}`, query: { assignment: task.id } })"
           >
             <PhotoThumbnail
               :id="photo.id"
@@ -187,6 +173,7 @@ onMounted(() => {
                   ? `${photo.remoteRevision}:${photo.thumbnailOnly}`
                   : undefined
               "
+              :expires-at="photo.expiresAt"
               :alt="photo.title || photo.shortId"
             /><span>{{ photo.shot || photo.category || photo.shortId }}</span>
           </button>
@@ -212,7 +199,7 @@ onMounted(() => {
             <dt>{{ s('team') }}</dt>
             <dd><RouterLink :to="'/profile/teams/' + encodeURIComponent(task.teamId)">{{ task.teamName || s('team') }}</RouterLink></dd>
           </div>
-          <div>
+          <div v-if="task.targetCount">
             <dt>{{ s('requiredCount') }}</dt>
             <dd>{{ task.targetCount }}</dd>
           </div>
@@ -267,7 +254,7 @@ onMounted(() => {
           ><span
             ><strong>{{
               task.ownerPublicId && task.ownerPublicId !== account?.publicId
-                ? task.ownerPublicId
+                ? q('Владелец задания')
                 : s('you')
             }}</strong
             ><small>{{ s('owner') }}</small></span
@@ -282,17 +269,13 @@ onMounted(() => {
             (participant.name || participant.id).slice(0, 1).toUpperCase()
           }}</span
           ><span
-            ><strong>{{ participant.name || participant.id }}</strong
-            ><small
-              >{{ s(participant.role) }} · {{ participant.id
-              }}<template v-if="task.accountId && participant.state">
-                · {{ w(participant.state) }}</template
-              ></small
+            ><strong>{{ participant.name || q('Участник задания') }}</strong
+            ><small>{{ s(participant.role) }}</small
             ></span
           >
         </div>
         <p class="field-hint">
-          {{ task.accountId ? w('inviteHint') : s('notifyHint') }}
+          {{ task.accountId ? q('Участники получают доступ сразу после сохранения задания.') : s('notifyHint') }}
         </p>
         <button
           v-if="task.accountId && !task.canManage"

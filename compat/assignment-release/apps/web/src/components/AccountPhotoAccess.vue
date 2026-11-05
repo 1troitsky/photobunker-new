@@ -21,7 +21,10 @@ onMounted(() => void connect())
 <template>
   <section class="native-screen account-photo-access">
     <div class="screen-body">
-      <h1>{{ q(busy ? 'Подключаем фотографии…' : missing ? 'Подключите ключ аккаунта' : 'Фотографии пока недоступны') }}</h1>
+      <div v-if="busy" class="photo-access-skeleton" aria-busy="true" aria-label="Loading">
+        <span /><span /><span /><span />
+      </div>
+      <h1 v-else>{{ q(missing ? 'Подключите ключ аккаунта' : 'Не удалось открыть библиотеку') }}</h1>
       <p v-if="missing" class="field-hint">{{ q('Этот аккаунт создан в прежней версии приложения. Подключите его единственный ключ один раз. Затем фотографии и переписка будут открываться автоматически.') }}</p>
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
       <button v-if="missing" class="primary-button" @click="router.push('/profile/account?mode=connect')">{{ q('Ввести ключ аккаунта') }}</button>

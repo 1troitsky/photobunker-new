@@ -2,7 +2,9 @@ import { ref } from 'vue'
 
 export type Locale = 'ru' | 'en'
 export const locale = ref<Locale>('en')
-const LOCALE_KEY = 'photobunker.locale'
+// v2 resets the pre-release browser-language default. English is the product
+// default; another language is used only after an explicit choice.
+const LOCALE_KEY = 'photobunker.locale.v2'
 
 const ru = {
   skip: 'Перейти к содержимому',
@@ -256,8 +258,7 @@ export function t(key: keyof typeof ru): string {
  // overwrite the user's current selection.
 const supported = (value: unknown): value is Locale => value === 'ru' || value === 'en'
 function defaultLocale(): Locale {
-  try { return navigator.language.toLowerCase().startsWith('ru') ? 'ru' : 'en' }
-  catch { return 'en' }
+  return 'en'
 }
 function applyLocale(value: Locale) {
   locale.value = value

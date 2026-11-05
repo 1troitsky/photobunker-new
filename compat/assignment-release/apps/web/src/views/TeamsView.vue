@@ -11,11 +11,11 @@ import { clone, type Team } from '../studio/model'
 import { loadStudio, removeItem, saveTeam, teams, pendingTeamIds } from '../studio/store'
 import { WorkspaceConflict } from '../studio/repository'
 import { account } from '../identity/store'
-import WorkspaceInvitations from '../components/WorkspaceInvitations.vue'
 import { respond } from '../workspace/api'
 import { w } from '../workspace/text'
 import { workspaceError } from '../workspace/errors'
 import { s } from '../studio/text'
+const props = defineProps<{ embedded?: boolean }>()
 const router = useRouter()
 const draft = ref<Team>(),
   busy = ref(false),
@@ -32,27 +32,35 @@ function edit(team?: Team) {
         participants: [],
         revision: 0,
       }
-  initial = JSON.stringify(draft.value)
+  initial = team ? JSON.stringify(draft.value) : ''
   error.value = ''
 }
 function close() {
-  if (
-    !busy.value &&
-    (JSON.stringify(draft.value) === initial || confirm(s('leave')))
-  )
-    draft.value = undefined
+  if (busy.value) return
+  draft.value = undefined
+  error.value = ''
 }
-async function save() {
-  if (!draft.value || busy.value) return
+async function save(finish = false) {
+  if (!draft.value) return false
+  if (busy.value) return false
+  if (!draft.value.name.trim()) { error.value = s('required'); return false }
+  if (!finish && draft.value.revision > 0 && JSON.stringify(draft.value) === initial) return true
   busy.value = true
+  error.value = ''
   try {
-    const saved = await saveTeam(draft.value)
-    draft.value = undefined
-    await router.push(teamProfilePath(saved.id))
+    const result = await saveTeam(draft.value)
+    draft.value = clone(result)
+    initial = JSON.stringify(draft.value)
+    if (finish) {
+      draft.value = undefined
+      await router.push(teamProfilePath(result.id))
+    }
+    return true
   } catch (failure) {
     error.value = account.value
       ? workspaceError(failure)
       : s(failure instanceof WorkspaceConflict ? 'conflict' : 'failed')
+    return false
   } finally {
     busy.value = false
   }
@@ -92,8 +100,8 @@ async function leave() {
 onMounted(loadStudio)
 </script>
 <template>
-  <section class="native-screen">
-    <ScreenHeader :title="s('teams')" back="/profile"
+  <section :class="props.embedded ? 'people-embedded' : 'native-screen'">
+    <ScreenHeader v-if="!props.embedded" :title="s('teams')" back="/people"
       ><button
         class="app-icon-button"
         :aria-label="s('createTeam')"
@@ -101,9 +109,12 @@ onMounted(loadStudio)
       >
         <AppIcon name="plus" /></button
     ></ScreenHeader>
-    <div class="screen-body">
-      <WorkspaceInvitations v-if="account" kind="team" />
-      <p v-if="account" class="field-hint">{{ w('teamHint') }}</p>
+    <div :class="props.embedded ? 'people-pane' : 'screen-body'">
+      <div v-if="props.embedded" class="people-pane-heading">
+        <div><h2>{{ s('teams') }}</h2><p>{{ s('teamHint') }}</p></div>
+        <button class="app-icon-button" :aria-label="s('createTeam')" @click="edit()"><AppIcon name="plus" /></button>
+      </div>
+      <p v-if="account && !props.embedded" class="field-hint">{{ w('teamHint') }}</p>
       <p v-if="error && !draft" class="form-error" role="alert">{{ error }}</p>
       <article v-for="team in teams" :key="team.id" class="preset-tile">
         <button class="preset-tile-main" @click="router.push(teamProfilePath(team.id))">
@@ -145,7 +156,7 @@ onMounted(loadStudio)
       :title="s(draft?.revision ? 'editTeam' : 'createTeam')"
       :busy="busy"
       @close="close"
-      ><form v-if="draft" class="native-form" @submit.prevent="save">
+      ><div v-if="draft" class="native-form">
         <label
           >{{ s('name')
           }}<input
@@ -159,9 +170,7 @@ onMounted(loadStudio)
           :read-only="draft.canManage === false"
           :owner-public-id="draft.ownerPublicId"
         />
-        <p class="field-hint">
-          {{ account ? w('inviteHint') : s('localShort') }}
-        </p>
+        <p v-if="busy" class="field-hint" role="status">{{ s('saving') }}</p>
         <p v-if="error" class="form-error" role="alert">{{ error }}</p>
         <button
           v-if="draft.canManage === false"
@@ -173,12 +182,14 @@ onMounted(loadStudio)
           {{ w('leave') }}</button
         ><button
           v-if="draft.canManage !== false"
+          type="button"
           class="primary-button full-button"
           :disabled="busy"
+          @click="save(true)"
         >
-          {{ s('save') }}
+          {{ s('done') }}
         </button>
-      </form></AppSheet
+      </div></AppSheet
     >
   </section>
 </template>

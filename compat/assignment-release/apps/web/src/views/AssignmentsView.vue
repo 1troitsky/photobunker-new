@@ -22,12 +22,14 @@ import { photos } from '../local/library'
 import { receipts } from '../workspace/state'
 import { locale, formatNumber } from '../i18n'
 import { account } from '../identity/store'
-import WorkspaceInvitations from '../components/WorkspaceInvitations.vue'
 import { s } from '../studio/text'
+import { q } from '../crypto/text'
 const router = useRouter(),
   query = ref(''),
   search = ref(false),
-  filter = ref('all'),
+  filter = ref('activeTasks'),
+  settingsOpen = ref(false),
+  sort = ref<'created' | 'edited' | 'photos'>('created'),
   menu = ref<string>(),
   failed = ref(false)
 const rows = computed(() =>
@@ -40,6 +42,9 @@ const rows = computed(() =>
       dueAt: item.finishesAt,
       startsAt: item.startsAt,
       count: item.targetCount,
+      createdAt: item.createdAt,
+      revision: item.revision,
+      canBrowse: item.rules.galleryAllowed,
       canCapture:
         !item.accountId ||
         ['owner', 'curator', 'contributor'].includes(item.role || '') && (!item.finishesAt || item.finishesAt > Date.now()),
@@ -56,6 +61,9 @@ const rows = computed(() =>
         dueAt: item.dueAt,
         startsAt: null,
         count: item.shots.length,
+        createdAt: 0,
+        revision: item.revision,
+        canBrowse: true,
         canCapture: item.canCapture,
         local: false,
       })),
@@ -66,7 +74,11 @@ const rows = computed(() =>
       `${item.name} ${item.instructions}`
         .toLowerCase()
         .includes(query.value.trim().toLowerCase()),
-  ),
+  ).sort((first, second) => sort.value === 'photos'
+    ? count(second.id) - count(first.id)
+    : sort.value === 'edited'
+      ? second.revision - first.revision
+      : second.createdAt - first.createdAt),
 )
 const menuTask = computed(() =>
   localTasks.value.find(
@@ -81,7 +93,7 @@ function count(id: string) {
   // A local/offline pending shot must not inflate the owner's progress.
   const confirmed = new Set([
     ...photos.value.filter(photo =>
-      (photo.uiAssignmentId === id || photo.assignmentId === id) &&
+      (photo.workspaceAssignmentId === id || photo.uiAssignmentId === id || photo.assignmentId === id) &&
       !photo.uiVersionOf && typeof photo.remoteRevision === 'number',
     ).map(photo => photo.id),
     ...receipts.value.filter(item => item.assignmentId === id).map(item => item.id),
@@ -144,9 +156,15 @@ onMounted(() => {
         "
       >
         <AppIcon name="search" /></button
+      ><button
+        class="app-icon-button"
+        :aria-label="s('assignmentSettings')"
+        @click="settingsOpen = true"
+      >
+        <AppIcon name="settings" /></button
     ></ScreenHeader>
     <div class="screen-body">
-      <WorkspaceInvitations v-if="account" kind="task" /><input
+      <input
         v-if="search"
         v-model="query"
         class="screen-search"
@@ -156,7 +174,7 @@ onMounted(() => {
       />
       <div v-if="localTasks.length || assignments.length" class="list-segments">
         <button
-          v-for="value in ['all', 'activeTasks', 'completed'] as const"
+          v-for="value in ['activeTasks', 'completed', 'all'] as const"
           :key="value"
           :aria-pressed="filter === value"
           @click="filter = value"
@@ -164,9 +182,12 @@ onMounted(() => {
           {{ s(value) }}
         </button>
       </div>
-      <p v-if="studioError || failed" class="form-error" role="alert">
-        {{ s('failed') }}
-      </p>
+      <div v-if="studioError || failed" class="form-error assignment-sync-error" role="alert">
+        <span>{{ q(studioError
+          ? 'Не удалось обновить задания с сервера. Локальные задания и изменения сохранены на устройстве.'
+          : 'Не удалось удалить выбранное задание. Откройте «Статус» для подробностей и повторите.') }}</span>
+        <RouterLink to="/status">{{ q('Открыть статус') }}</RouterLink>
+      </div>
       <article v-for="item in rows" :key="item.id" class="assignment-tile">
         <div class="assignment-tile-heading">
           <button
@@ -212,24 +233,26 @@ onMounted(() => {
               : s('noDeadline')
           }}</span>
         </div>
-        <div class="progress-track">
+        <div v-if="item.count" class="progress-track">
           <span
             :style="{
               width: `${Math.min(100, (count(item.id) / Math.max(1, item.count)) * 100)}%`,
             }"
           />
         </div>
-        <button
-          v-if="
-            item.canCapture &&
-            !item.closed &&
-            (!item.startsAt || item.startsAt <= Date.now())
-          "
-          class="secondary-button full-button"
-          @click="start(item.id)"
-        >
-          <AppIcon name="camera" />{{ s('capture') }}
-        </button>
+        <div class="assignment-actions">
+          <button
+            v-if="item.canCapture && !item.closed && (!item.startsAt || item.startsAt <= Date.now())"
+            class="secondary-button"
+            @click="start(item.id)"
+          >
+            <AppIcon name="camera" />{{ s('capture') }}
+          </button>
+          <button v-if="item.canBrowse" class="secondary-button"
+            @click="router.push({ path: '/browser', query: { assignment: item.id } })">
+            <AppIcon name="gallery" />{{ s('viewPhotos') }}
+          </button>
+        </div>
       </article>
       <div v-if="!rows.length" class="native-empty">
         <AppIcon name="profiles" />
@@ -252,6 +275,21 @@ onMounted(() => {
         </button>
       </div>
     </div>
+    <AppSheet :open="settingsOpen" :title="s('assignmentSettings')" @close="settingsOpen = false">
+      <div class="native-form">
+        <label>{{ s('showFirst') }}<select v-model="filter">
+          <option value="activeTasks">{{ s('activeTasks') }}</option>
+          <option value="all">{{ s('all') }}</option>
+          <option value="completed">{{ s('completed') }}</option>
+        </select></label>
+        <label>{{ s('sort') }}<select v-model="sort">
+          <option value="created">{{ s('createdDate') }}</option>
+          <option value="edited">{{ s('editedDate') }}</option>
+          <option value="photos">{{ s('photoDate') }}</option>
+        </select></label>
+        <button class="primary-button full-button" @click="settingsOpen = false">{{ s('done') }}</button>
+      </div>
+    </AppSheet>
     <AppSheet :open="!!menu" :title="menuName" @close="menu = undefined"
       ><div class="action-list">
         <button v-if="menuTask" @click="navigate('edit')">

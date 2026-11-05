@@ -29,7 +29,10 @@ function edit(team?: Team) {
         participants: [],
         revision: 0,
       }
-  initial = JSON.stringify(draft.value)
+  // A newly suggested default name is still an unsaved team. Keeping its
+  // serialized draft as `initial` made Done close the sheet without creating
+  // anything when the owner accepted that default unchanged.
+  initial = team ? JSON.stringify(draft.value) : ''
   editing.value = true
   error.value = ''
 }
@@ -43,22 +46,26 @@ watch(
     }
   },
 )
-async function save() {
+async function save(closeAfter = false) {
   if (busy.value) return
+  if (JSON.stringify(draft.value) === initial) {
+    if (closeAfter) { editing.value = false; emit('close') }
+    return
+  }
+  if (!draft.value.name.trim()) { error.value = s('required'); return }
   busy.value = true
   error.value = ''
   try {
     const team = await saveTeam(draft.value)
     emit('pick', clone(team))
-    emit('close')
-    editing.value = false
+    draft.value = clone(team)
+    initial = JSON.stringify(draft.value)
+    if (closeAfter) { emit('close'); editing.value = false }
   } catch (failure) {
     error.value = account.value
       ? workspaceError(failure)
       : s(failure instanceof WorkspaceConflict ? 'conflict' : 'failed')
-  } finally {
-    busy.value = false
-  }
+  } finally { busy.value = false }
 }
 watch(
   () => account.value?.id,
@@ -70,13 +77,8 @@ watch(
 )
 function close() {
   if (busy.value) return
-  if (
-    editing.value &&
-    JSON.stringify(draft.value) !== initial &&
-    !confirm(s('leave'))
-  )
-    return
   editing.value = false
+  error.value = ''
   emit('close')
 }
 </script>
@@ -89,17 +91,17 @@ function close() {
     :busy="busy"
     @close="close"
   >
-    <form v-if="editing" class="native-form" @submit.prevent.stop="save">
+    <div v-if="editing" class="native-form">
       <label
         >{{ s('name') }}<input v-model="draft.name" required maxlength="80"
       /></label>
       <ParticipantsEditor v-model="draft.participants" />
-      <p class="field-hint">{{ s('teamSnapshot') }}</p>
+      <p v-if="busy" class="field-hint" role="status">{{ s('saving') }}</p>
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
-      <button class="primary-button full-button" :disabled="busy">
-        {{ s('save') }}
+      <button type="button" class="primary-button full-button" :disabled="busy" @click="save(true)">
+        {{ s('done') }}
       </button>
-    </form>
+    </div>
     <template v-else>
       <button
         type="button"

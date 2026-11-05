@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
-import { guardReload } from '../studio/unsaved'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import ScreenHeader from '../components/ScreenHeader.vue'
 import FormTabs from '../components/FormTabs.vue'
 import ToggleRow from '../components/ToggleRow.vue'
@@ -37,13 +36,14 @@ const route = useRoute(),
 const tab = ref('basics'),
   ready = ref(false),
   busy = ref(false),
+  saveState = ref<'idle' | 'saving' | 'saved' | 'error'>('idle'),
   error = ref(''),
   teamPicker = ref(false),
   editTeamId = ref('')
 const shots = ref(''),
   categories = ref('')
-let initial = '',
-  saved = false
+let saveTimer: ReturnType<typeof setTimeout> | undefined,
+  saveAgain = false, disposed = false
 const fresh = computed(
   () => route.params.id === undefined || route.params.id === 'new',
 )
@@ -63,13 +63,17 @@ function setDate(field: 'startsAt' | 'finishesAt', event: Event) {
   const value = (event.target as HTMLInputElement).value
   draft.value[field] = value ? new Date(value).getTime() : null
 }
-const signature = () =>
-  `${JSON.stringify(draft.value)}|${shots.value}|${categories.value}`
-const dirty = computed(() => ready.value && signature() !== initial)
-guardReload(dirty, busy)
-watch(signature, () => {
-  error.value = ''
-})
+const signature = () => {
+  const value = clone(draft.value)
+  value.revision = 0
+  return `${JSON.stringify(value)}|${shots.value}|${categories.value}`
+}
+const hasDeadline = computed(() => draft.value.finishesAt !== null)
+function setDeadline(enabled: boolean) {
+  draft.value.finishesAt = enabled
+    ? Math.max(Date.now() + 86400000, (draft.value.startsAt ?? Date.now()) + 86400000)
+    : null
+}
 onMounted(async () => {
   await Promise.all([loadStudio(), refreshAssignments(), refreshProfiles()])
   const id = String(route.query.copy ?? (fresh.value ? '' : route.params.id))
@@ -106,6 +110,7 @@ onMounted(async () => {
     item.id = crypto.randomUUID()
     item.revision = 0
     item.createdAt = Date.now()
+    item.startsAt = item.createdAt
     item.completed = false
     item.name = `${item.name} (${s('duplicate')})`.slice(0, 80)
     item.participants = item.participants.filter(
@@ -117,14 +122,30 @@ onMounted(async () => {
   }
   item.rules.useAssignmentPhotoId ??= true // Old assignments default to shared numbering.
   draft.value = item
+  const returnedPreset = typeof route.query.preset === 'string' ? route.query.preset : ''
+  if (returnedPreset) {
+    const preset = asLocalPreset(returnedPreset)
+    if (preset) {
+      draft.value.presetId = preset.id
+      draft.value.preset = preset
+    }
+  }
   shots.value = item.shots.join('\n')
   categories.value = item.rules.categories.join('\n')
-  initial = signature()
   ready.value = true
 })
 function pickPreset(event: Event) {
   draft.value.presetId = (event.target as HTMLSelectElement).value
   draft.value.preset = asLocalPreset(draft.value.presetId) ?? null
+}
+async function createPreset() {
+  // Persist the assignment snapshot before leaving this editor. The preset
+  // editor returns with the newly created ID and it is selected immediately.
+  if (signature() !== '') await save()
+  await router.push({
+    path: '/camera/presets/new',
+    query: { returnTo: route.path },
+  })
 }
 const selectedTeam = computed(() =>
   teams.value.find((team) => team.id === draft.value.teamId),
@@ -159,20 +180,30 @@ function syncShots() {
     draft.value.shots.length,
   )
 }
-async function save() {
-  if (!ready.value || busy.value) return
-  draft.value.shots = lines(shots.value)
-  draft.value.rules.categories = draft.value.rules.particularCategory
+function normalizedDraft() {
+  const value = clone(draft.value)
+  value.shots = lines(shots.value)
+  value.rules.categories = value.rules.particularCategory
     ? lines(categories.value)
     : []
-  const invalid = validateTask(draft.value)
+  return value
+}
+function scheduleSave(delay = 550) {
+  if (!ready.value || disposed) return
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => { saveTimer = undefined; void save() }, delay)
+}
+async function save() {
+  if (!ready.value || busy.value) return
+  const snapshot = normalizedDraft()
+  const invalid = validateTask(snapshot)
   if (invalid) {
-    tab.value = invalid
+    saveState.value = 'error'
     error.value = s(
       invalid === 'basics' &&
-        draft.value.startsAt !== null &&
-        draft.value.finishesAt !== null &&
-        draft.value.finishesAt <= draft.value.startsAt
+        snapshot.startsAt !== null &&
+        snapshot.finishesAt !== null &&
+        snapshot.finishesAt <= snapshot.startsAt
         ? 'datesInvalid'
         : 'required',
     )
@@ -180,13 +211,24 @@ async function save() {
   }
   const actor = account.value?.id
   busy.value = true
+  saveState.value = 'saving'
   error.value = ''
+  const savingSignature = signature()
   try {
-    const item = await saveTask(draft.value)
+    const item = await saveTask(snapshot)
     if (actor !== account.value?.id) return
-    saved = true
-    await router.replace(`/assignments/${item.id}`)
+    // Keep edits made while the request was in flight; only advance the
+    // optimistic revision required by the next background save.
+    draft.value.revision = item.revision
+    draft.value.id = item.id
+    saveState.value = 'saved'
+    if (fresh.value) await router.replace(`/assignments/${item.id}/edit`)
+    if (signature() !== savingSignature || saveAgain) {
+      saveAgain = false
+      scheduleSave(80)
+    }
   } catch (failure) {
+    saveState.value = 'error'
     error.value = account.value
       ? workspaceError(failure)
       : s(failure instanceof WorkspaceConflict ? 'conflict' : 'failed')
@@ -194,26 +236,36 @@ async function save() {
     busy.value = false
   }
 }
+watch(signature, () => {
+  if (!ready.value) return
+  error.value = ''
+  saveState.value = 'idle'
+  if (busy.value) saveAgain = true
+  else scheduleSave()
+})
 watch(
   () => account.value?.id,
   (id, previous) => {
     if (previous && id !== previous) {
-      saved = true
       ready.value = false
       draft.value = newTask('')
       void router.replace('/assignments')
     }
   },
 )
-onBeforeRouteLeave(
-  () => saved || (!busy.value && (!dirty.value || confirm(s('leave')))),
-)
+onBeforeUnmount(() => {
+  disposed = true
+  if (saveTimer) clearTimeout(saveTimer)
+  // The current save already owns an immutable snapshot. Never display a
+  // leave confirmation; valid edits are normally committed by the debounce.
+})
 </script>
 <template>
   <section class="native-screen native-editor assignment-editor">
     <ScreenHeader
       :title="s(fresh ? 'newAssignment' : 'editAssignment')"
       :back="fresh ? '/assignments' : `/assignments/${route.params.id}`"
+      :subtitle="ready ? s(saveState === 'saving' ? 'saving' : saveState === 'saved' ? 'saved' : 'saveAutomatically') : undefined"
     /><template v-if="ready"
       ><FormTabs v-model="tab" :items="tabs" />
       <form class="native-form editor-body" @submit.prevent="save">
@@ -240,13 +292,19 @@ onBeforeRouteLeave(
                 :value="dateValue(draft.startsAt)"
                 type="datetime-local"
                 @input="setDate('startsAt', $event)" /></label
-            ><label
-              >{{ s('finishes')
-              }}<input
-                :value="dateValue(draft.finishesAt)"
-                type="datetime-local"
-                @input="setDate('finishesAt', $event)"
-            /></label>
+            ><div class="deadline-field">
+              <label class="deadline-toggle">
+                <input type="checkbox" :checked="hasDeadline"
+                  @change="setDeadline(($event.target as HTMLInputElement).checked)" />
+                <span><strong>{{ s(hasDeadline ? 'deadlineEnabled' : 'deadlineDisabled') }}</strong></span>
+              </label>
+              <label v-if="hasDeadline">{{ s('finishes') }}<input
+                  :value="dateValue(draft.finishesAt)"
+                  :min="dateValue((draft.startsAt ?? Date.now()) + 60000)"
+                  type="datetime-local"
+                  @input="setDate('finishesAt', $event)" />
+              </label>
+            </div>
           </div>
           <p class="field-hint">
             {{ account ? w('taskHint') : s('localShort') }}
@@ -269,13 +327,16 @@ onBeforeRouteLeave(
                 {{ preset.name }}
               </option>
             </select></label
-          ><label
+          ><button type="button" class="secondary-button assignment-create-preset" @click="createPreset">
+            <AppIcon name="plus" />{{ s('newPreset') }}
+          </button><label
             >{{ s('requiredCount')
             }}<input
               v-model.number="draft.targetCount"
               type="number"
               min="1"
-              max="999" /></label
+              max="9999"
+            /></label
           ><label
             >{{ s('shots')
             }}<textarea
@@ -392,18 +453,6 @@ onBeforeRouteLeave(
           </div>
         </div>
         <p v-if="error" class="form-error" role="alert">{{ error }}</p>
-        <footer class="editor-footer">
-          <button
-            type="button"
-            class="secondary-button"
-            :disabled="busy"
-            @click="router.push('/assignments')"
-          >
-            {{ s('cancel') }}</button
-          ><button type="submit" class="primary-button" :disabled="busy">
-            {{ s(busy ? 'saving' : 'save') }}
-          </button>
-        </footer>
       </form>
       <TeamPicker
         :open="teamPicker"

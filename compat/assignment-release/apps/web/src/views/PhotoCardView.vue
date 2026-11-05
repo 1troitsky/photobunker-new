@@ -5,6 +5,8 @@ import ScreenHeader from '../components/ScreenHeader.vue'
 import AppIcon from '../components/AppIcon.vue'
 import PrivateLocationMap from '../components/PrivateLocationMap.vue'
 import PhotoCardLinks from '../components/PhotoCardLinks.vue'
+import PhotoThumbnail from '../components/PhotoThumbnail.vue'
+import AppSheet from '../components/AppSheet.vue'
 import { photos } from '../local/library'
 import { account, sessionState } from '../identity/store'
 import { appLockReady, appLocked } from '../app/lock'
@@ -14,6 +16,8 @@ import { privatePhotoCard, type PrivatePhotoCard } from '../studio/private-photo
 import { photoCardText as t } from '../studio/photo-card-text'
 import { profilePath } from '../identity/person'
 import { formatDate, formatNumber, formatBytes } from '../i18n'
+import { localTasks } from '../studio/store'
+import { q } from '../crypto/text'
 
 const route = useRoute()
 const card = ref<PrivatePhotoCard>()
@@ -22,6 +26,7 @@ const ownerOfCard = ref('')
 const loading = ref(false)
 const error = ref<'offline' | 'denied' | 'locked' | 'unavailable'>()
 const expanded = ref(false)
+const shareOpen = ref(false)
 const copyState = ref<'idle' | 'copied' | 'failed'>('idle')
 const now = ref(Date.now())
 const id = computed(() => String(route.params.id ?? ''))
@@ -31,10 +36,12 @@ const inGallery = computed(() => photos.value.some(item =>
   !item.deleteRequested &&
   (item.expiresAt === undefined || item.expiresAt > now.value)))
 const backLink = computed(() => inGallery.value ? galleryLink.value : '/gallery')
+const indexedPhoto = computed(() => photos.value.find(item => item.id === id.value))
 const visible = computed(() =>
   privateCardScopeAllowed() && ownerOfCard.value === account.value?.id &&
   !!card.value && (card.value.expiresAt === undefined || card.value.expiresAt > now.value)
     ? card.value : undefined)
+const assignment = computed(() => localTasks.value.find(item => item.id === visible.value?.assignmentId))
 const dateTime = (value: number) => formatDate(value, { dateStyle: 'medium', timeStyle: 'short' })
 const coordinates = computed(() => visible.value?.location
   ? visible.value.location.latitude.toFixed(6) + ', ' +
@@ -49,6 +56,7 @@ function invalidate() {
   loading.value = false
   error.value = undefined
   expanded.value = false
+  shareOpen.value = false
   copyState.value = 'idle'
 }
 async function load() {
@@ -62,6 +70,14 @@ async function load() {
   loading.value = true
   try {
     if (!privateCardScopeAllowed()) throw new Error('photo_card.locked')
+    const local = photos.value.find(item => item.id === photoId &&
+      !item.deleteRequested && (item.expiresAt === undefined || item.expiresAt > Date.now()))
+    if (local) {
+      card.value = privatePhotoCard(local)
+      ownerOfCard.value = owner || ''
+      canShare.value = local.workspaceAccess?.shareExternal === true
+      loading.value = false
+    }
     const photo = await readPrivateCardPhoto(photoId)
     const projection = privatePhotoCard(photo)
     if (token !== generation || owner !== account.value?.id ||
@@ -113,12 +129,10 @@ onBeforeUnmount(() => { invalidate(); clearInterval(expiry) })
 
 <template>
   <section class="native-screen photo-card-screen">
-    <ScreenHeader :title="t('photoCard')" :back="backLink">
-      <span class="photo-card-private-label"><AppIcon name="lock" />{{ t('private') }}</span>
-    </ScreenHeader>
+    <ScreenHeader :title="t('photoCard')" :back="backLink" />
     <div class="screen-body photo-card-body">
-      <div v-if="loading && !visible" class="native-empty" role="status">
-        <AppIcon name="info" /><p>{{ t('loading') }}</p>
+      <div v-if="loading && !visible" class="photo-card-loading" role="status" aria-label="Loading">
+        <span class="photo-card-loading-image" /><span /><span />
       </div>
       <div v-else-if="!visible" class="native-empty">
         <AppIcon name="lock" />
@@ -129,10 +143,17 @@ onBeforeUnmount(() => { invalidate(); clearInterval(expiry) })
       </div>
       <template v-else>
         <div class="photo-card-intro">
-          <span class="photo-card-kicker">{{ t('private') }}</span>
+          <span class="photo-card-kicker">{{ t('photoCard') }}</span>
           <h2>{{ visible.title || visible.nameId || t('noTitle') }}</h2>
           <p v-if="visible.namePending" class="field-hint" role="status">{{ t('pendingId') }}</p>
-          <p v-if="visible.description" class="photo-card-description">{{ visible.description }}</p>
+        </div>
+        <div class="photo-card-image">
+          <PhotoThumbnail :id="visible.id"
+            :access-key="indexedPhoto?.accountId ? `${indexedPhoto.remoteRevision}:${indexedPhoto.thumbnailOnly}` : 'card'"
+            :expires-at="visible.expiresAt" :alt="visible.title || t('photoCard')" />
+        </div>
+        <div v-if="visible.description" class="photo-card-caption">
+          <p class="photo-card-description">{{ visible.description }}</p>
         </div>
         <div class="photo-card-content">
           <section class="photo-card-section">
@@ -146,12 +167,23 @@ onBeforeUnmount(() => { invalidate(); clearInterval(expiry) })
                 <dt>{{ t('captured') }}</dt>
                 <dd>{{ dateTime(visible.capturedAt) }}</dd>
               </div>
+              <div v-if="visible.nameId">
+                <dt>{{ q('ID фотографии') }}</dt><dd>{{ visible.nameId }}</dd>
+              </div>
+              <div v-if="visible.assignmentId">
+                <dt>{{ q('Задание') }}</dt>
+                <dd><RouterLink :to="`/assignments/${encodeURIComponent(visible.assignmentId)}`">
+                  {{ assignment?.name || q('Открыть задание') }}</RouterLink></dd>
+              </div>
               <div v-if="visible.author">
                 <dt>{{ t('author') }}</dt>
                 <dd><RouterLink :to="profilePath(visible.author.publicId)">
-                  {{ visible.author.publicId }}</RouterLink></dd>
+                  {{ visible.author.publicId === account?.publicId ? q('Вы') : q('Профиль участника') }}</RouterLink></dd>
               </div>
             </dl>
+            <div v-if="visible.tags?.length" class="photo-card-tags">
+              <span v-for="tag in visible.tags" :key="tag">#{{ tag }}</span>
+            </div>
             <RouterLink v-if="inGallery" :to="galleryLink" class="secondary-button photo-card-gallery">
               <AppIcon name="gallery" />{{ t('gallery') }}
             </RouterLink>
@@ -185,9 +217,16 @@ onBeforeUnmount(() => { invalidate(); clearInterval(expiry) })
               </div>
             </dl>
           </section>
-          <PhotoCardLinks v-if="canShare && visible" :card="visible" :share-allowed="canShare" />
+          <section v-if="canShare" class="photo-card-section">
+            <button type="button" class="primary-button full-button" @click="shareOpen = true">
+              <AppIcon name="share" />{{ q('Поделиться карточкой') }}
+            </button>
+          </section>
         </div>
       </template>
     </div>
+    <AppSheet :open="shareOpen && !!visible" :title="q('Поделиться карточкой')" @close="shareOpen = false">
+      <PhotoCardLinks v-if="visible" :card="visible" :share-allowed="canShare" />
+    </AppSheet>
   </section>
 </template>

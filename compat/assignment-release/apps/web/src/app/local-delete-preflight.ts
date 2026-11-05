@@ -12,7 +12,6 @@ import { delivery } from '../delivery/queue'
 import { pendingCount, queueBusy, queueError } from '../workspace/state'
 import { readDurableText } from '../messages/durable-outbox'
 import { readTeamCache } from '../workspace/team-local'
-import { assertMatrixRecoveryForLocalDelete } from '../messages/store'
 import { protectionEnabled, protectionReady, photoReadAllowed, keyState } from '../crypto/store'
 import { request as secureRequest } from '../crypto/api'
 import { photoIndex } from '../workspace/api'
@@ -223,7 +222,7 @@ export async function freshLocalDeletePreflight(pin: string): Promise<{scope: De
   const remoteKeys = await secureRequest<{enabled:boolean;document?:unknown;bundle?:unknown}>('/keys')
   if (!remoteKeys.enabled || !remoteKeys.document || !remoteKeys.bundle)
     throw new PreflightDenied('recovery')
-  await assertMatrixRecoveryForLocalDelete(scope.owner,scope.device)
+  await (await import('../messages/store')).assertMatrixRecoveryForLocalDelete(scope.owner,scope.device)
   checkPreflightScope(scope)
   // A second inventory is required so work arriving during the remote checks
   // cannot silently become an undetected queue entry.

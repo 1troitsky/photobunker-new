@@ -9,15 +9,14 @@ import { account, deviceId } from '../src/identity/store'
 import { connection, security } from '../src/messages/store'
 import { ensureNewAccountMessaging } from '../src/identity/messaging-setup'
 beforeEach(() => { vi.clearAllMocks(); account.value = { id: 'first' } as never; deviceId.value = 'device-first'; connection.value = 'ready'; security.value.verified = true; sdk.start.mockResolvedValue(undefined); sdk.preserve.mockResolvedValue(undefined) })
-it('finishes saving the existing account recovery package before releasing the onboarding client', async () => {
+it('finishes saving the existing account recovery package without stopping the shared client', async () => {
   await ensureNewAccountMessaging()
-  expect(sdk.preserve).toHaveBeenCalledOnce(); expect(sdk.stop).toHaveBeenCalledOnce()
-  expect(sdk.preserve.mock.invocationCallOrder[0]).toBeLessThan(sdk.stop.mock.invocationCallOrder[0]!)
+  expect(sdk.preserve).toHaveBeenCalledOnce(); expect(sdk.stop).not.toHaveBeenCalled()
 })
 it('does not finish registration with an unprepared messaging identity', async () => {
   security.value.verified = false
   await expect(ensureNewAccountMessaging()).rejects.toThrow('onboarding.messaging_unavailable')
-  expect(sdk.preserve).not.toHaveBeenCalled(); expect(sdk.stop).toHaveBeenCalledOnce()
+  expect(sdk.preserve).not.toHaveBeenCalled(); expect(sdk.stop).not.toHaveBeenCalled()
 })
 it('does not save or stop another account when it changes during initial preparation', async () => {
   let finish!: () => void

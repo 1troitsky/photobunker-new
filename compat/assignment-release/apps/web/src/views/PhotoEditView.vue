@@ -50,10 +50,14 @@ const edits = ref<EditDocument>(emptyEdits()),
   error = ref(''),
   ready = ref(false),
   versionNotice = ref('')
-const backPath = computed(
-  () =>
-    `/gallery/${route.params.id}${route.query.version ? `?version=${route.query.version}` : ''}`,
-)
+const backPath = computed(() => {
+  const query = new URLSearchParams()
+  if (typeof route.query.version === 'string') query.set('version', route.query.version)
+  if (typeof route.query.assignment === 'string') query.set('assignment', route.query.assignment)
+  if (typeof route.query.folder === 'string') query.set('folder', route.query.folder)
+  if (route.query.personal === '1') query.set('personal', '1')
+  return `/gallery/${route.params.id}${query.size ? `?${query}` : ''}`
+})
 const data = ref(detailsFor()),
   dataSaved = ref(false)
 const tool = ref<Stroke['tool']>('brush'),
@@ -90,8 +94,9 @@ const imageDirty = computed(() => signature(edits.value) !== initial.value)
 const dataDirty = computed(() => detailsDirty(photo.value, data.value))
 const dirty = computed(() => imageDirty.value || dataDirty.value)
 guardReload(dirty, busy)
-const image = new Image()
+const image = new Image(), previewImage = new Image()
 let originalUrl = '',
+  previewUrl = '',
   saved = false,
   alive = true,
   frame = 0
@@ -139,10 +144,11 @@ function redo() {
 function paint() {
   if (!ready.value || !preview.value || !alive) return
   try {
+    const sourceImage = previewImage.naturalWidth ? previewImage : image
     const canvas = renderEdits(
-      image,
+      sourceImage,
       compare.value ? emptyEdits() : edits.value,
-      1200,
+      960,
     )
     // Reassigning canvas dimensions resets its bitmap and implicitly releases
     // pointer capture. Keep the live drawing gesture intact when the output
@@ -230,34 +236,28 @@ function chooseText(id: string) {
   selectedText.value = id
   void nextTick(focusText)
 }
-function addText() {
+function addText(anchor?: Point) {
   if (edits.value.texts.length >= 20) return
-  const anchor = imagePoint(
-    { x: 0.1, y: 0.15 },
-    image.naturalWidth,
-    image.naturalHeight,
-    edits.value,
+  const position = anchor ?? imagePoint(
+    { x: 0.1, y: 0.15 }, image.naturalWidth, image.naturalHeight, edits.value,
   )
   const layer: TextLayer = {
     rotation: edits.value.rotation,
     mirror: edits.value.mirror,
     id: crypto.randomUUID(),
     text: '',
-    ...anchor,
+    ...position,
     size: 0.05,
     color: '#ffffff',
   }
   edits.value.texts.push(layer)
   selectedText.value = layer.id
   checkpoint()
-  // Vue must mount the new textarea before it can receive focus.
-  void nextTick(focusText)
+  return layer
 }
 watch(tab, (value) => {
-  if (value === 'text' && ready.value) {
-    if (!edits.value.texts.length) addText()
-    else if (!activeText.value) selectedText.value = edits.value.texts[0]!.id
-  }
+  if (value === 'text' && ready.value && edits.value.texts.length && !activeText.value)
+    selectedText.value = edits.value.texts[0]!.id
 })
 function down(event: PointerEvent) {
   if (
@@ -319,9 +319,10 @@ function down(event: PointerEvent) {
       selectedText.value = hit.id
       pointer.offset = { x: value.x - hit.x, y: value.y - hit.y }
     } else {
-      if (!activeText.value) addText()
-      activeText.value!.x = value.x
-      activeText.value!.y = value.y
+      const layer = activeText.value ?? addText(value)
+      if (!layer) return
+      layer.x = value.x
+      layer.y = value.y
       pointer.offset = { x: 0, y: 0 }
     }
   }
@@ -446,8 +447,28 @@ onMounted(async () => {
     image.src = originalUrl
     await image.decode()
     if (!alive) return
+    const longest = Math.max(image.naturalWidth, image.naturalHeight)
+    if (longest > 960) {
+      const scale = 960 / longest
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale))
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale))
+      canvas.getContext('2d')!.drawImage(image, 0, 0, canvas.width, canvas.height)
+      const blob = await new Promise<Blob | null>(resolve =>
+        canvas.toBlob(resolve, 'image/webp', 0.86),
+      )
+      canvas.width = canvas.height = 0
+      if (blob) {
+        previewUrl = URL.createObjectURL(blob)
+        previewImage.src = previewUrl
+        await previewImage.decode()
+      }
+    } else {
+      previewImage.src = originalUrl
+      await previewImage.decode()
+    }
+    if (!alive) return
     ready.value = true
-    if (tab.value === 'text' && !edits.value.texts.length) addText()
     await nextTick()
     paint()
   } catch (failure) {
@@ -528,7 +549,16 @@ async function save() {
     }
     await router.replace({
       path: `/gallery/${photo.value.id}`,
-      query: { version: version.id },
+      query: {
+        version: version.id,
+        ...(typeof route.query.assignment === 'string'
+          ? { assignment: route.query.assignment }
+          : {}),
+        ...(typeof route.query.folder === 'string'
+          ? { folder: route.query.folder }
+          : {}),
+        ...(route.query.personal === '1' ? { personal: '1' } : {}),
+      },
     })
   } catch (failure) {
     error.value =
@@ -560,7 +590,9 @@ onBeforeUnmount(() => {
   alive = false
   cancelAnimationFrame(frame)
   if (originalUrl) URL.revokeObjectURL(originalUrl)
+  if (previewUrl) URL.revokeObjectURL(previewUrl)
   image.src = ''
+  previewImage.src = ''
   if (preview.value) preview.value.width = preview.value.height = 0
 })
 </script>
@@ -626,7 +658,7 @@ onBeforeUnmount(() => {
     </div>
     <FormTabs v-model="tab" :items="tabs" />
     <div class="native-form photo-edit-controls">
-      <fieldset :disabled="busy" class="editor-tools">
+      <fieldset :disabled="busy || !ready" class="editor-tools">
         <div v-if="tab === 'image'" class="form-section">
           <div class="image-tool-row">
             <button
@@ -825,6 +857,8 @@ onBeforeUnmount(() => {
               }}<select v-model="shapeTool">
                 <option value="rectangle">{{ s('rectangle') }}</option>
                 <option value="ellipse">{{ s('ellipse') }}</option>
+                <option value="arrow">{{ s('arrow') }}</option>
+                <option value="star">{{ s('star') }}</option>
               </select></label
             >
             <label>{{ s('color') }}<input v-model="ink" type="color" /></label>
@@ -838,13 +872,6 @@ onBeforeUnmount(() => {
           <p class="field-hint">
             {{ s(tab === 'privacy' ? 'redactHint' : 'shapeHint') }}
           </p>
-          <label v-if="tab === 'privacy'"
-            >{{ s('watermark')
-            }}<input
-              v-model="edits.watermark"
-              maxlength="100"
-              @change="checkpoint"
-          /></label>
           <p v-if="tab === 'privacy'" class="field-hint">
             {{ s('redactOriginalHint') }}
           </p>

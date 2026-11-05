@@ -4,7 +4,6 @@ import { invalidateLocalDeleteSession } from '../identity/store'
 import { identityRequest, IdentityError } from '../identity/api'
 import { lockApp } from './lock'
 import { hardLock } from '../crypto/store'
-import { stopMessaging } from '../messages/store'
 import { listPhotos, deletePhoto } from '../local/photos'
 import * as encryptedDb from '../crypto/database'
 import { eraseDurableOutbox } from '../messages/durable-outbox'
@@ -17,7 +16,7 @@ import { erasePresencePreferences } from '../profiles/presence'
 import { clearScope } from '../studio/repository'
 import { eraseAppPinForLocalDelete } from './pin-store'
 import { updateVerifier, readJournal, mutateJournal, validJournal, type LocalDeleteJournal } from './local-delete-store'
-import { freshLocalDeletePreflight, type DeleteScope, checkPreflightScope } from './local-delete-preflight'
+import type { DeleteScope } from './local-delete-preflight'
 
 export const deletionBlocked = ref(true)
 export const deletionFailure = ref(false)
@@ -29,7 +28,7 @@ const lockState = () => {
   // Protect the UI and loaded keys synchronously even if IndexedDB fails.
   lockApp()
   hardLock()
-  stopMessaging()
+  void import('../messages/store').then(module => module.stopMessaging())
 }
 channel?.addEventListener('message', () => {
   lockState()
@@ -257,6 +256,7 @@ export function resumeLocalDeletion(): Promise<boolean> {
  * and a second confirmation naming the exact account+device.
  */
 export async function commitLocalDeletion(pin: string, expected: DeleteScope) {
+  const { freshLocalDeletePreflight, checkPreflightScope } = await import('./local-delete-preflight')
   checkPreflightScope(expected)
   if(deletionBlocked.value || !navigator.locks?.request) throw new Error('localDelete.storage')
   return navigator.locks.request('photobunker-local-delete-commit',async()=>{
