@@ -17,7 +17,7 @@
 | Объект | Факт | Статус |
 | --- | --- | --- |
 | Handoff branch | `handoff/owner-agent-2026-11-06` | `CONFIRMED` |
-| Implementation snapshot | `53f7d696d385fd81d3611089873db425c9175e8d` | `CONFIRMED` |
+| Implementation snapshot | `595be251ae092ae40cd2354bc910afa31ecc76e5` | `CONFIRMED` local Q1 implementation |
 | Активный runtime | `compat/assignment-release/` | `CONFIRMED` |
 | Production URL | `https://photobunker.duckdns.org` | `CONFIRMED` 2026-11-05 |
 | Release marker | `dock-pwa-20261105-1` | `CONFIRMED` на сервере |
@@ -32,6 +32,28 @@
 4. Исторические backend checks: 68 tests / 1329 assertions проходили на SQLite in-memory; реальные dev-data не удалялись.
 5. Remote account origin был исправлен; после этого владелец смог войти и продолжить мобильное тестирование.
 6. PWA release mechanism реализован: content-hashed assets, `release.json`, service-worker version, `no-store` для shell и безопасный reload без очистки IndexedDB/OPFS.
+
+### Q1 evidence на implementation commit `595be25`
+
+- `IMPLEMENTED`: mobile shell использует один `--dock-total-height` для workspace,
+  dock и перекрывающих панелей; фон dock продолжается до нижнего края safe-area;
+  подписи пяти пунктов остаются видимыми на 320 px; низкий landscape viewport
+  больше не переключается на floating desktop dock.
+- `CONFIRMED test`: `docker compose -f compat/assignment-release/compose.yaml exec -T web npm test`
+  — 63 files / 320 tests, exit code 0.
+- `CONFIRMED test`: targeted PWA/SW — 2 files / 7 tests, exit code 0.
+- `CONFIRMED build`: `PHOTOBUNKER_RELEASE_ID=q1-dock-20261106-1 npm run build`
+  в штатном web container, exit code 0; `release.json` содержит тот же marker.
+- `CONFIRMED test`: Playwright MCP на локальном runtime — 320×700, 390×844,
+  844×390 и 1440×900 без horizontal overflow; mobile dock заканчивается ровно
+  на нижней границе viewport, touch targets 59 px. Assignments ↔ Contacts после
+  загрузки переключались за 4.4–15.7 ms; это laboratory timing, не RUM.
+- `FAIL`: `npm run localization:check` останавливается на существующем
+  untranslated `q('Удалить цифру')` в `App.vue`; Q1 этот код не меняет.
+- `NOT RUN`: Lighthouse CI — для Q1 нет сохранённого сопоставимого pre-change
+  baseline и branch config; synthetic audit не подменяет latency private route.
+- `NOT RUN`: production deploy, installed-PWA cross-release и реальный iPhone/
+  Android safe-area. Статус остаётся ниже `ACCEPTED` до проверки владельца.
 
 Ни один пункт выше не означает, что текущий интерфейс принят или что полный final-branch pipeline пройден.
 

@@ -22,9 +22,9 @@
 
 | ID | Статус | Проблема / критерий |
 | --- | --- | --- |
-| UI-01 | `OWNER FAILED` | Dock ранее прыгал, затем оказался выше нижней границы с пустой полосой, затем визуально стал ещё хуже. Нужны стабильные header/work-area/dock слои; dock меняет только focus, не remount всего shell. |
-| UI-02 | `IMPLEMENTED` | CSS и PWA release updater развёрнуты, но владелец не подтвердил новый dock после release `dock-pwa-20261105-1`. Не ставить `ACCEPTED` без повторного телефона. |
-| UI-03 | `OWNER FAILED` | Переходы между меню занимали до ~10 секунд. Навигация должна отображать локальный экран сразу, без ожидания HTTP/sync. |
+| UI-01 | `OWNER FAILED` | На `595be25` workspace/dock используют одну высоту, dock доходит до нижнего края portrait/landscape, labels остаются на 320 px; Playwright без jump, но только владелец может снять `OWNER FAILED` на телефоне. |
+| UI-02 | `IMPLEMENTED` | На `595be25` release marker имеет deterministic test; build `q1-dock-20261106-1` собран локально. До production deploy и повторной проверки установленной PWA не ставить `ACCEPTED`. |
+| UI-03 | `OWNER FAILED` | На локальном Playwright Assignments ↔ Contacts после загрузки: 4.4–15.7 ms и стабильный dock. Production/RUM и owner mobile recheck ещё `NOT RUN`; прежний owner defect не закрыт. |
 | UI-04 | `OPEN` | После capture навигация не мгновенная. Durable local commit и визуальный результат должны предшествовать фоновой доставке. |
 | UI-05 | `OWNER FAILED` | Глобальные spacing, paddings, высота строк, font-size и блоки непоследовательны; встречались нулевые отступы, огромные gaps и очень мелкий текст. Нужны единые tokens/primitives. |
 | UI-06 | `OWNER FAILED` | На узком экране текст и controls сжимались в столбик по одной букве. Все layouts проверять минимум 320/390 px и desktop 1440 px без horizontal overflow. |
@@ -33,7 +33,14 @@
 | UI-09 | `PARTIAL` | Основной язык должен быть English для нового профиля; RU выбирается пользователем. Все user-facing strings имеют EN/RU без `Translation unavailable` и смешения языков. |
 | UI-10 | `OPEN` | Все изменения настроек/профиля/правил сохраняются сразу там, где это безопасно; никаких глобальных «Changes are not saved» dialogs. Ошибка должна указывать конкретное поле/операцию. |
 | UI-11 | `OWNER FAILED` | `×`, Back или Cancel в формах Contact/Team/других сущностей иногда создают или сохраняют объект. Cancel всегда discard; create только явной командой. |
-| UI-12 | `PARTIAL` | PWA update не должен очищать IndexedDB/OPFS/keys. `release.json`/SW/versioned shell реализованы; проверить upgrade старой установленной PWA между двумя реальными releases. |
+| UI-12 | `PARTIAL` | PWA update не должен очищать IndexedDB/OPFS/keys. `release.json`/SW/versioned shell и release-marker test реализованы; upgrade старой установленной PWA между двумя реальными releases ещё `NOT RUN`. |
+
+Q1 implementation evidence: commit `595be251ae092ae40cd2354bc910afa31ecc76e5`,
+runtime `compat/assignment-release/`; Vitest 63/63 files and 320/320 tests PASS,
+targeted PWA/SW 7/7 PASS, production build PASS. Playwright artifacts:
+`test-results/playwright-mcp/q1-after-contacts-320x700.png` и
+`test-results/playwright-mcp/test-results/playwright-mcp/q1-after-profile-390x844.png`
+(ignored local evidence). Production deploy и owner acceptance пока `NOT RUN`.
 
 ## 3. Camera, GPS, presets и assignments capture
 
