@@ -637,10 +637,7 @@ watch(
           :to="item.to"
           :class="[
             'nav-item',
-            {
-              active: isActive(item.name),
-              'dock-camera': item.name === 'camera',
-            },
+            { active: isActive(item.name) },
           ]"
           :aria-label="label(item.name)"
           :aria-current="isActive(item.name) ? 'page' : undefined"

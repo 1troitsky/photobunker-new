@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-11-06
+goal: Один визуально ясный и стабильный dock без двойных active states, пустой
+  safe-area полосы и скачков.
