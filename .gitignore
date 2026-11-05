@@ -39,6 +39,7 @@ id_rsa*
 *.secret
 
 # Local development artifacts
+/LOCAL-WORKFLOW.md
 .DS_Store
 Thumbs.db
 .idea/

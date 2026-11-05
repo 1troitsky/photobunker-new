@@ -1,7 +1,11 @@
 /* Application shell. Existing capture/storage modules keep their behavior. */
-:root { --dock-height: 70px; }
+:root {
+  --dock-height: 70px;
+  --dock-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --dock-total-height: calc(var(--dock-height) + var(--dock-safe-bottom));
+}
 body { overscroll-behavior-y: none; }
-.app-shell { display: flex; flex-direction: column; min-height: 100svh; padding: 0 0 calc(var(--dock-height) + env(safe-area-inset-bottom) + 20px); }
+.app-shell { display: flex; flex-direction: column; min-height: 100svh; padding: 0 0 calc(var(--dock-total-height) + 20px); }
 .app-bar { display: flex; align-items: center; gap: 20px; min-height: 72px; padding: calc(12px + env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) 12px max(24px, env(safe-area-inset-left)); border-bottom: 1px solid var(--border); }
 .app-wordmark { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 650; letter-spacing: -.5px; }
 .app-wordmark .brand-mark { width: 32px; height: 32px; border-radius: 10px; color: var(--accent-ink); }
@@ -113,10 +117,10 @@ body { overscroll-behavior-y: none; }
 .settings-panel { margin-top: 20px; }
 .settings-screen .page-heading > p, .settings-screen .upcoming-label { color: var(--secondary); }
 .material-filters input, .material-filters select, .photo-retention input { color-scheme: inherit; }
-@media (max-width: 700px) {
+@media (max-width: 700px), (max-height: 500px) and (max-width: 1000px) {
   html, body, #app { height: 100%; min-height: 100%; }
   body { overflow: hidden; }
-  .app-shell { height: 100dvh; min-height: 0; overflow: hidden; padding: 0 0 calc(var(--dock-height) + env(safe-area-inset-bottom)); }
+  .app-shell { height: 100dvh; min-height: 0; overflow: hidden; padding: 0 0 var(--dock-total-height); }
   .main-content { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
   .app-bar { gap: 10px; min-height: 60px; padding: calc(10px + env(safe-area-inset-top)) 16px 10px; }
   .app-wordmark { font-size: 14px; }
@@ -127,8 +131,9 @@ body { overscroll-behavior-y: none; }
   .content-screen { padding: 22px 0; }
   .page-heading { margin-bottom: 20px; }
   .page-heading h1 { font-size: 25px; }
-  .navigation { bottom: 0; left: 0; right: 0; width: 100%; height: calc(var(--dock-height) + env(safe-area-inset-bottom)); transform: translateZ(0); border-width: 1px 0 0; border-radius: 0; padding: 6px max(4px, env(safe-area-inset-left)) calc(6px + env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-right)); background: var(--dock); box-shadow: 0 -8px 24px #0000001c; backdrop-filter: none; -webkit-backdrop-filter: none; contain: layout paint style; }
-  .nav-item { font-size: 11px; }
+  .navigation { bottom: 0; left: 0; right: 0; width: 100%; height: var(--dock-total-height); transform: translateZ(0); border-width: 1px 0 0; border-radius: 0; padding: 5px max(4px, env(safe-area-inset-left, 0px)) max(5px, var(--dock-safe-bottom)) max(4px, env(safe-area-inset-right, 0px)); background: var(--dock); box-shadow: 0 -8px 24px #0000001c; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .navigation::after { content: ''; position: absolute; z-index: -1; left: 0; right: 0; top: 100%; height: max(16px, var(--dock-safe-bottom)); background: var(--dock); }
+  .nav-item { min-height: 44px; font-size: 10px; }
   .nav-item > span { display: flex; }
   .offline-notice { width: calc(100% - 32px); margin: 12px 16px 0; }
   .camera-screen { padding-top: 12px; }
@@ -157,8 +162,9 @@ body { overscroll-behavior-y: none; }
   .profile-avatar-preview { width:72px; height:72px; }
 }
 @media (max-width: 360px) {
-  .nav-item { font-size: 0; gap: 0; }
-  .nav-item .dock-icon { height: 38px; }
+  .navigation { gap: 0; padding-left: max(2px, env(safe-area-inset-left, 0px)); padding-right: max(2px, env(safe-area-inset-right, 0px)); }
+  .nav-item { gap: 2px; padding-inline: 0; font-size: 10px; }
+  .nav-item .dock-icon { height: 28px; }
 }
 @media (max-width: 359px) {
   .app-wordmark > span:last-child { display: none; }

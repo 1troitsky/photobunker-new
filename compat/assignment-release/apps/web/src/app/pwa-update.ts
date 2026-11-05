@@ -45,8 +45,8 @@ async function latestRelease(): Promise<Release | undefined> {
   return release(await response.json())
 }
 
-export function isNewRelease(latest: Release | undefined): latest is Release {
-  return !!latest && latest.buildId !== BUILD_ID
+export function isNewRelease(latest: Release | undefined, current = BUILD_ID): latest is Release {
+  return !!latest && latest.buildId !== current
 }
 
 export function startPwaUpdates() {
