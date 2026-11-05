@@ -10,7 +10,7 @@ This is a privacy-oriented pseudonymous identity, not a promise of network anony
 
 Photo, Assignment, Team, Card and Browser refer to `accountId` and capabilities through the public Identity/Authorization API. Billing or Messenger may be separate future modules, but they cannot become startup dependencies and must not reuse photo encryption keys. Messenger/Matrix/RTC are outside the current release.
 
-The one user-visible recovery key encodes a version, non-secret account locator, at least 256 random secret bits and a checksum in a human-safe form. The concrete PB2 encoding, primitives and wire contracts are fixed by the approved Issue #4 **Codex security review — protocol v2**, recorded below. Independent implementation security review and executable test vectors remain mandatory before merge. The raw secret is never sent to the server, logged, placed in URLs, analytics, localStorage or persistent browser caches.
+The one user-visible recovery key encodes a version, non-secret account locator, at least 256 random secret bits and a checksum in a human-safe form. The concrete PB2 encoding, primitives and wire contracts are recorded below. Independent implementation security review and executable test vectors remain mandatory before release. The raw secret is never sent to the server, logged, placed in URLs, analytics, localStorage or persistent browser caches.
 
 ## 2. Key hierarchy — no single content key for every photo
 
@@ -68,10 +68,10 @@ Revoking a device closes sessions and future server reads. Already downloaded of
 - Per-asset DEKs, versioned envelopes, corruption/tampering tests and key-rotation test vectors.
 - No raw Recovery Key, account private key, AKEK or plaintext DEK in logs, URLs, analytics, localStorage, IndexedDB or OPFS.
 
-R2-03 and especially R2-04 cannot be marked Ready until Codex reviews the protocol and executable test vectors. R2-01/R2-02 UI work does not depend on that review.
+Identity/storage cannot be marked `CONFIRMED` until the agent reviews the protocol and executable test vectors. Independent UI work does not prove that review.
 
 
-## 7. R2-03 binding protocol v2 — Codex security review
+## 7. R2-03 binding protocol v2 — security review
 
 This section supersedes PB1/PB4 and generic v1 wording elsewhere in this document. Normative: [Issue #4](https://github.com/1troitsky/photobunker-new/issues/4). Legacy sources are read-only; no backwards compatibility or legacy migration in R2-03.
 
@@ -84,7 +84,7 @@ This section supersedes PB1/PB4 and generic v1 wording elsewhere in this documen
 6. **Recovery**: GET by non-secret locator returns ciphertext account envelope + server public key and revision; client decrypts, verifies account public/private key agreement, generates a *fresh* device key/envelope, signs recovery enrollment with recovered account key and new-device key. No private key, recovery secret, AKEK or DEK is transmitted. Account switch/logout rejects stale callbacks and removes runtime plaintext/object URLs, without deleting another account’s ciphertext.
 7. **Rotation**: signed account + current device proof, `expectedRevision` CAS; new random locator and AEAD envelope published atomically, old locator invalid only after commit. Idempotent reconciliation checks original `operationId` and envelope digest, never replays a consumed challenge. User must save and confirm new key before attempting rotation; after ambiguous network outcome do not claim success.
 8. **Pairing**: new device ephemeral P-256 ECDH and signing key, 5-minute one-time request. Trusted, distinct existing device shows/computes fingerprint and explicitly approves only after out-of-band comparison. HKDF-SHA-256 derived from ECDH shared bytes; AES-GCM transfers the encrypted account package with AAD binding accountId/pairingId/newDeviceId. Server relays public keys/ciphertext only. After decrypt, new device signs a separate enrollment challenge. Self approval and replay denied.
-9. **Server boundary**: `apps/api` is a new minimal Laravel backend (R2-03 only); `/identity/v2/*` must be reverse-proxied same-origin over HTTPS and DB migrations installed by Codex. No Garage/S3, Photo storage or Matrix. Only public account authentication keys, ciphertext, device signing public keys, opaque IDs and bounded session metadata are server-visible. Do not log secrets.
-10. **Review gate**: Codex must run unit vectors, PHP API tests, browser IDB probe, lost-ACK/reload, multiple accounts/tabs, Safari PWA, signature replay/expiry/revoke, rotation, pairing, production build and threat review. Until actual PASS, this implementation is a **Draft PR under review**, not audited E2EE nor a production release.
+9. **Server boundary**: `apps/api` is a minimal Laravel backend; `/identity/v2/*` must be reverse-proxied same-origin over HTTPS and DB migrations installed only through a reviewed deploy. No Garage/S3, Photo storage or Matrix in the identity boundary. Only public account authentication keys, ciphertext, device signing public keys, opaque IDs and bounded session metadata are server-visible. Do not log secrets.
+10. **Review gate**: the agent must run unit vectors, PHP API tests, browser IDB probe, lost-ACK/reload, multiple accounts/tabs, Safari PWA, signature replay/expiry/revoke, rotation, pairing, production build and threat review. Until actual PASS, this is not audited E2EE nor a production release.
 
 Fixed HKDF vector for bytes `locator=00…0f`, `secret=00…1f`, `accountId=00000000-0000-4000-8000-000000000001`: `aee630a52a9361e5e677793df273a4fabd0c60b615e205e2facfaa06278f90a6`.

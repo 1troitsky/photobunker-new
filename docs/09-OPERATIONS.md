@@ -1,6 +1,6 @@
 # 09. Development & operations contracts
 
-**Статус:** согласованные storage lifecycle invariants. **Начальный S3 backend — Garage** (S3-compatible adapter), фото живёт **24ч–45д**, миниатюра WebP ≤320px, отдельного постоянного preview нет. Домены/тарифы/развёртывание — инженерные детали Codex.
+**Статус:** согласованные storage lifecycle invariants. **Начальный S3 backend — Garage** (S3-compatible adapter), миниатюра WebP ≤320px, отдельного постоянного preview нет. Effective TTL определяется пользователем в пределах актуального тарифа и фиксируется при capture. Домены/тарифы/развёртывание уточняются владельцем и агентом.
 
 ## 1. Предлагаемая инфраструктура
 
@@ -12,7 +12,7 @@
 
 ## 1.1. Очерёдность интеграций
 
-**R2-01:** Codex workspace, .gitignore, локальный production build/import-boundary tests, test harness, GitHub Project и HTTPS preview — **без PostgreSQL/Garage**. **R2-02:** ChatGPT UI, Codex production testing, владелец first UX acceptance. **R2-03:** real Identity + backend и recovery. **R2-04:** client local encrypted storage + Safari capability. **R2-05:** Garage ciphertext sync и PostgreSQL storage metadata/reconciliation/expiry jobs. Не создавайте dependencies setup от будущего S3 bucket.
+Исторические R2-этапы сохранены в roadmap/history. Текущая работа идёт от handoff-ветки небольшими acceptance slices; не создавать setup-зависимость от будущего S3 bucket.
 
 ## 2. Среды и конфигурация
 
@@ -26,17 +26,17 @@ S3 object и локальный asset всегда имеют photoId, owner, pu
 
 Storage quota: на устройстве и сервере отдельно; резервировать/check budget перед тяжёлой обработкой, не терять действующий неистёкший asset. Не удалять единственное **неистёкшее** несинхронизированное фото из-за нехватки места; **истёкшее** удаляется независимо от upload status. Досрочное eviction локальных ещё действительных synced copies — после утверждённого recovery contract ST-04; TTL ST-09 уже утверждён.
 
-S3 versioning, object-lock, replication и backups **не должны незаметно продлевать доступный период хранения**. Codex проверяет настройки Garage, жизненный цикл snapshots/backup и документирует физические гарантии; объект в одном серверном volume не является backup. Не обещать физический secure erase в точную секунду, если провайдер/диск/офлайн-устройство этого не гарантирует.
+S3 versioning, object-lock, replication и backups **не должны незаметно продлевать доступный период хранения**. Агент проверяет настройки Garage, жизненный цикл snapshots/backup и документирует физические гарантии; объект в одном серверном volume не является backup. Не обещать физический secure erase в точную секунду, если провайдер/диск/офлайн-устройство этого не гарантирует.
 
 
 ## 3.1. Недорогое автоматическое удаление без полного сканирования
 
-1. В PostgreSQL индексировать `photos(expires_at, id)` для активных снимков (вариант partial-index по статусу на усмотрение Codex). Не запускать отдельный таймер на каждый файл.
+1. В PostgreSQL индексировать `photos(expires_at, id)` для активных снимков; конкретный partial-index проверяется по реальному query plan. Не запускать отдельный таймер на каждый файл.
 2. **Один системный cron / Laravel Scheduler с периодом 1 минута** запускает лёгкий query по `expires_at <= now()`, **limit/batch + стабильная пагинация**; большая нагрузка обрабатывается queue workers с ограниченной конкуренцией. Не сканировать всю таблицу и не делать дешифрование при sweep.
 3. Истёкшая фотография **сразу перестаёт читаться** через серверную ACL/TTL, Card/Browser/download/Share. Идемпотентный delete job удаляет объекты Garage (включая thumb, original, edit, share, temporary), фиксирует подтверждения, удаляет связанные Photo/Metadata/Note/Card/индексы в БД и очищает технический tombstone после завершения безопасного retry window.
 4. Worker ретраит 5xx/timeout/backoff и проводит reconciliation для orphan objects и jobs. Поздний upload/retry не может восстановить expired фото. Нет бессрочных orphan objects или приватных metadata в tombstones.
 5. На клиенте expiry проверяется при каждом чтении, запуске/возобновлении, в ограниченном maintenance cycle: скрыть photo и очистить локальные ciphertext, metadata, thumbnail cache. **Закрытая offline PWA не может гарантированно исполнить фоновый cron**, поэтому cleanup выполнится при следующей активности. Принудительная серверная очистка не означает физического стирания у отключённого пользователя.
-6. Codex тестирует 24h, 45d, boundary timestamps, редактирование перед expiry, lost ACK, S3 outage, expired unsynced photo, скачивание по старой signed link, повторный запуск и отсутствие оставшихся blobs/DB records. Наблюдать `expired_pending_deletion`, delete retry age, orphan bytes и lag, **не логировать чувствительные metadata**.
+6. Агент тестирует тарифные TTL boundaries, редактирование перед expiry, lost ACK, S3 outage, expired unsynced photo, старую signed link, повторный запуск и отсутствие оставшихся blobs/DB records. Наблюдать `expired_pending_deletion`, delete retry age, orphan bytes и lag, **не логировать чувствительные metadata**.
 
 ## 4. Delivery and rollback
 

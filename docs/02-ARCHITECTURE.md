@@ -1,6 +1,6 @@
 # 02. Архитектура PhotoBunker: границы и устойчивость
 
-**Статус: APPROVED ARCHITECTURAL INVARIANTS (2026-10-28).** Разработка разрешена по согласованному roadmap без ожидания назначения Codex или merge upstream (owner override 2026-10-29). Процедура — [14 Independent Development](14-INDEPENDENT-DEVELOPMENT-PIPELINE.md) и [COLLABORATION](../COLLABORATION.md). Это **проектные обязательные границы**, а не утверждение, что соответствующий код уже готов. Открыты только конкретные технические выборы, явно помеченные OPEN в профильных контрактах. Владелец утверждает изменения продукта, Codex организует setup/проверки, ChatGPT исполняет большую часть Issues.
+**Статус: APPROVED ARCHITECTURAL INVARIANTS (2026-10-28), процесс обновлён 2026-11-06.** Это обязательные границы, а не утверждение, что соответствующий код уже готов. Владелец утверждает продукт и UX; один агент реализует, проверяет и документирует небольшие вертикальные шаги по [актуальному workflow](14-INDEPENDENT-DEVELOPMENT-PIPELINE.md).
 
 ## 1. Цель архитектуры
 
@@ -83,10 +83,10 @@ Assignments предоставляет неизменяемый снимок `Ca
 
 ## 6. Технический baseline и отложенные интеграции
 
-- **Сервер:** Laravel + PostgreSQL и очереди — рабочая целевая архитектура; **интеграция PostgreSQL/Garage не входит в R2-01** и выполняется по соответствующим backend/storage Issues. Конкретную версию Laravel Codex проверяет при установке, не копирует старую схему БД автоматически.
-- **Клиент:** Vue 3 / TypeScript PWA; **Dexie/IndexedDB** для локальных metadata/journal/outbox, **OPFS только для encrypted blobs** при поддержке, **encrypted IndexedDB Blob fallback**, **Pinia только для ephemeral UI state**. Проверка Safari/iOS, storage.persist()/quota/eviction — обязательна в R2-04. Vue Router/инструмент интеграции выбирается Codex без нарушения немедленной навигации и доступа к локальным данным. См. [12](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md).
-- **Хранилище файлов:** утверждён гибрид **local encrypted → S3**, первый совместимый backend — **Garage**. ST-02/03 — три режима originals; ST-05/06 — единственная encrypted WebP thumbnail ≤320px, отдельного постоянного preview нет; ST-09 — **TTL 24 часа — 45 дней** по заданию и автоматическое удаление всех photo-related files/DB metadata; ST-12/13 — раздельная metadata DB, encryption before persistence, запрет системной галереи. Конкретные SDK/локальный адаптер, качество сжатия и история редактора уточняются Codex по соответствующему Issue.
-- **Crypto/Identity:** утверждённые жизненные состояния first-device bootstrap и recovery envelope — в [11](11-IDENTITY-AND-KEYS.md), trusted-time policy в [12](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md). Использовать проверенные примитивы/тест-векторы, делать независимый threat review в Codex, не придумывать свою AEAD.
+- **Сервер:** Laravel + PostgreSQL и очереди — рабочая целевая архитектура; новую схему БД нельзя копировать из legacy автоматически.
+- **Клиент:** Vue 3 / TypeScript PWA; **Dexie/IndexedDB** для локальных metadata/journal/outbox, **OPFS только для encrypted blobs** при поддержке, **encrypted IndexedDB Blob fallback**, **Pinia только для ephemeral UI state**. Проверка Safari/iOS, storage.persist()/quota/eviction обязательна. Router/инструменты не должны нарушать мгновенную навигацию и доступ к локальным данным. См. [12](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md).
+- **Хранилище файлов:** утверждён гибрид **local encrypted → S3**, первый совместимый backend — **Garage**. ST-02/03 — три режима originals; ST-05/06 — единственная encrypted WebP thumbnail ≤320px, отдельного постоянного preview нет; ST-12/13 — раздельная metadata DB, encryption before persistence, запрет системной галереи. Effective TTL задаётся пользователем в пределах тарифа и фиксируется при capture; актуальное owner-решение описано в `ts_and_ux.md` и `docs/16-*`.
+- **Crypto/Identity:** жизненные состояния first-device bootstrap и recovery envelope — в [11](11-IDENTITY-AND-KEYS.md), trusted-time policy в [12](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md). Использовать проверенные примитивы/тест-векторы и отдельный threat review; не придумывать свою AEAD.
 
 ## 7. Машинные ограничения будущего репозитория
 
@@ -105,4 +105,4 @@ Assignments предоставляет неизменяемый снимок `Ca
 - Все неутверждённые вопросы отмечаются **OPEN** в существующих документах.
 - После согласования с владельцем записываются: решение, причины, последствия, исключения, критерии проверки и дата. Изменение не теряет контекст.
 - Бэклог roadmap уже создан. Новые Issues только по согласованному изменению scope, не создавать параллельную очередь.
-- **Roadmap** опубликован в [08](08-ROADMAP.md). ChatGPT самостоятельно выбирает следующий согласованный Issue по графу зависимостей и собирает stacked Draft PR; Codex проверяет и интегрирует всю цепочку после завершения реализации. Технические и security gates применяются в полной мере перед интеграцией/релизом. [14](14-INDEPENDENT-DEVELOPMENT-PIPELINE.md).
+- Исторический roadmap опубликован в [08](08-ROADMAP.md). Текущую последовательность определяют `ts_and_ux.md` и `docs/16-*`; агент выполняет один проверяемый шаг и обновляет status перед следующим. Технические и security gates полностью действуют перед release. [14](14-INDEPENDENT-DEVELOPMENT-PIPELINE.md).

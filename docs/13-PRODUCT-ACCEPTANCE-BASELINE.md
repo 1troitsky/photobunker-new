@@ -56,7 +56,7 @@
 
 ## 8. Каждый Issue — измеримые доказательства
 
-Happy/error path; offline/reconnect/reload; account switch; permissions и E2EE; expiry/revoke; mobile PWA keyboard/touch/safe area; RU/EN; **production build**; негативные сценарии и реальные логи **Codex**. Показать owner milestone builds R2-02, R2-06, R2-05/R2-07 и последующие, не требовать у владельца технической проверки каждого PR.
+Happy/error path; offline/reconnect/reload; account switch; permissions и E2EE; expiry/revoke; mobile PWA keyboard/touch/safe area; RU/EN; **production build**; негативные сценарии и реальные безопасные логи агента. Показывать владельцу законченные milestone/quick-task builds, не перекладывая на него техническую диагностику.
 
 **Исключено из первого релиза:** messenger/attachments/group chats, Matrix/LiveKit/RTC/voice/video, presence/online statuses, chat shares и обязанности синхронизации participants с chat-room. Если пользователь позже добавит Messenger — отдельный модуль и новый roadmap, без backdoor deps.
 

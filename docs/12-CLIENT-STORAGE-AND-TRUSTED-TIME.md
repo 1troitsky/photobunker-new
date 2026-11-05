@@ -1,6 +1,6 @@
 # 12. Browser storage, encrypted persistence и доверенное время
 
-**Статус: технический baseline для R2-04/R2-06/R2-05 (28.10.2026).** Содержит принятое разделение ответственности; конкретные версии SDK и браузерные багфиксы подбирает и проверяет Codex. Не является утверждением о полной совместимости без hardware testing.
+**Статус: технический baseline для local storage/capture/sync (28.10.2026).** Содержит принятое разделение ответственности; конкретные версии SDK и браузерные багфиксы подбирает и проверяет агент. Не является утверждением о полной совместимости без hardware testing.
 
 ## 1. Единая схема хранения и fallback
 
@@ -47,7 +47,7 @@ Sources to revisit for API capability, **not requirements or repo dependencies**
 
 **Безопасность/ограничение:** local IndexedDB/OPFS и wall clock можно изменить при полном контроле устройства; одно лишь хранение `lastTrustedServerUtc` не даёт криптографической защиты от rollback атакующего с filesystem access. Поддерживать root E2EE и key access restrictions; не обещать невзламываемый offline TTL. Сервер всегда enforcement authority и удаляет ciphertext/metadata по cron независимо от клиента. На выключенном offline устройстве cleanup только при запуске/возобновлении.
 
-## 4. Что тестирует Codex
+## 4. Что тестирует агент
 
 - Safari PWA fresh install, IndexedDB/OPFS capability and fallback, `persist()` true/false/unsupported, quota pressure and browser crash, account switch and tab concurrency.
 - Запись encrypted capture, consistency after partial write, orphan reconciliation, outbox retries, ciphertext-only inspection via browser development tools.

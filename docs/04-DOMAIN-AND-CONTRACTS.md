@@ -66,7 +66,7 @@ Assignment required capture parameters are versioned and frozen at capture; role
 
 - exact compression profiles/format and browser support (ST-08), **не путать с уже выбранным WebP ≤320px для thumbnail**;
 - **Thumbnail уже определён:** один encrypted WebP ≤320px, S3 + bounded encrypted local cache, без постоянного preview. Детальная capability matrix thumbnail-only permission — в составе ACL review;
-- **Identity/recovery специфицированы** в [11](11-IDENTITY-AND-KEYS.md): anonymous key-only Account, signed challenges, first device, one Recovery Key, pairing, per-asset DEKs и partial bootstrap; Codex crypto review обязателен до R2-03;
+- **Identity/recovery специфицированы** в [11](11-IDENTITY-AND-KEYS.md): anonymous key-only Account, signed challenges, first device, one Recovery Key, pairing, per-asset DEKs и partial bootstrap; отдельный crypto/security review обязателен до release;
 - **S3/TTL уже выбраны:** Garage через адаптер, фото 24ч–45д по заданию с expiry и полным cleanup. OPEN только числовые бюджеты инфраструктуры, recovery/backup и provider deployment;
 - whether version history beyond one current edit exists (ST-07);
 - share export semantics/recipients (ST-10); **любой share/derivative истекает не позже фото и подлежит физическому cleanup**;

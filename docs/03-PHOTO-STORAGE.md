@@ -88,7 +88,7 @@ Camera API -> кратковременные байты в памяти
 
 В нормальном устойчивом состоянии режима 3 — **один долговременный полноразмерный asset**. Временно допустимы две зашифрованные копии ради crash safety. Cleanup должен охватывать orphaned upload, thumbnail, preview, export, editor temp, удалённые и истёкшие файлы. Ошибка очистки не должна подменяться ложным статусом «удалено окончательно».
 
-**ST-04 key recovery baseline задан** в [11 — Identity/Keys](11-IDENTITY-AND-KEYS.md): первый device trust, recovery secret, новый device через pairing или recovery envelope. Конкретная криптографическая реализация и UX ещё подлежат независимому review Codex перед R2-03/R2-04; без доказанной recovery-процедуры нельзя удалять единственную **неистёкшую** копию. Для **истёкшего** снимка действует обязательное удаление даже если он не успел синхронизироваться, без повторной загрузки истёкших данных.
+**ST-04 key recovery baseline задан** в [11 — Identity/Keys](11-IDENTITY-AND-KEYS.md): первый device trust, recovery secret, новый device через pairing или recovery envelope. Криптографическая реализация и UX требуют отдельного review и test vectors; без доказанной recovery-процедуры нельзя удалять единственную **неистёкшую** копию. Для **истёкшего** снимка действует обязательное удаление даже если он не успел синхронизироваться, без повторной загрузки истёкших данных.
 
 ## 6. Миниатюры, TTL, автоматическая очистка и оставшиеся детали
 
@@ -117,12 +117,12 @@ Camera API -> кратковременные байты в памяти
 | ST-01 | Сначала защищённое локальное сохранение, затем фоновая синхронизация с S3 | **DECIDED 2026-10-28** |
 | ST-02 | Три режима: исходный без дополнительного сжатия (UI disabled); сжатый исходник отдельно + edit; сжатый master с заменой | **DECIDED 2026-10-28** |
 | ST-03 | Режим выбирается в задании, default = «перезаписывать оригинал»; без задания default | **DECIDED 2026-10-28** |
-| ST-04 | First-device bootstrap, recovery secret + encrypted server envelope, new-device pairing/recovery; [11](11-IDENTITY-AND-KEYS.md) | **TECHNICAL BASELINE 2026-10-28**, review Codex перед R2-03; досрочное eviction не разрешено до тестов |
+| ST-04 | First-device bootstrap, recovery secret + encrypted server envelope, new-device pairing/recovery; [11](11-IDENTITY-AND-KEYS.md) | **TECHNICAL BASELINE 2026-10-28**, отдельный security review; досрочное eviction не разрешено до тестов |
 | ST-05 | Одна зашифрованная миниатюра WebP ≤320px, S3 + bounded encrypted local cache; ACL не шире фото | **DECIDED 2026-10-28** |
 | ST-06 | Отдельных постоянных previews не создавать | **DECIDED 2026-10-28** |
 | ST-07 | Полная история редактора и Undo после закрытия | OPEN |
 | ST-08 | Capture profile v1: JPEG q=0.90, ≤4096 px/12.5 MP, no upscale, EXIF отдельно в encrypted metadata; будущая настройка только новой policy revision | **TECHNICAL BASELINE 2026-10-28**, раздел 2.1 |
-| ST-09 | Фотографии 24ч–45д по заданию, удаление фото/всех assets/thumbnail/DB/metadata/share при expiry; batch scheduler + queue | **DECIDED 2026-10-28**; конкретные числовые квоты/backup SLA — технические параметры для Codex |
+| ST-09 | Effective TTL фиксируется при capture; удаление фото/всех assets/thumbnail/DB/metadata/share при expiry; batch scheduler + queue | Пределы определяются актуальным тарифом и owner specification; backup SLA требует проверки |
 | ST-10 | Экспорт/публикация Photo Card и жизнь независимых share objects | OPEN |
 | ST-11 | Старые encrypted photos, ключи и совместимость при переносе | OPEN |
 | ST-12 | Метаданные фото отдельно в БД, запись при съёмке и фоновая синхронизация | **DECIDED 2026-10-28**; схема и публичность полей OPEN |
@@ -132,4 +132,4 @@ Camera API -> кратковременные байты в памяти
 | ST-16 | Локальное хранилище Dexie/IndexedDB metadata/outbox + OPFS encrypted photo blobs с IDB Blob fallback; Pinia ephemeral | **TECHNICAL BASELINE 2026-10-28**, [12](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md) |
 | ST-17 | Server UTC authoritative, last trusted server time, local clock rollback detection/fail-closed offline | **TECHNICAL BASELINE 2026-10-28**, [12](12-CLIENT-STORAGE-AND-TRUSTED-TIME.md) |
 
-**Не блокировать фундамент/UI:** ST-01/02/03/05/06/09/12/13 утверждены, ST-04/08/16/17 имеют **конкретный технический baseline**, Garage — первый S3 backend. Crypto recovery, Safari storage, clock rollback и память/качество capture profile подлежат специальным review/test до статуса `Verified` и интеграции, но не требуют назначения Issue от Codex в Phase I. Поздние OPEN: ST-07 editor history, ST-10 детализация экспорта, ST-11 legacy migration, ST-15 ретроактивные изменения. Удаление по expiry не OPEN.
+ST-01/02/03/05/06/09/12/13 имеют утверждённый baseline, ST-04/08/16/17 — конкретный технический baseline, Garage — первый S3 backend. Crypto recovery, Safari storage, clock rollback и память/качество capture profile требуют специального review/test до `CONFIRMED`. Поздние OPEN: ST-07 editor history, ST-10 детализация экспорта, ST-11 legacy migration, ST-15 ретроактивные изменения.
