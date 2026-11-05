@@ -9,7 +9,7 @@
 ## 2. Сборка и выпуск
 
 - [x] 2.1 Выполнить затронутые deterministic-тесты и production build; записать точные команды, exit codes и новый build ID. Запустить сопоставимый Lighthouse CI, если доступен релевантный baseline, иначе записать `NOT RUN`.
-- [ ] 2.2 После проверок сделать commit/push в `main`, безопасно опубликовать новый static bundle с уникальным `PHOTOBUNKER_RELEASE_ID` и проверить публичный marker, assets, headers и API health; записать release ID и сценарий проверки владельцем в status docs/отчёт.
+- [x] 2.2 После проверок сделать commit/push в `main`, безопасно опубликовать новый static bundle с уникальным `PHOTOBUNKER_RELEASE_ID` и проверить публичный marker, assets, headers и API health; записать release ID и сценарий проверки владельцем в status docs/отчёт.
 
 ## Workflow follow-up
 

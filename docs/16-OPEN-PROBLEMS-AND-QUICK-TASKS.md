@@ -23,7 +23,7 @@
 | ID | Статус | Проблема / критерий |
 | --- | --- | --- |
 | UI-01 | `OWNER FAILED` | Q1 candidate 2026-11-06: Camera больше не выделена вне своего маршрута; активный пункт имеет один тонкий индикатор без pill; подписи 12 px, 320/375/390 px без обрезания. Playwright MCP/CLI подтверждают геометрию, но локальный API 500 потребовал in-memory fixture. Владелец должен проверить установленную PWA на телефоне, прежде чем менять статус. |
-| UI-02 | `IMPLEMENTED` | На `595be25` release marker имеет deterministic test; `q1-dock-20261106-1` подтверждён на production. До повторной проверки установленной PWA владельцем не ставить `ACCEPTED`. |
+| UI-02 | `IMPLEMENTED` | На `595be25` release marker имеет deterministic test; `q1-dock-20261106-2` подтверждён на production по marker, hash, headers и health. Upgrade установленной PWA ещё `NOT RUN`; до проверки владельцем не ставить `ACCEPTED`. |
 | UI-03 | `OWNER FAILED` | На локальном Playwright Assignments ↔ Contacts после загрузки: 4.4–15.7 ms и стабильный dock. Production/RUM и owner mobile recheck ещё `NOT RUN`; прежний owner defect не закрыт. |
 | UI-04 | `OPEN` | После capture навигация не мгновенная. Durable local commit и визуальный результат должны предшествовать фоновой доставке. |
 | UI-05 | `OWNER FAILED` | Глобальные spacing, paddings, высота строк, font-size и блоки непоследовательны; встречались нулевые отступы, огромные gaps и очень мелкий текст. Нужны единые tokens/primitives. |
@@ -43,7 +43,7 @@ targeted PWA/SW 7/7 PASS, production build PASS. Playwright artifacts:
 (ignored local evidence). Production deploy `q1-dock-20261106-1`: public marker,
 bundle hashes, cache headers и API health `CONFIRMED`; owner acceptance пока `NOT RUN`.
 
-Новый Q1 candidate: [baseline](evidence/q1-dock-20261106/before-assignments-320x700.png) → [после](evidence/q1-dock-20261106/after-assignments-320x700.png), [light](evidence/q1-dock-20261106/after-camera-light-390x844.png). Playwright CLI 1/1 PASS, targeted Vitest 13/13 PASS, build `q1-dock-20261106-2` PASS. Production deploy и реальный phone recheck пока `NOT RUN`; Lighthouse CI `NOT RUN` без сопоставимого приватного baseline.
+Новый Q1 candidate на `595ec85`: [baseline](evidence/q1-dock-20261106/before-assignments-320x700.png) → [после](evidence/q1-dock-20261106/after-assignments-320x700.png), [light](evidence/q1-dock-20261106/after-camera-light-390x844.png). Playwright CLI 1/1 PASS, targeted Vitest 13/13 PASS, build `q1-dock-20261106-2` PASS. Production deploy `CONFIRMED`: public marker, bundle hashes, cache headers, API health/ready и гостевой `/welcome`. Реальный phone recheck и installed-PWA upgrade `NOT RUN`; Lighthouse CI `NOT RUN` без сопоставимого приватного baseline. Владелец: закрыть/открыть PWA без удаления данных, пройти Assignments → Contacts → Camera и проверить нижнюю safe-area, подписи, один active state и отсутствие скачка dock.
 
 ## 3. Camera, GPS, presets и assignments capture
 

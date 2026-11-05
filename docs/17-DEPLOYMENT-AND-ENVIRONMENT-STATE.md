@@ -29,7 +29,7 @@ cd compat/assignment-release
 - Host Nginx config: `/etc/nginx/sites-available/photobunker`.
 - Config backup before PWA header update: `/var/www/photobunker/backups/photobunker-nginx-before-pwa-20261105.conf`.
 
-Последняя проверка 2026-11-05:
+Историческая проверка 2026-11-05:
 
 ```text
 GET /api/v1/health -> 200 {"status":"ok"}
@@ -37,6 +37,8 @@ GET /api/v1/ready  -> 200 {"status":"ready"}
 GET /               -> 200
 release.json         -> {"buildId":"dock-pwa-20261105-1"}
 ```
+
+Новая проверка 2026-11-06 для Q1 dock (`main@595ec85`): `release.json` → `q1-dock-20261106-2`; публичные `index.html`, `sw.js`, `release.json`, CSS и JS побайтно совпадают с локальной сборкой; root/SW/release имеют `no-store`, CSS — `immutable`; health и ready возвращают 200. Backup до публикации: `/var/www/photobunker/.local/backups/q1-dock-20261106-2-before/`. Playwright MCP открыл публичный `/welcome`; реальный installed-PWA upgrade остаётся `NOT RUN`.
 
 Важно: server Git HEAD исторически показывал старый `main@31ac368`, хотя исходники и `dist` копировались поверх него. Поэтому **не выполнять** на production `git reset`, `git checkout`, `git pull` или clean. Сначала создать отдельный release directory/checkout и план atomic switch.
 
