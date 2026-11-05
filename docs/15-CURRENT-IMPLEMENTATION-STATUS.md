@@ -20,8 +20,8 @@
 | Implementation snapshot | `595be251ae092ae40cd2354bc910afa31ecc76e5` | `CONFIRMED` local Q1 implementation |
 | Активный runtime | `compat/assignment-release/` | `CONFIRMED` |
 | Production URL | `https://photobunker.duckdns.org` | `CONFIRMED` 2026-11-05 |
-| Release marker | `dock-pwa-20261105-1` | `CONFIRMED` на сервере |
-| Server HTTP/API health | root, health, ready возвращали 200 | `CONFIRMED` 2026-11-05 |
+| Release marker | `q1-dock-20261106-1` | `CONFIRMED` production 2026-11-06 |
+| Server HTTP/API health | root, health, ready возвращают 200 | `CONFIRMED` 2026-11-06 |
 | Owner mobile acceptance | повторно выявлены критические UX/functional defects | `OWNER FAILED` |
 
 ## 3. Подтверждённые ограниченные результаты
@@ -52,8 +52,11 @@
   untranslated `q('Удалить цифру')` в `App.vue`; Q1 этот код не меняет.
 - `NOT RUN`: Lighthouse CI — для Q1 нет сохранённого сопоставимого pre-change
   baseline и branch config; synthetic audit не подменяет latency private route.
-- `NOT RUN`: production deploy, installed-PWA cross-release и реальный iPhone/
-  Android safe-area. Статус остаётся ниже `ACCEPTED` до проверки владельца.
+- `CONFIRMED` production: static bundle опубликован в `/var/www/photobunker`,
+  public `release.json` вернул `q1-dock-20261106-1`, public CSS/JS SHA-256
+  совпали с локальным bundle; root/SW/release имеют `no-store`, health/ready — 200.
+- `NOT RUN`: installed-PWA cross-release и реальный iPhone/Android safe-area.
+  Статус остаётся ниже `ACCEPTED` до проверки владельца.
 
 Ни один пункт выше не означает, что текущий интерфейс принят или что полный final-branch pipeline пройден.
 

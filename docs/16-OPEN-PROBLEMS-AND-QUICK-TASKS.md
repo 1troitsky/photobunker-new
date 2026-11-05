@@ -23,7 +23,7 @@
 | ID | Статус | Проблема / критерий |
 | --- | --- | --- |
 | UI-01 | `OWNER FAILED` | На `595be25` workspace/dock используют одну высоту, dock доходит до нижнего края portrait/landscape, labels остаются на 320 px; Playwright без jump, но только владелец может снять `OWNER FAILED` на телефоне. |
-| UI-02 | `IMPLEMENTED` | На `595be25` release marker имеет deterministic test; build `q1-dock-20261106-1` собран локально. До production deploy и повторной проверки установленной PWA не ставить `ACCEPTED`. |
+| UI-02 | `IMPLEMENTED` | На `595be25` release marker имеет deterministic test; `q1-dock-20261106-1` подтверждён на production. До повторной проверки установленной PWA владельцем не ставить `ACCEPTED`. |
 | UI-03 | `OWNER FAILED` | На локальном Playwright Assignments ↔ Contacts после загрузки: 4.4–15.7 ms и стабильный dock. Production/RUM и owner mobile recheck ещё `NOT RUN`; прежний owner defect не закрыт. |
 | UI-04 | `OPEN` | После capture навигация не мгновенная. Durable local commit и визуальный результат должны предшествовать фоновой доставке. |
 | UI-05 | `OWNER FAILED` | Глобальные spacing, paddings, высота строк, font-size и блоки непоследовательны; встречались нулевые отступы, огромные gaps и очень мелкий текст. Нужны единые tokens/primitives. |
@@ -40,7 +40,8 @@ runtime `compat/assignment-release/`; Vitest 63/63 files and 320/320 tests PASS,
 targeted PWA/SW 7/7 PASS, production build PASS. Playwright artifacts:
 `test-results/playwright-mcp/q1-after-contacts-320x700.png` и
 `test-results/playwright-mcp/test-results/playwright-mcp/q1-after-profile-390x844.png`
-(ignored local evidence). Production deploy и owner acceptance пока `NOT RUN`.
+(ignored local evidence). Production deploy `q1-dock-20261106-1`: public marker,
+bundle hashes, cache headers и API health `CONFIRMED`; owner acceptance пока `NOT RUN`.
 
 ## 3. Camera, GPS, presets и assignments capture
 
