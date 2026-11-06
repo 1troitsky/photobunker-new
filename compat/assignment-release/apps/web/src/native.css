@@ -937,3 +937,6 @@
 .public-card-media { min-width:0; }
 .public-card-media img { border-radius:14px; }
 .shared-card-screen .photo-card-content { gap:16px; }
+
+.public-card-embedded-header { justify-content:flex-end; min-height:52px; padding-top:4px; padding-bottom:4px; }
+.sheet-browser .photo-card-body { padding-bottom:24px; }

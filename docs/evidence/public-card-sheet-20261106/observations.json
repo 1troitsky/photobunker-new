@@ -1,0 +1,72 @@
+{
+  "release": "public-card-sheet-20261106-1",
+  "scenario": "Actual Browser menu -> Public card; synthetic account/photo and scoped HTTP fixture. No private/server data changed.",
+  "open": {
+    "sheet": true,
+    "image": true,
+    "noNewWindow": true,
+    "routeUnchanged": true,
+    "sameScreen": true,
+    "backgroundInert": true
+  },
+  "close": {
+    "gone": true,
+    "sameScreen": true,
+    "sameRuntime": true,
+    "backgroundUsable": true
+  },
+  "escape": {
+    "gone": true,
+    "noNewWindow": true
+  },
+  "swipe": {
+    "gone": true,
+    "sameScreen": true
+  },
+  "external": {
+    "noEmptyWindow": true,
+    "preparationFailureVisible": true,
+    "sheetStillVisible": true,
+    "sameRuntime": true
+  },
+  "narrow": {
+    "width": 320,
+    "noHorizontalOverflow": true,
+    "closeButton": {
+      "x": 265,
+      "y": 32,
+      "width": 42,
+      "height": 42,
+      "top": 32,
+      "right": 307,
+      "bottom": 74,
+      "left": 265
+    },
+    "externalControl": {
+      "x": 95.859375,
+      "y": 31,
+      "width": 157.140625,
+      "height": 44,
+      "top": 31,
+      "right": 253,
+      "bottom": 75,
+      "left": 95.859375
+    }
+  },
+  "final": {
+    "image": true,
+    "closeSize": 44,
+    "unchangedRoute": true,
+    "sameRuntime": true
+  },
+  "notRun": [
+    "Exact owner-device white-screen/relaunch",
+    "Real iOS/Android installed PWA and native browser",
+    "Successful production private publish/Open in browser",
+    "Performance/Lighthouse"
+  ],
+  "notes": [
+    "Final verification used actual Browser buttons.",
+    "External link is prepared inside app; explicit ready anchor opens device browser."
+  ]
+}

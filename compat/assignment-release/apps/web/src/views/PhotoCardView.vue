@@ -23,12 +23,14 @@ import { localTasks } from '../studio/store'
 import { q } from '../crypto/text'
 import { usePageIssue, usePageLoad } from '../app/page-load'
 
+const props = defineProps<{ photoId?: string; embedded?: boolean; initialShare?: boolean }>()
+const emit = defineEmits<{close:[]}>()
 const route = useRoute()
 const card = ref<PrivatePhotoCard>()
 const imageUrl = ref(''), actionBusy = ref(false), actionError = ref(''), disabled = ref(false)
 const imageFile = shallowRef<File>()
 function releaseImage() { if (imageUrl.value) URL.revokeObjectURL(imageUrl.value); imageUrl.value = ''; imageFile.value = undefined }
-function closeWindow() { window.close() }
+function closeWindow() { if (props.embedded) emit('close'); else window.close() }
 async function imageAction(copy: boolean) {
   if (!imageFile.value || !visible.value || !canShare.value || actionBusy.value) return
   actionBusy.value = true; actionError.value = ''
@@ -53,7 +55,7 @@ const expanded = ref(false)
 const shareOpen = ref(false)
 const copyState = ref<'idle' | 'copied' | 'failed'>('idle')
 const now = ref(Date.now())
-const id = computed(() => String(route.params.id ?? ''))
+const id = computed(() => props.photoId ?? String(route.params.id ?? ''))
 const indexedPhoto = computed(() => photos.value.find(item => item.id === id.value))
 const visible = computed(() =>
   privateCardScopeAllowed() && ownerOfCard.value === account.value?.id &&
@@ -163,8 +165,8 @@ const expiry = setInterval(() => {
   }
 }, 1000)
 let appliedShareIntent = ''
-watch([visible, canShare, () => route.fullPath], () => {
-  if ((window.history.state?.openCardShare === true || route.query.share === '1') && visible.value && canShare.value && appliedShareIntent !== route.fullPath) {
+watch([visible, canShare, () => props.initialShare, () => route.fullPath], () => {
+  if ((props.initialShare || (!props.embedded && (window.history.state?.openCardShare === true || route.query.share === '1'))) && visible.value && canShare.value && appliedShareIntent !== route.fullPath) {
     appliedShareIntent = route.fullPath
     window.history.replaceState({ ...window.history.state, openCardShare: false }, '')
     shareOpen.value = true
@@ -175,19 +177,20 @@ onBeforeUnmount(() => { invalidate(); clearInterval(expiry) })
 
 <template>
   <section class="native-screen photo-card-screen">
-    <header class="screen-header public-card-header">
-      <span class="screen-monogram" aria-hidden="true">pb</span>
-      <div class="screen-title"><h1>Public card</h1></div>
+    <header :class="['screen-header public-card-header', {'public-card-embedded-header':embedded}]">
+      <span v-if="!embedded" class="screen-monogram" aria-hidden="true">pb</span>
+      <div v-if="!embedded" class="screen-title"><h1>Public card</h1></div>
       <div class="screen-actions">
         <button class="app-icon-button" :aria-label="q('Копировать изображение')" :disabled="!imageFile || !canShare || actionBusy" @click="imageAction(true)"><AppIcon name="copy" /></button>
         <button class="app-icon-button" :aria-label="q('Скачать изображение')" :disabled="!imageFile || !canShare || actionBusy" @click="imageAction(false)"><AppIcon name="download" /></button>
         <button class="app-icon-button" :aria-label="q('Поделиться карточкой')" :disabled="!visible || !canShare" @click="shareOpen = true"><AppIcon name="share" /></button>
-        <button class="app-icon-button" :aria-label="q('Закрыть')" @click="closeWindow"><AppIcon name="close" /></button>
+        <button v-if="!embedded" class="app-icon-button" :aria-label="q('Закрыть')" @click="closeWindow"><AppIcon name="close" /></button>
       </div>
     </header>
     <div class="screen-body photo-card-body">
       <p class="field-hint public-card-preview-label">{{ q('Предпросмотр. Другие увидят карточку только по созданной вами ссылке.') }}</p>
       <p v-if="actionError" class="form-error" role="alert">{{ actionError }}</p>
+      <div v-if="error && visible" class="field-error" role="alert"><p>{{ q('Не удалось обновить карточку. Уже доступные данные сохранены.') }}</p><button class="secondary-button" type="button" :disabled="loading" @click="load">{{ t('retry') }}</button></div>
       <div v-if="disabled" class="native-empty"><AppIcon name="lock" /><h2>{{ q('Public card выключена') }}</h2><p>{{ q('Включите её в параметрах изображения, чтобы создать ссылку.') }}</p></div>
       <div v-else-if="loading && !visible" class="photo-card-loading" role="status" aria-label="Loading">
         <span class="photo-card-loading-image" /><span /><span />

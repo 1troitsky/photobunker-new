@@ -10,7 +10,7 @@ import { appLockReady, appLocked } from '../app/lock'
 import { protectionEnabled, protectionReady, strongUnlocked, warmLocked, photoReadAllowed } from '../crypto/store'
 import { photos, refreshLibrary, libraryError, serverError } from '../local/library'
 import { request } from '../workspace/api'
-import { photoCardPath } from '../studio/private-photo-card'
+import { openPublicCard } from '../studio/public-card-policy'
 import { eraseBrowser, readBrowser, saveBrowser } from '../photo-browser/cache'
 import { visibleBrowserPhotos, type BrowserCollection, type BrowserSnapshot } from '../photo-browser/model'
 import { bt } from '../photo-browser/text'
@@ -343,19 +343,19 @@ onBeforeUnmount(() => {
           <div v-for="item in ordered" :key="item.id" class="browser-photo">
             <label v-if="choosing" class="browser-check"><input type="checkbox" :checked="selectedSet.has(item.id)"
               @change="toggle(item.id)" /></label>
-            <RouterLink :to="photoCardPath(item.id)" target="_blank" rel="noopener noreferrer" class="native-photo-tile">
+            <button type="button" @click="openPublicCard(item.id)" class="native-photo-tile">
               <PhotoThumbnail v-if="status === 'ready'" :id="item.id" :alt="item.label || bt('photo')" />
               <span v-else class="thumbnail-placeholder" />
               <span class="tile-caption">{{ item.label || bt('photo') }}</span>
-            </RouterLink>
+            </button>
           </div>
         </div>
         <ul v-else-if="display === 'list'" class="browser-list">
           <li v-for="item in ordered" :key="item.id">
             <input v-if="choosing" type="checkbox" :aria-label="item.label || bt('photo')"
               :checked="selectedSet.has(item.id)" @change="toggle(item.id)" />
-            <RouterLink :to="photoCardPath(item.id)" target="_blank" rel="noopener noreferrer">
-              <AppIcon name="gallery" />{{ item.label || bt('photo') }}</RouterLink>
+            <button type="button" @click="openPublicCard(item.id)">
+              <AppIcon name="gallery" />{{ item.label || bt('photo') }}</button>
           </li>
         </ul>
         <ul v-else class="browser-tree">
@@ -365,7 +365,7 @@ onBeforeUnmount(() => {
               <ul><li v-for="item in ordered.filter(photo => photo.assignmentId === task.id)" :key="item.id">
                 <input v-if="choosing" type="checkbox" :checked="selectedSet.has(item.id)"
                   :aria-label="item.label || bt('photo')" @change="toggle(item.id)" />
-                <RouterLink :to="photoCardPath(item.id)" target="_blank" rel="noopener noreferrer">{{ item.label || bt('photo') }}</RouterLink>
+                <button type="button" @click="openPublicCard(item.id)">{{ item.label || bt('photo') }}</button>
               </li></ul>
             </details>
           </li>

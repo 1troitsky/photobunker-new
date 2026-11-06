@@ -7,6 +7,24 @@ import { account } from '../identity/store'
 import { photoReadAllowed } from '../crypto/store'
 import { isExpired } from '../delivery/clock'
 
+/** Explicit "Open in browser" uses the existing protected share flow. */
+export async function createPublicCardLink(photoId: string): Promise<string> {
+  const owner = account.value?.id
+  const { publicPhotoCard } = await import('./public-card-policy')
+  const { CARD_ONLY } = await import('../crypto/card-shares')
+  const { commitCardShare, flushCardShares, listCardShareIntents } = await import('../crypto/card-share-outbox')
+  const card = publicPhotoCard(await readPrivateCardPhoto(photoId))
+  const version = await prepareCardPhotoVersion(photoId)
+  const files = await shareCardImages(photoId, version.id, false)
+  if (!owner || owner !== account.value?.id || !photoReadAllowed()) throw new Error('card_share.account_changed')
+  const row = await commitCardShare(photoId, card, {...CARD_ONLY, metadata:true, photo:true},
+    Math.min(Date.now()+3600000,card.expiresAt ?? 0), 3600, files)
+  await flushCardShares()
+  const published = (await listCardShareIntents(photoId)).find(item => item.id === row.id)
+  if (published?.state !== 'sent' || published.lastError) throw new Error('card_share.unavailable')
+  return published.url
+}
+
 /** Explicit Publish prepares a sanitized derivative; it never shares raw original bytes. */
 export async function prepareCardPhotoVersion(photoId: string) {
   const owner = account.value?.id

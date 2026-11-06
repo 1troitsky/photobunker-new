@@ -1,4 +1,5 @@
 import type { Photo } from '../local/photos'
+import { shallowRef } from 'vue'
 import { privatePhotoCard, type PrivatePhotoCard } from './private-photo-card'
 
 export type PublicCardPolicy = {
@@ -41,7 +42,6 @@ export function publicPhotoCard(photo: Photo): PrivatePhotoCard {
   if (full && policy.editedAt && photo.metadata?.editedAt) card.editedAt = photo.metadata.editedAt
   return card
 }
-export function openPublicCard(id: string, share = false) {
-  // Direct user gesture: browser/PWA owns the temporary external window.
-  window.open('/photo-cards/' + encodeURIComponent(id) + (share ? '?share=1' : ''), '_blank', 'noopener,noreferrer')
-}
+export const publicCardPreview = shallowRef<{ id: string; share: boolean }>()
+export function openPublicCard(id: string, share = false) { publicCardPreview.value = { id, share } }
+export function closePublicCard() { publicCardPreview.value = undefined }

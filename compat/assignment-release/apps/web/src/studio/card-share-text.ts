@@ -1,6 +1,6 @@
 import { locale } from '../i18n'
 const text = {
-  openCard: ['Открыть Public card ↗', 'Open Public card ↗'],
+  openCard: ['Открыть в браузере ↗', 'Open in browser ↗'],
   share: ['Поделиться карточкой', 'Share card'],
   create: ['Создать ссылку', 'Create link'],
   only: ['Только карточка', 'Card only'],
