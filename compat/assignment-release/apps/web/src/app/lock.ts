@@ -78,8 +78,8 @@ async function calibrate(): Promise<number> {
   const elapsed = Math.max(1, performance.now() - start)
   return Math.max(100000, Math.min(600000, Math.round(100000 * (300 / elapsed) / 10000) * 10000))
 }
-async function makeRecord(pin: string): Promise<PinV2> {
-  if (!/^\d{4,6}$/.test(pin)) throw new Error('pin.length')
+async function makeRecord(pin: string, migratingLegacy = false): Promise<PinV2> {
+  if (!(migratingLegacy ? /^\d{4,8}$/ : /^\d{4,6}$/).test(pin)) throw new Error('pin.length')
   const salt = hex(crypto.getRandomValues(new Uint8Array(16)))
   const iterations = await calibrate()
   return {
@@ -182,9 +182,9 @@ async function verify(pin: string, id: string, epoch: number, mutation: number) 
         return { ...previousRecord, failures: 0, until: 0,
           lastWall: Math.max(now, previousRecord.lastWall ?? 0) }
       }
-      const failures = Math.min(100, previousRecord.failures + 1)
-      // Five failed app-PIN attempts lock normal access for 30 minutes. The
-      // lock screen remains mounted so an emergency-delete PIN can still run.
+      const freshWindow = previousRecord.until > 0 && previousRecord.until <= now
+      const failures = Math.min(100, (freshWindow ? 0 : previousRecord.failures) + 1)
+      // After five failures, lock normal access for 20 minutes. Emergency remains usable.
       const wait = failures < 5 ? 0 : 20 * 60 * 1000
       return { ...previousRecord, failures, until: Math.max(previousRecord.until, now + wait),
         lastWall: Math.max(now, previousRecord.lastWall ?? 0) }
@@ -204,7 +204,7 @@ export async function unlockApp(pin: string) {
   if (isLegacy(verified)) {
     // Existing 4-digit PIN accepted until this successful unlock. Only then
     // replace its fast SHA-256 record; never rewrite failed legacy attempts.
-    const migrated = await makeRecord(pin)
+    const migrated = await makeRecord(pin, true)
     try {
       await writePin(id, previous => {
         if (!previous || !sameVerifier(previous, verified)) throw new Error('pin.changed')
@@ -253,12 +253,11 @@ export async function setAppPin(pin: string, oldPin?: string) {
     await verify(oldPin, id, epoch, mutation)
   }
   const emergency = await import('./emergency')
-  if (await emergency.matchesConfiguredEmergencyPin(pin))
-    throw new Error('localDelete.samePin')
-  // Two-stage emergency codes have halves tied to the normal PIN length.
-  // Rotate/disable the emergency code first, never silently orphan it.
+  // A configured emergency code is bound to the old normal PIN's length.
   if (await emergency.hasConfiguredEmergencyPin())
     throw new Error('pin.emergency_reset_required')
+  if (await emergency.matchesConfiguredEmergencyPin(pin))
+    throw new Error('localDelete.samePin')
   const next = await makeRecord(pin)
   guard(id, epoch, mutation)
   try {
