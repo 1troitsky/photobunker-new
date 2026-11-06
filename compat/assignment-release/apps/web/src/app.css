@@ -1,7 +1,7 @@
 /* Application shell. Existing capture/storage modules keep their behavior. */
 :root {
   --dock-height: 70px;
-  --dock-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --dock-safe-bottom: 0px;
   --dock-total-height: calc(var(--dock-height) + var(--dock-safe-bottom));
 }
 body { overscroll-behavior-y: none; }
