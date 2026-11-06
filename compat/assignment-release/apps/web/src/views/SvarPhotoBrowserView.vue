@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Filemanager, Willow, WillowDark } from '@svar-ui/vue-filemanager'
 import '@svar-ui/vue-filemanager/all.css'
@@ -15,7 +15,7 @@ import { localTasks, loadStudio } from '../studio/store'
 import { theme } from '../app/preferences'
 import { readOrganizer, saveOrganizer, saveBrowser, type BrowserFolder } from '../photo-browser/cache'
 import { buildSvarProjection, type BrowserEntry, type BrowserScope } from '../photo-browser/svar-projection'
-import { deletePhoto as deleteStoredPhoto } from '../server/photos'
+import { deletePhoto as deleteStoredPhoto, readThumbnail } from '../server/photos'
 import { bt } from '../photo-browser/text'
 import '../styles/svar-browser.css'
 
@@ -74,6 +74,43 @@ const mayCreate = computed(() => canRead.value && current.value !== undefined &&
 const canShare = computed(() => canRead.value && tasks.value.some(task =>
   task.canManage || task.role === 'owner' || task.role === 'curator'))
 const mode = ref<'cards'|'table'>('table')
+const thumbnails = ref(new Map<string, string>())
+let previewEpoch = 0
+function clearThumbnails() {
+  previewEpoch++
+  for (const url of thumbnails.value.values()) URL.revokeObjectURL(url)
+  thumbnails.value = new Map()
+}
+function previewFor(item: { id?: string }): string | null {
+  return item.id ? thumbnails.value.get(item.id) ?? null : null
+}
+async function refreshThumbnails() {
+  clearThumbnails()
+  if (!canRead.value) return
+  const generation = previewEpoch, owner = account.value?.id
+  const targets = [...projection.value.byPath.entries()].filter(([path, item]) =>
+    item.kind === 'photo' && projection.value.parent.get(path) === activePath.value).slice(0, 32)
+  const photoMap = new Map(photos.value.map(photo => [photo.id, photo]))
+  let next = 0
+  async function worker() {
+    while (next < targets.length) {
+      const [path, item] = targets[next++]!
+      if (item.kind !== 'photo' || generation !== previewEpoch) break
+      const photo = photoMap.get(item.id)
+      if (!photo) continue
+      try {
+        const blob = await readThumbnail(item.id,
+          `${photo.remoteRevision}:${photo.thumbnailOnly}`, photo.expiresAt)
+        if (generation !== previewEpoch || account.value?.id !== owner) break
+        const url = URL.createObjectURL(blob)
+        thumbnails.value = new Map(thumbnails.value).set(path, url)
+      } catch { /* Missing thumbnail does not expose another photo or block navigation. */ }
+    }
+  }
+  await Promise.allSettled(Array.from({ length: Math.min(3, targets.length) }, () => worker()))
+}
+watch([projection, activePath, canRead], () => { void refreshThumbnails() }, { immediate: true })
+onBeforeUnmount(clearThumbnails)
 
 function routeForPath(path: string) {
   const entry = projection.value.byPath.get(path)
@@ -353,7 +390,7 @@ onMounted(() => {
       <template v-else>
         <component :is="isDark ? WillowDark : Willow" class="svar-browser-skin">
           <Filemanager :key="account?.id + ':' + deviceId" :data="projection.data"
-            :readonly="true" :menuOptions="() => []" :init="initManager"
+            :readonly="true" :menuOptions="() => []" :previews="previewFor" :init="initManager"
             :panels="[{ path: activePath, selected: [] }]" :mode="mode" />
         </component>
         <div v-if="selected" class="svar-browser-selected" role="group" :aria-label="bt('selected')">
