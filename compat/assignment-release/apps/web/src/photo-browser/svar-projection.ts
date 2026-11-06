@@ -106,16 +106,15 @@ export function buildSvarProjection(
   }
 
   const photoFolder = new Map<string, string>()
-  // Folder membership is metadata only. It must never change the photo's
-  // assignment/ACL: allow it only when the folder and photo scopes agree.
+  // Folder membership never changes assignment or ACL. Index it by scope too,
+  // so a stale cross-assignment reference cannot shadow a legitimate folder.
   for (const folder of folders) {
     const path = paths.get(pathKey('folder', folder.id))
     if (!path) continue
     const targetScope = (byPath.get(path) as Extract<BrowserEntry, { kind: 'folder' }>).scope
     for (const id of folder.photoIds) {
-      if (!photoFolder.has(id)) photoFolder.set(id, path)
-      // A wrong-scope reference is checked below before any rendering.
-      void targetScope
+      const key = targetScope + ':' + id
+      if (!photoFolder.has(key)) photoFolder.set(key, path)
     }
   }
   for (const photo of photos) {
@@ -128,9 +127,8 @@ export function buildSvarProjection(
     if (assignmentId && !knownTasks.has(assignmentId)) continue
     const scope: BrowserScope = assignmentId ? 'assignment:' + assignmentId : 'personal'
     const defaultParent = assignmentId ? paths.get(pathKey('assignment', assignmentId))! : personal
-    const specified = photoFolder.get(photo.id)
-    const folderScope = specified ? (byPath.get(specified) as Extract<BrowserEntry, { kind: 'folder' }>)?.scope : undefined
-    const base = specified && folderScope === scope ? specified : defaultParent
+    const specified = photoFolder.get(scope + ':' + photo.id)
+    const base = specified || defaultParent
     const readable = !photo.thumbnailOnly && (!photo.workspaceAccess || photo.workspaceAccess.read)
     const label = readable ? (photo.title?.trim() || photo.shortId || labels.photo) :
       (photo.shortId || labels.photo)
