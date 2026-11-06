@@ -21,7 +21,7 @@
 | Q1 dock source commit | `595ec85` на `main` и `origin/main` | `CONFIRMED` 2026-11-06 |
 | Активный runtime | `compat/assignment-release/` | `CONFIRMED` |
 | Production URL | `https://photobunker.duckdns.org` | `CONFIRMED` 2026-11-06 |
-| Release marker | `browser-rollback-20261106-1` | `CONFIRMED` production 2026-11-06 |
+| Release marker | `browser-native-20261106-1` | `CONFIRMED` production 2026-11-06 |
 | Server HTTP/API health | root, health, ready возвращают 200 | `CONFIRMED` 2026-11-06 |
 | Owner mobile acceptance | повторно выявлены критические UX/functional defects | `OWNER FAILED` |
 
@@ -79,7 +79,9 @@
 
 ## 4. Код существует, но приёмка не пройдена
 
-Владелец отклонил PR #55: `OWNER FAILED`. PR и follow-up отменены `da33e7c`, восстановлен web source до #55 (`f81c2da`) с PIN #54. Откат опубликован как `browser-rollback-20261106-1`; публичные HTML/SW/release/JS/CSS совпали с build, exit 0. [Аудит восстановленного Browser](BROWSER-AUDIT-2026-11-06.md) содержит source links, реальные screenshots синтетического сценария и измерения. Новая реализация ждёт проверки владельцем аудита.
+Владелец отклонил PR #55: `OWNER FAILED`. PR и follow-up отменены `da33e7c`, восстановлен web source до #55 (`f81c2da`) с PIN #54. Откат опубликован как `browser-rollback-20261106-1`; публичные HTML/SW/release/JS/CSS совпали с build, exit 0. [Аудит восстановленного Browser](BROWSER-AUDIT-2026-11-06.md) содержит source links, реальные screenshots синтетического сценария и измерения.
+
+После согласования аудита владелец поручил исправление. Новый native Browser (`56d91ad`, `main`/`origin/main`) опубликован как `browser-native-20261106-1`: четыре раздела, единая scoped-модель, реальные раскрытия Tree, history, действия по capability, локальные папки независимо от HTTP и видимый mobile expiry. Статус — `READY FOR OWNER REVIEW`, не `ACCEPTED`; прежние жалобы владельца не закрыты автоматически. [Результаты и screenshots](BROWSER-AUDIT-2026-11-06.md#решение-владельца-и-реализация), [публичная сверка](evidence/browser-native-20261106/deploy.json). Production build и целевые organizer/scope tests — exit 0; public shell/Browser/photo/card bundles совпадают с build, health/ready — 200, no-store/immutable подтверждены. Гостевой Playwright открыл production и получил ожидаемый вход без identity (401); приватный Browser на production не подменялся fixture. Backup: `/var/www/photobunker/.local/backups/browser-native-20261106-1-before/`. Реальные фото/original/edit/share, destructive delete, iOS/Android/PWA upgrade — `NOT RUN`. Проверка владельца: Browser → своё задание → папка → Back; Tree; expiry; меню фото; личное фото Archive → Restore. Архив только локальный и не меняет TTL.
 
 PR #54 интегрирован в main (`b701503`) и опубликован по прямой команде владельца с защитой аварийного удаления (`7eee94e`), release `pr54-pin-20261106-1`. Публичные HTML/SW/release/CSS/JS побайтно совпали с build, health/ready — 200. Обычный PIN 4–6 цифр, последовательный ввод без таймеров и второй keypad доступны на `/profile/security`; существующие legacy PIN сохранены. Аварийная настройка, trigger, replay и отправка cloud command явно заблокированы до доказательства сохранения backup. `READY FOR OWNER REVIEW` для обычного PIN; emergency — `BLOCKED`. Backup deploy: `/var/www/photobunker/.local/backups/pr54-pin-20261106-1-before/`. Владелец также отклонил dock release `-3`; Q1 остаётся `OWNER FAILED`.
 
@@ -87,7 +89,7 @@ PR #54 интегрирован в main (`b701503`) и опубликован п
 | --- | --- | --- |
 | Shell/Dock | fixed shell CSS, dock marker, PWA updater | `IMPLEMENTED`, новый результат не подтверждён владельцем |
 | PIN | `PasscodeInput.vue`, обновлённые lock/emergency rules | `OWNER FAILED`: быстрый ввод теряет цифры, UX не принят |
-| Browser | крупная правка `PhotoBrowserIndexView.vue`, folders/actions/cache | `OWNER FAILED`: модель и UI отклонены |
+| Browser | native scoped explorer `56d91ad`, release `browser-native-20261106-1` | `READY FOR OWNER REVIEW`; прежняя версия `OWNER FAILED`, новая не принята |
 | Photo read/cache | encrypted `photo-cache.ts`, view/card/editor правки | `OWNER FAILED`: фото не открывались |
 | Camera/GPS | permission/location/context и camera UI правки | `OWNER FAILED`: размер/permissions/GPS/navigation остаются неверными |
 | Status | status store/view/route | `OWNER FAILED`: нет понятного realtime monitoring |

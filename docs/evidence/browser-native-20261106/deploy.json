@@ -1,0 +1,74 @@
+{
+  "release": "browser-native-20261106-1",
+  "commit": "56d91ad",
+  "command": "Public curl bytes == local production build; health/ready; Cache-Control",
+  "exitCode": 0,
+  "checks": [
+    {
+      "path": "index.html",
+      "equalsBuild": true
+    },
+    {
+      "path": "sw.js",
+      "equalsBuild": true
+    },
+    {
+      "path": "release.json",
+      "equalsBuild": true
+    },
+    {
+      "path": "assets/index-CJyqVsZl.js",
+      "equalsBuild": true
+    },
+    {
+      "path": "assets/index-BAALl9yv.css",
+      "equalsBuild": true
+    },
+    {
+      "path": "assets/PhotoBrowserIndexView-CRX8nf3N.css",
+      "equalsBuild": true
+    },
+    {
+      "path": "assets/PhotoBrowserIndexView-BtSW4ncd.js",
+      "equalsBuild": true
+    },
+    {
+      "path": "assets/PhotoView-B8EmJZBQ.js",
+      "equalsBuild": true
+    },
+    {
+      "path": "assets/PhotoCardView-T0WXwOyW.js",
+      "equalsBuild": true
+    },
+    {
+      "path": "/api/v1/health",
+      "http": 200,
+      "body": {
+        "status": "ok"
+      }
+    },
+    {
+      "path": "/api/v1/ready",
+      "http": 200,
+      "body": {
+        "status": "ready"
+      }
+    },
+    {
+      "path": "/",
+      "headers": "Cache-Control: no-store, no-cache, must-revalidate"
+    },
+    {
+      "path": "/sw.js",
+      "headers": "Cache-Control: no-store, no-cache, must-revalidate"
+    },
+    {
+      "path": "/release.json",
+      "headers": "Cache-Control: no-store, no-cache, must-revalidate"
+    },
+    {
+      "path": "/assets/index-CJyqVsZl.js",
+      "headers": "Cache-Control: public, max-age=31536000, immutable"
+    }
+  ]
+}

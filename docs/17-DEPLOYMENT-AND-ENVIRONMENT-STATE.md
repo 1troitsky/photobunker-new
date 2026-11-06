@@ -42,6 +42,8 @@ release.json         -> {"buildId":"dock-pwa-20261105-1"}
 
 Важно: server Git HEAD исторически показывал старый `main@31ac368`, хотя исходники и `dist` копировались поверх него. Поэтому **не выполнять** на production `git reset`, `git checkout`, `git pull` или clean. Сначала создать отдельный release directory/checkout и план atomic switch.
 
+Последняя публикация 2026-11-06: Browser `main@56d91ad`, release `browser-native-20261106-1`. Заменены восемь frontend source files и собранный shell; backend/данные не менялись. Backup shell и пяти существовавших source files: `/var/www/photobunker/.local/backups/browser-native-20261106-1-before/`. Assets загружены без удаления старых, checksum dry-run — пустой, exit 0; index → SW → release marker опубликованы последовательно. [Публичная сверка shell, bundles, health/ready и cache headers](evidence/browser-native-20261106/deploy.json) — exit 0. Новый ID получен через production Playwright; приватная приёмка и установленная PWA — `NOT RUN`.
+
 ## 3. PWA cache/update
 
 Текущая схема:

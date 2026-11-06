@@ -83,7 +83,7 @@ bundle hashes, cache headers и API health `CONFIRMED`; owner acceptance пок�
 
 | ID | Статус | Проблема / критерий |
 | --- | --- | --- |
-| BR-01 | `OWNER FAILED` | PR #55 с SVAR отклонён и отменён `da33e7c`; на сервере прежний Browser, release `browser-rollback-20261106-1`. [Аудит](BROWSER-AUDIT-2026-11-06.md) фиксирует воспроизведённые дефекты и пробелы TS. Новая реализация начинается только после проверки аудита владельцем. |
+| BR-01 | `READY FOR OWNER REVIEW` | PR #55/SVAR остаётся отклонённым (`OWNER FAILED`) и отменённым. После согласования [аудита](BROWSER-AUDIT-2026-11-06.md) опубликован native Browser `56d91ad`, release `browser-native-20261106-1`. Изоляция scopes, location, offline folders, разделы/actions, Tree/history/expiry/tags и desktop проверены на синтетическом сценарии. Прежние жалобы не закрыты: нужна проверка владельца с реальными фото; hardware/приватный production flow — `NOT RUN`. |
 | BR-02 | `OPEN` | Один ordered content list/tree содержит folders и photos; folder открывает новый current location. |
 | BR-03 | `OWNER FAILED` | Неясно, где root/current folder. Обязательны root label, breadcrumb/back history и устойчивый route/location ID. |
 | BR-04 | `OWNER FAILED` | Create folder создавал только в root. `+` создаёт folder в текущем writable location. |
