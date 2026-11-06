@@ -8,11 +8,18 @@ import { locale } from '../i18n'
 // state is needed to open it; private data never enters this URL.
 defineProps<{ photo?: Photo; menu?: boolean; versionKey?: string }>()
 const open = ref(false)
+const appleMobile = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+  (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
+// A same-origin HTTPS _blank link stays in the installed iOS web app.
+// Hand the tap to Safari's application scheme instead, without window.open.
+const safari = appleMobile && location.protocol === 'https:'
+const publicUrl = new URL('/public-card.html', location.origin).href
+const externalUrl = safari ? publicUrl.replace(/^https:/, 'x-safari-https:') : publicUrl
 </script>
 <template>
   <button type="button" :class="['public-card-link',{'public-card-menu-link':menu}]" aria-haspopup="dialog" @click="open=true"><AppIcon name="profiles" /><span>Public card</span></button>
   <AppSheet :open="open" title="Public card" browser @close="open=false">
-    <template #actions><a href="/public-card.html" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" class="browser-external" :aria-label="locale==='ru' ? 'Открыть в браузере устройства' : 'Open in device browser'">{{ locale==='ru' ? 'В браузере' : 'Open in browser' }} ↗</a></template>
+    <template #actions><a :href="externalUrl" :target="safari ? '_self' : '_blank'" rel="noopener noreferrer" referrerpolicy="no-referrer" class="browser-external" :aria-label="safari ? (locale==='ru' ? 'Открыть в Safari' : 'Open in Safari') : (locale==='ru' ? 'Открыть в браузере устройства' : 'Open in device browser')">{{ safari ? (locale==='ru' ? 'В Safari' : 'Open in Safari') : (locale==='ru' ? 'В браузере' : 'Open in browser') }} ↗</a></template>
     <iframe v-if="open" src="/public-card.html" title="Public card" class="public-card-frame" sandbox="" referrerpolicy="no-referrer" tabindex="-1" />
   </AppSheet>
 </template>
