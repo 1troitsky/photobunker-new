@@ -118,6 +118,18 @@ describe('R1-08B crash/reload/reconnect, SYNTHETIC account A/B ONLY',()=>{
       expect(new Set(f.info().submissions).size).toBe(1)
     },
   )
+  it('never sends a cloud deletion while the local purge is incomplete',async()=>{
+    const f=fixture()
+    f.setOnline(true)
+    f.setCrash('during-purge')
+    await f.step()
+    expect(f.info().wipeFailed).toBe(true)
+    expect(f.info().row.phase).toBe('purging')
+    expect(f.info().submissions).toHaveLength(0)
+    await f.step()
+    expect(f.info().row.phase).toBe('purged')
+    expect(f.info().submissions).toHaveLength(1)
+  })
   it('lost server ACK resends the exact same signed command, never creates a second operation',async()=>{
     const f=fixture();f.setOnline(true);f.setCrash('lost-ack')
     await expect(f.step()).rejects.toThrow()
