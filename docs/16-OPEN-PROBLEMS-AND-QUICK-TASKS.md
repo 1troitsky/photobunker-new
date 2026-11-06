@@ -68,6 +68,8 @@ Status / entry loader: прежний overlay при каждом переход
 
 ## 4. Photo view, Photo Card и Editor
 
+Opening correction `769e3a5` / `public-card-sheet-20261106-1`: in-app bottom browser sheet, close and explicit device-browser control. Previous `public-card-20261106-1` opening is `OWNER FAILED` (white screen/restart). Current candidate `IMPLEMENTED`; owner check: Browser → Public card → bottom sheet → close → same screen without restart. [Evidence/limits](PUBLIC-CARD-2026-11-06.md). External link prepares inside app, then opens by explicit anchor tap. Hardware/PWA/private publish: `NOT RUN`.
+
 Public card `3233f4b`, release `public-card-20261106-1` — `IMPLEMENTED`: новое окно и полевая visibility policy, настройки фото/задания и снимок правил при capture. [Снимки/ограничения](PUBLIC-CARD-2026-11-06.md). Проверка владельца: Photo → Public card → новое окно; отключить GPS в параметрах фото → создать новую ссылку; изменить правила задания → новый снимок, старые фото не меняются. Production private publish и iOS/PWA — `NOT RUN`. Прежние замечания остаются `OWNER FAILED` до приёмки.
 
 Кандидат wrapper/viewer `365095d`, release `workspace-viewer-20261106-1`: общий loader минимум 1.5 s/fade и регистрация initial page work, стабильный image stage/footer, natural image-only mode с vertical swipe. [Evidence и ограничения](WORKSPACE-VIEWER-2026-11-06.md). `READY FOR OWNER REVIEW`, hardware acceptance не выполнена. Public card/policy добавлены кандидатом `3233f4b` (пока без owner acceptance); task policy должна сниматься при capture только новых фото, без ретроактивного изменения existing photos.

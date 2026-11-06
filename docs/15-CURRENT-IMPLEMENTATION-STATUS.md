@@ -21,7 +21,7 @@
 | Q1 dock source commit | `595ec85` на `main` и `origin/main` | `CONFIRMED` 2026-11-06 |
 | Активный runtime | `compat/assignment-release/` | `CONFIRMED` |
 | Production URL | `https://photobunker.duckdns.org` | `CONFIRMED` 2026-11-06 |
-| Release marker | `public-card-20261106-1` | `CONFIRMED` production 2026-11-06 |
+| Release marker | `public-card-sheet-20261106-1` | `CONFIRMED` production 2026-11-06 |
 | Server HTTP/API health | root, health, ready возвращают 200 | `CONFIRMED` 2026-11-06 |
 | Owner mobile acceptance | повторно выявлены критические UX/functional defects | `OWNER FAILED` |
 
@@ -30,6 +30,8 @@
 Public card `main@3233f4b`, release `public-card-20261106-1`, `IMPLEMENTED`: отдельное окно без dock, явное создание защищённой ссылки, параметры полей у фото и задания, capture snapshot только для новых фото. [Состав, снимки и ограничения](PUBLIC-CARD-2026-11-06.md), [deploy proof](evidence/public-card-20261106/deploy.json). 16 targeted tests и production build — exit 0; PHP lint двух validators локально/на сервере — exit 0. Owner mobile/private publish/backend integration — `NOT RUN`, не `ACCEPTED`.
 
 ## 3. Подтверждённые ограниченные результаты
+
+Public card opening: `main@769e3a5`, `public-card-sheet-20261106-1`, `IMPLEMENTED`. Previous external-window release is `OWNER FAILED`: owner reported white screen and app restart. Preview now opens in a bottom browser sheet inside the existing session; close/Escape/swipe preserve Browser route and screen. [Screenshot and observations](evidence/public-card-sheet-20261106/observations.json), [deployment](evidence/public-card-sheet-20261106/deploy.json). Production build and diff check exit 0. Real phone/PWA and successful private publish to device browser: `NOT RUN`.
 
 1. Integration history и поздние незакоммиченные изменения сохранены в GitHub; secret `.env` не добавлен.
 2. Исторический Colima production E2E 2026-11-04 проходил цепочку create/recover account → assignment → encrypted capture/offline retry → gallery/card/editor/browser/team. Это доказательство конкретной сборки и тестового контекста, но не текущей мобильной приёмки.

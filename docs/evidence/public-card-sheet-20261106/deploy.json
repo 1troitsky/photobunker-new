@@ -1,0 +1,85 @@
+{
+  "release": "public-card-sheet-20261106-1",
+  "commit": "769e3a5",
+  "command": "python3 /tmp/photobunker-public-card-sheet-verify.py",
+  "exitCode": 0,
+  "checks": [
+    {
+      "path": "index.html",
+      "equalsBuild": true,
+      "cache": "no-store, no-cache, must-revalidate",
+      "sha256": "12732f9afe500cc94ffa5d1c657835d18abc84728f0def8e27e9704be15484f8"
+    },
+    {
+      "path": "sw.js",
+      "equalsBuild": true,
+      "cache": "no-store, no-cache, must-revalidate",
+      "sha256": "1055e68d8539716614f7b1c12b4be2212134e1519daef1b053bcc709d0634656"
+    },
+    {
+      "path": "release.json",
+      "equalsBuild": true,
+      "cache": "no-store, no-cache, must-revalidate",
+      "sha256": "4624f52a3b71010591b904cfb02f732dd8c50b4e85e3549e612bb9a43f74aeec"
+    },
+    {
+      "path": "assets/index-B-7b0eaO.js",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "c65c8e09d644ec0833452a3c42495e70ff2536139e4dbb3aec1f1b725011ad13"
+    },
+    {
+      "path": "assets/index-zBEfWnGT.js",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "9a2468f0547ba1a8d7b1a56575d84c93f8b4ab0fbd910b6089c06c2595669709"
+    },
+    {
+      "path": "assets/index-uV-5IIrw.js",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "98e983a18b8f5712ac08e58dcd02ebde033324b8ad9550fc1b199c7150f60b9d"
+    },
+    {
+      "path": "assets/index-Bld_PfK0.js",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "65bbbad50d4fc9e4430a91e5e12a97055fe85d4081ed198880891cd6290a2198"
+    },
+    {
+      "path": "assets/index-DuPqPxBC.js",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "dbf40b605c8c045ca401b4c99a0e924ad82f964f2fd829d72e307bb31255cfa4"
+    },
+    {
+      "path": "assets/index-COFeDb_s.css",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "49ea8d746248872bca832b122c99d764cc2d0809535c1a89e0677da223435ccc"
+    },
+    {
+      "path": "assets/PhotoCardView-Cv1ivVMD.js",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "4d238bb25d65d48ebaf5274aa55a4fe6aa5cec5fca3979ad9bd53a4d4cdf321c"
+    },
+    {
+      "path": "api/v1/health",
+      "http": 200,
+      "body": {
+        "status": "ok"
+      }
+    },
+    {
+      "path": "api/v1/ready",
+      "http": 200,
+      "body": {
+        "status": "ready"
+      }
+    }
+  ],
+  "backup": "/var/www/photobunker/.local/backups/public-card-sheet-20261106-1-before/",
+  "assetsChecksumDryRun": "empty, exit 0",
+  "privateProductionAcceptance": "NOT RUN"
+}

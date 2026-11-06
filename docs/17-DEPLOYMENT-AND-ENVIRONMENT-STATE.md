@@ -1,5 +1,7 @@
 # 17. Deployment и состояние окружения
 
+Latest candidate: `main@769e3a5`, `public-card-sheet-20261106-1`; 9 frontend source files and shell. Backup `/var/www/photobunker/.local/backups/public-card-sheet-20261106-1-before/`. Old assets preserved; checksum dry-run empty, exit 0; index → SW → release. [Public verification](evidence/public-card-sheet-20261106/deploy.json). Backend/data unchanged. Real phone/PWA/private publish: `NOT RUN`.
+
 Дата среза: 2026-11-06. Этот runbook не разрешает destructive операции.
 
 ## 1. GitHub и режим REMOTE
