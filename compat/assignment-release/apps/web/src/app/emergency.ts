@@ -1,8 +1,8 @@
 import { ref } from 'vue'
 import { account,deviceId,hasConfirmedIdentity } from '../identity/store'
 import { identityRequest } from '../identity/api'
-import { appLocked,appLockReady,appPinLength,conflictsWithAppPinPrefix } from './lock'
-import { generateEmergencyKey,openEmergencyKey,matchesEmergencyPin as matchesSealed,signEmergencyIntent,type SealedEmergencyKey,type EmergencyIntent } from './emergency-crypto'
+import { appLocked,appLockReady,appPinEnabled,appPinLength,conflictsWithAppPinPrefix } from './lock'
+import { generateEmergencyKey,openEmergencyKey,matchesEmergencyPin as matchesSealed,matchesEmergencyFirstHalf as matchesFirst,signEmergencyIntent,type SealedEmergencyKey,type EmergencyIntent } from './emergency-crypto'
 import { readEmergency,changeEmergency,type EmergencyRow,type EmergencyPending } from './emergency-store'
 
 export const emergencyReady=ref(false)
@@ -130,7 +130,8 @@ export async function loadLockedEmergencyPinLength() {
     const row=good(await readEmergency(s.owner,s.device),s)
     emergencyPinLength.value=row?.confirmed?.sealed.pinLength??0
     emergencyManualEntry.value=!!row?.confirmed &&
-      (row.confirmed.sealed.manualEntry === true || row.confirmed.sealed.pinLength === undefined)
+      (!row.confirmed.sealed.firstHalfVerifier ||
+       row.confirmed.sealed.pinLength !== appPinLength.value*2)
   }catch{emergencyPinLength.value=0;emergencyManualEntry.value=false}
 }
 export async function loadEmergencyRegistration() {
@@ -145,7 +146,8 @@ export async function loadEmergencyRegistration() {
       row.confirmed.keyId===remote.keyId&&row.confirmed.revision===remote.revision)
     emergencyPinLength.value=emergencyActive.value ? row?.confirmed?.sealed.pinLength??0 : 0
     emergencyManualEntry.value=!!emergencyActive.value &&
-      (row?.confirmed?.sealed.manualEntry === true || row?.confirmed?.sealed.pinLength === undefined)
+      (!row?.confirmed?.sealed.firstHalfVerifier ||
+       row.confirmed.sealed.pinLength !== appPinLength.value*2)
     emergencyReady.value=true
     if(remote.active&&!emergencyActive.value)emergencyFailure.value='emergency.unavailable'
   }catch(error){
@@ -161,7 +163,10 @@ async function exclusive<T>(s:ReturnType<typeof scope>,run:()=>Promise<T>):Promi
 }
 export async function configureEmergencyPin(next:string,repeat:string,oldPin='') {
   const s=scope(),generation=epoch
-  if(next!==repeat||!/^\d{6,10}$/.test(next))throw new Error('emergency.pin')
+  if(!appPinEnabled.value||appPinLength.value<4||appPinLength.value>6)
+    throw new Error('emergency.appPinRequired')
+  if(next!==repeat||!/^\d{8,12}$/.test(next)||
+     next.length!==appPinLength.value*2)throw new Error('emergency.pin')
   assertScope(s,generation)
   emergencyBusy.value=true
   try {await exclusive(s,async()=>{
@@ -172,19 +177,20 @@ export async function configureEmergencyPin(next:string,repeat:string,oldPin='')
       if(!oldPin)throw new Error('emergency.oldPin')
       await openWithThrottle(s,generation,oldPin,row.confirmed.sealed)
     }
-    const prefixConflict=await conflictsWithAppPinPrefix(next)
-    if(prefixConflict && next.length === appPinLength.value)
+    const half=next.length/2
+    if(await conflictsWithAppPinPrefix(next.slice(0,half)) ||
+       await conflictsWithAppPinPrefix(next.slice(half)))
       throw new Error('emergency.samePin')
     assertScope(s,generation)
     if(row && row.revision!==remote.revision)throw new Error('emergency.conflict')
     const keyId=uuid(),operationId=uuid()
-    const sealed=await generateEmergencyKey(next,keyId,prefixConflict)
+    const sealed=await generateEmergencyKey(next,keyId)
     assertScope(s,generation)
     await mutate(s,{action:'register',keyId,operationId,expectedRevision:remote.revision,sealed},remote.revision)
     // A durable local commit PRECEDES any remote mutation.
     await reconcilePending(s,generation)
     assertScope(s,generation)
-    emergencyActive.value=true;emergencyPinLength.value=next.length;emergencyManualEntry.value=prefixConflict;emergencyReady.value=true;emergencyFailure.value=''
+    emergencyActive.value=true;emergencyPinLength.value=next.length;emergencyManualEntry.value=false;emergencyReady.value=true;emergencyFailure.value=''
   })}finally{emergencyBusy.value=false}
 }
 export async function disableEmergencyPin(oldPin:string) {
@@ -218,6 +224,15 @@ export async function matchesConfiguredEmergencyPin(candidate:string) {
     assertScope(s,generation)
   }
   return false
+}
+/** First stage only: verifies a blinded half, NEVER starts deletion. */
+export async function matchesLockedEmergencyFirstHalf(candidate:string):Promise<boolean> {
+  const s=scope()
+  if(!s.owner||!s.device||!appLocked.value||!appLockReady.value)return false
+  const row=good(await readEmergency(s.owner,s.device),s)
+  const sealed=row?.confirmed?.sealed
+  if(!sealed||row?.pending||sealed.pinLength!==appPinLength.value*2)return false
+  return matchesFirst(candidate,sealed)
 }
 export async function hasConfiguredEmergencyPin() {
   const s=scope(),generation=epoch
