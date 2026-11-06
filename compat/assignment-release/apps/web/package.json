@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@matrix-org/matrix-sdk-crypto-wasm": "18.9.0",
+    "@svar-ui/vue-filemanager": "2.6.0",
     "canonicalize": "2.1.0",
     "libsodium-wrappers": "0.8.4",
     "livekit-client": "2.22.4",

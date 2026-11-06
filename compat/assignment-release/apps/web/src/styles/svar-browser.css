@@ -1,0 +1,66 @@
+/* SVAR is a visual explorer only. PhotoBunker owns scopes, mutations and previews. */
+.svar-browser {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.svar-browser-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.svar-browser-bar, .svar-browser-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.svar-browser-bar { justify-content: space-between; min-width: 0; }
+.svar-browser-bar > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 1rem;
+}
+.svar-browser-actions button { min-height: 44px; }
+.svar-browser-skin {
+  display: block;
+  flex: 1 1 auto;
+  min-height: 340px;
+  height: min(61dvh, 740px);
+  max-height: min(73dvh, 820px);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border, rgba(127,127,127,.25));
+  border-radius: 12px;
+}
+.svar-browser-skin > * { min-width: 0; min-height: 0; }
+.svar-browser-selected {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  min-width: 0;
+  border: 1px solid var(--border, rgba(127,127,127,.25));
+  border-radius: 12px;
+}
+.svar-browser-selected img, .svar-browser-selected .thumbnail-placeholder {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex: 0 0 56px;
+}
+.svar-browser-selected strong { min-width: 100px; flex: 1; overflow-wrap: anywhere; }
+.svar-browser-selected button { min-height: 44px; }
+@media (max-width: 500px) {
+  .svar-browser-body { gap: 8px; }
+  .svar-browser-bar { align-items: stretch; }
+  .svar-browser-actions { width: 100%; }
+  .svar-browser-actions button { flex: 1; }
+  .svar-browser-skin { min-height: 290px; height: 52dvh; max-height: 60dvh; }
+  .svar-browser-selected { gap: 8px; }
+}
