@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { webcrypto } from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { generateEmergencyKey,openEmergencyKey,signEmergencyIntent } from '../src/app/emergency-crypto'
+import { generateEmergencyKey,openEmergencyKey,matchesEmergencyFirstHalf,signEmergencyIntent } from '../src/app/emergency-crypto'
 import { statementBytes,canonical } from '../src/crypto/protocol'
 import { unb64 } from '../src/identity/keys'
 beforeEach(()=>vi.stubGlobal('crypto',webcrypto))
@@ -20,16 +20,21 @@ describe('R1-08A / synthetic P-256 emergency keys and signed intent primitives',
     expect(json).not.toContain(secret)
     expect(json).not.toContain('PRIVATE KEY')
     expect(key).not.toHaveProperty('privateKey')
+    expect(key.firstHalfVerifier).toMatch(/^[a-f0-9]{64}$/)
+    expect(await matchesEmergencyFirstHalf('6728',key)).toBe(true)
+    expect(await matchesEmergencyFirstHalf('6729',key)).toBe(false)
+    expect(await matchesEmergencyFirstHalf('67280519',key)).toBe(false)
+    await expect(generateEmergencyKey('123456',KEY)).rejects.toThrow('emergency.pin')
     expect((await openEmergencyKey(secret,key)).extractable).toBe(false)
     await expect(openEmergencyKey('00000000',key)).rejects.toThrow('emergency.wrong')
     await expect(openEmergencyKey(secret,{...key,keyId:OTHER})).rejects.toThrow()
     await expect(openEmergencyKey(secret,{...key,ciphertext:key.ciphertext.slice(0,-2)+'AA'})).rejects.toThrow()
   })
   it('signs exact domain-separated canonical payload bound to account, key, revision and operation',async()=>{
-    const key=await generateEmergencyKey('123456',KEY)
+    const key=await generateEmergencyKey('12345678',KEY)
     const payload={version:1 as const,operationId:OP,accountId:ACCOUNT,keyId:KEY,
       revision:1,action:'emergency-delete' as const}
-    const signed=await signEmergencyIntent('123456',key,payload)
+    const signed=await signEmergencyIntent('12345678',key,payload)
     expect(signed.intent).toBe(canonical(payload))
     const imported=await webcrypto.subtle.importKey('spki',unb64(key.publicKey),
       {name:'ECDSA',namedCurve:'P-256'},false,['verify'])
@@ -41,7 +46,7 @@ describe('R1-08A / synthetic P-256 emergency keys and signed intent primitives',
     ])
       expect(await webcrypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},imported,
         unb64(signed.signature),statementBytes('emergency-delete',other))).toBe(false)
-    await expect(signEmergencyIntent('000000',key,payload)).rejects.toThrow('emergency.wrong')
+    await expect(signEmergencyIntent('00000000',key,payload)).rejects.toThrow('emergency.wrong')
   })
   it('does not expose any emergency delete trigger through the ordinary 4-digit or 6-digit app PIN',()=>{
     // R1-08A offers only configuration and explicit signing primitive.

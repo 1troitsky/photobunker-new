@@ -43,11 +43,12 @@ beforeEach(() => {
   vi.restoreAllMocks()
 })
 describe('R1-06 D3 PIN security boundary', () => {
-  it('writes versioned PBKDF2 for 4–8 digits and requires the old PIN for change and disable', async () => {
+  it('writes versioned PBKDF2 for 4–6 digits and requires the old PIN for change and disable', async () => {
     await loadAppLock()
     expect(appLockReady.value).toBe(true)
     await expect(setAppPin('123')).rejects.toThrow('pin.length')
     await expect(setAppPin('123456789')).rejects.toThrow('pin.length')
+    await expect(setAppPin('1234567')).rejects.toThrow('pin.length')
     await setAppPin('1234')
     const value = fixtures.data.get(pinScope()) as { version: number; salt: string; verifier: string; iterations: number; length: number }
     expect(value.version).toBe(2)
@@ -94,8 +95,9 @@ describe('R1-06 D3 PIN security boundary', () => {
     await loadAppLock()
     expect(appPinEnabled.value).toBe(false)
     fixtures.device.value = 'device-1'
-    wall = 3_800_000
+    wall = 3_300_000 // 20-minute cooldown expired; one new failure is not another 20-minute ban.
     await loadAppLock()
+    await expect(unlockApp('999999')).rejects.toThrow('pin.wrong')
     await unlockApp('123456')
     expect(appLocked.value).toBe(false)
     Date.now = original

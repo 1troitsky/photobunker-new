@@ -29,8 +29,9 @@ export async function replayEmergencyPhases(initial:EmergencyCommand,ops:Emergen
     // retry from the journal instead of swallowing a storage/transaction error.
     if(!wipeFailed)row=await ops.advance(row.operationId,'purging','purged')
   }
-  // A failed local wipe never discards the valid signed server intent.
-  if(row.delivery!=='completed' && ops.online()){
+  // Local deletion must complete before any cloud-side destructive command.
+  // A failed wipe preserves the signed intent in the crash-safe journal for retry.
+  if(row.phase==='purged' && !wipeFailed && row.delivery!=='completed' && ops.online()){
     const state=await ops.deliver(row)
     await ops.recordDelivery(row.operationId,state)
   }

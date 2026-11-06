@@ -7,13 +7,23 @@ const props = withDefaults(defineProps<{
   label: string
   disabled?: boolean
   autofocus?: boolean
-}>(), { length: 8, disabled: false, autofocus: false })
-const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
+  /** Lock screen only: reset input immediately on N digits, no timers. */
+  autoClear?: boolean
+}>(), { length: 8, disabled: false, autofocus: false, autoClear: false })
+const emit = defineEmits<{ 'update:modelValue': [value: string]; complete: [value: string] }>()
 const input = ref<HTMLInputElement>()
-const count = computed(() => Math.max(4, Math.min(10, props.length)))
+const count = computed(() => Math.max(4, Math.min(12, props.length)))
 function update(event: Event) {
-  const value = (event.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 10)
-  emit('update:modelValue', value)
+  const field = event.target as HTMLInputElement
+  const value = field.value.replace(/\D/g, '').slice(0, count.value)
+  if (props.autoClear && value.length === count.value) {
+    // Clearing the native input synchronously preserves fast subsequent typing.
+    field.value = ''
+    emit('update:modelValue', '')
+    emit('complete', value)
+  } else {
+    emit('update:modelValue', value)
+  }
 }
 function focus() { input.value?.focus() }
 onMounted(() => {
@@ -25,8 +35,8 @@ defineExpose({ focus })
 <template>
   <label class="passcode-entry" :aria-label="label" @click="focus">
     <input ref="input" :value="modelValue" type="password" inputmode="numeric"
-      pattern="[0-9]*" autocomplete="one-time-code" :autofocus="autofocus"
-      :disabled="disabled" maxlength="10" @input="update" />
+      pattern="[0-9]*" autocomplete="off" :autofocus="autofocus"
+      :disabled="disabled"  :maxlength="count" @input="update" />
     <span class="passcode-dots" aria-hidden="true">
       <i v-for="index in count" :key="index" :class="{ filled: index <= modelValue.length }" />
     </span>

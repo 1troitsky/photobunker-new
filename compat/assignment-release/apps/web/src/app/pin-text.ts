@@ -5,7 +5,7 @@ const entries = {
     'Необязательная блокировка интерфейса и ключей в памяти при reload или сворачивании. Это НЕ шифрование всей базы и НЕ замена ключу PB1/PB4, восстановлению или системной блокировке телефона. При копировании профиля браузера короткий PIN можно атаковать.',
     'Optional UI and in-memory key lock on reload or background. This does NOT encrypt the entire database or replace PB1/PB4 recovery keys or your phone lock. A copied browser profile is NOT securely protected by a short PIN.',
   ],
-  newPin: ['Новый PIN (от 4 до 8 цифр)', 'New PIN (4 to 8 digits)'],
+  newPin: ['Новый PIN (4–6 цифр)', 'New PIN (4–6 digits)'],
   repeatPin: ['Повторите новый PIN', 'Repeat the new PIN'],
   oldPin: ['Текущий PIN для подтверждения', 'Current PIN to confirm'],
   enable: ['Включить PIN', 'Enable PIN'],
@@ -25,12 +25,13 @@ const entries = {
   mismatch: ['PIN-коды не совпадают', 'PINs do not match'],
   disableConfirm: ['Введите текущий PIN, чтобы отключить блокировку', 'Enter the current PIN to turn off the lock'],
   wrong: ['Неверный PIN', 'Incorrect PIN'],
-  cooldown: ['Устройство заблокировано на 30 минут', 'This device is locked for 30 minutes'],
+  cooldown: ['Обычный вход заблокирован на 20 минут. Аварийный PIN доступен.', 'Normal access is locked for 20 minutes. Emergency PIN remains available.'],
   rollback: ['Время устройства изменилось назад. Верните правильное время для разблокировки.', 'Device clock moved backwards. Restore the correct time before unlocking.'],
   storage: ['Не удалось проверить локальный PIN. Доступ остаётся закрытым; проверьте хранилище и повторите.', 'Local PIN could not be verified. Access stays locked. Check storage and retry.'],
-  length: ['Введите от 4 до 8 цифр', 'Enter 4 to 8 digits'],
+  length: ['Введите от 4 до 6 цифр', 'Enter 4 to 6 digits'],
   confirm: ['Введите текущий PIN перед изменением', 'Confirm your current PIN before changing it'],
   changed: ['PIN изменён в другой вкладке. Повторите после обновления.', 'PIN changed in another tab. Retry after refreshing.'],
+  emergencyResetRequired: ['Сначала отключите аварийный PIN, затем меняйте или отключайте обычный.', 'Disable the emergency PIN before changing or removing the normal PIN.'],
   account: ['Аккаунт или устройство изменились', 'Account or device changed'],
   forgot: ['Восстановить или сменить аккаунт по ключу', 'Recover or change account with a key'],
   lockAfter: ['Требовать PIN', 'Require PIN'],
@@ -52,6 +53,7 @@ export function pinError(error: unknown) {
   if (msg === 'pin.mismatch') return pt('mismatch')
   if (msg === 'pin.confirm_required') return pt('confirm')
   if (msg === 'pin.changed') return pt('changed')
+  if (msg === 'pin.emergency_reset_required') return pt('emergencyResetRequired')
   if (msg === 'pin.account_changed') return pt('account')
   return pt('storage')
 }

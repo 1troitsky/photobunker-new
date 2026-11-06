@@ -8,6 +8,7 @@ import {
   loadAppLock,
   lockApp,
   unlockApp,
+  recordFailedEmergencyConfirmation,
 } from './app/lock'
 import { hardLock, resumeTrustedPhotos } from './crypto/store'
 import { pt, pinError } from './app/pin-text'
@@ -16,7 +17,7 @@ import { q } from './crypto/text'
 import { deletionBlocked, deletionFailure, deletionPhase, resumeLocalDeletion } from './app/local-delete-run'
 import { localDeleteText } from './app/local-delete-text'
 import { emergencyBlocked,emergencyChecked,tryEmergencyOnLockedScreen } from './app/emergency-run'
-import { emergencyManualEntry, emergencyPinLength, loadLockedEmergencyPinLength } from './app/emergency'
+import { emergencyManualEntry, emergencyPinLength, loadLockedEmergencyPinLength, matchesLockedEmergencyFirstHalf } from './app/emergency'
 import AccountPhotoAccess from './components/AccountPhotoAccess.vue'
 import {
   startProtection,
@@ -109,23 +110,71 @@ const privateMessage = computed(() =>
 const appPin = ref(''),
   appPinError = ref(''),
   appPinOpening = ref(false)
-const pinDigits = ['1','2','3','4','5','6','7','8','9','0'] as const
-let passcodeSubmitTimer: number | undefined
-function clearPasscodeSubmit() {
-  if (passcodeSubmitTimer !== undefined) window.clearTimeout(passcodeSubmitTimer)
-  passcodeSubmitTimer = undefined
+
+// Complete N-digit segments are queued instantly; PBKDF2 never drops rapid input.
+const pendingPinParts: string[] = []
+let drainingPin = false
+let emergencyFirstPart = ''
+let pinInputGeneration = 0
+function resetPinEntry() {
+  pinInputGeneration++
+  pendingPinParts.length = 0
+  emergencyFirstPart = ''
+  appPin.value = ''
 }
-function appendPin(digit: string) {
-  if (!appPinOpening.value && appPin.value.length < 10) {
-    appPin.value += digit
-    appPinError.value = ''
+function onPinPart(part: string) {
+  if (!appLockReady.value || !appLocked.value || emergencyManualEntry.value ||
+      part.length !== appPinLength.value) return
+  if (pendingPinParts.length >= 16) {
+    appPinError.value = pinError(new Error('pin.wrong'))
+    return
+  }
+  pendingPinParts.push(part)
+  void drainPinParts()
+}
+async function drainPinParts() {
+  if (drainingPin) return
+  drainingPin = true
+  const generation = pinInputGeneration
+  try {
+    while (pendingPinParts.length && generation === pinInputGeneration && appLocked.value) {
+      const part = pendingPinParts.shift()!
+      appPinError.value = ''
+      if (emergencyFirstPart) {
+        const fullCode = emergencyFirstPart + part
+        emergencyFirstPart = ''
+        const triggered = await tryEmergencyOnLockedScreen(fullCode).catch(() => false)
+        if (generation !== pinInputGeneration) break
+        if (triggered) { pendingPinParts.length = 0; break }
+        try {
+          await recordFailedEmergencyConfirmation()
+          appPinError.value = pinError(new Error('pin.wrong'))
+        } catch(error) { appPinError.value = pinError(error) }
+        continue
+      }
+      try {
+        const firstPartMatched = await matchesLockedEmergencyFirstHalf(part)
+        if (generation !== pinInputGeneration || !appLocked.value) break
+        if (firstPartMatched) {
+          emergencyFirstPart = part
+          continue
+        }
+        await unlockApp(part)
+      } catch (error) {
+        if (generation === pinInputGeneration) appPinError.value = pinError(error)
+      }
+    }
+  } finally {
+    drainingPin = false
+    // A new account/input generation may have queued digits while the old
+    // PBKDF2 check was finishing; drain the new queue rather than drop it.
+    if (pendingPinParts.length && appLocked.value)
+      void drainPinParts()
   }
 }
-function removePinDigit() {
-  if (!appPinOpening.value) appPin.value = appPin.value.slice(0, -1)
-}
+/** Old emergency registrations retain explicit Submit until reconfigured. */
 async function openApp() {
-  if (appPinOpening.value || appPin.value.length < 4) return
+  if (!emergencyManualEntry.value || appPinOpening.value || appPin.value.length < 4) return
   const pin = appPin.value
   appPinError.value = ''
   appPinOpening.value = true
@@ -133,7 +182,7 @@ async function openApp() {
     await unlockApp(pin)
   } catch (error) {
     const triggered = await tryEmergencyOnLockedScreen(pin).catch(() => false)
-    if(!triggered)appPinError.value = pinError(error)
+    if (!triggered) appPinError.value = pinError(error)
   } finally {
     appPin.value = ''
     appPinOpening.value = false
@@ -142,33 +191,22 @@ async function openApp() {
 watch(
   () => `${account.value?.id}:${deviceId.value}`,
   () => {
+    resetPinEntry()
     void loadAppLock()
   },
   { immediate: true },
 )
-watch([() => account.value?.id, deviceId, appLocked], ([owner, device, locked]) => {
-  if (owner && device && locked) void loadLockedEmergencyPinLength()
-}, { immediate: true })
-watch([appPin, appPinLength, emergencyPinLength, emergencyManualEntry], ([value, normalLength, emergencyLength, manual]) => {
-  clearPasscodeSubmit()
-  if (manual || appPinOpening.value || !appLocked.value) return
-  const length = value.length
-  if (length !== normalLength && (!emergencyLength || length !== emergencyLength)) return
-  // A short pause lets a longer emergency PIN continue past the normal PIN
-  // length. Known prefix conflicts use explicit neutral confirmation instead.
-  const delay = emergencyLength && length === emergencyLength ? 180 : 520
-  passcodeSubmitTimer = window.setTimeout(() => {
-    passcodeSubmitTimer = undefined
-    void openApp()
-  }, delay)
-})
+watch([() => account.value?.id, deviceId, appLocked, appLockReady, appPinLength],
+  ([owner, device, locked, ready]) => {
+    if (owner && device && locked && ready) void loadLockedEmergencyPinLength()
+  }, { immediate: true })
 watch([appLockReady, appLocked], ([ready, locked]) => {
   if (!ready || locked) {
     // Synchronous cleanup before any protected Vue view can paint.
     hardLock()
     void import('./messages/store').then(module => module.stopMessaging())
-    appPin.value = ''
-  } else { clearPasscodeSubmit(); resumeTrustedPhotos() }
+    resetPinEntry()
+  } else { resetPinEntry(); resumeTrustedPhotos() }
 }, { flush: 'sync' })
 function updatePrivatePresence() {
   if (backgroundReady.value && hasConfirmedIdentity() && appLockReady.value &&
@@ -708,19 +746,14 @@ watch(
             </template>
             <template v-else-if="appLockReady">
               <p class="passcode-prompt">{{ pt('title') }}</p>
-              <PasscodeInput v-model="appPin" :length="10" :label="pt('title')"
-                :disabled="appPinOpening" autofocus />
-              <div class="passcode-keypad" aria-label="PIN keypad">
-                <button v-for="digit in pinDigits.slice(0, 9)" :key="digit" type="button"
-                  :disabled="appPinOpening" @click="appendPin(digit)">{{ digit }}</button>
-                <span aria-hidden="true" />
-                <button type="button" :disabled="appPinOpening" @click="appendPin('0')">0</button>
-                <button type="button" class="passcode-delete" :disabled="appPinOpening || !appPin"
-                  :aria-label="q('Удалить цифру')" @click="removePinDigit"><AppIcon name="back" /></button>
-              </div>
+              <PasscodeInput v-model="appPin"
+                :length="emergencyManualEntry ? Math.max(10, emergencyPinLength, appPinLength) : appPinLength"
+                :auto-clear="!emergencyManualEntry" :label="pt('title')"
+                :disabled="appPinOpening && emergencyManualEntry" autofocus
+                @complete="onPinPart" />
               <button v-if="emergencyManualEntry" class="primary-button passcode-submit"
-                :disabled="appPinOpening || appPin.length < 4">{{ pt('unlock') }}</button
-              ><button
+                :disabled="appPinOpening || appPin.length < 4">{{ pt('unlock') }}</button>
+              <button
                 type="button"
                 class="quiet-button passcode-recovery"
                 @click="router.push('/profile/account?mode=recover&pinReset=1')"

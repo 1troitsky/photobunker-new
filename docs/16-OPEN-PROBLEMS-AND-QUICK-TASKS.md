@@ -11,7 +11,7 @@
 | Шаг | Scope | Готово только когда |
 | --- | --- | --- |
 | Q1 | Dock + shell + PWA update | Док физически прижат к нижней safe-area без пустой полосы и скачков на Assignments/Contacts; установленная PWA получает новый release без удаления данных; владелец подтвердил на телефоне. |
-| Q2 | Единый быстрый PIN input | Быстрый набор не теряет цифры; normal/emergency используют один экран и правильную prefix-логику; клавиатура открывается сразу; владелец подтвердил. |
+| Q2 | Единый быстрый PIN input | Одна системная клавиатура, обработка без таймеров. Normal 4–6; emergency в две последовательные половины по N цифр, автоматическая очистка после каждой. Принятие владельцем на телефоне обязательно. |
 | Q3 | Browser replacement | Единая классическая модель files+folders, корректный current folder/breadcrumb/create/move/delete/select; assignment и personal scopes не смешаны. |
 | Q4 | Camera + assignment + post-capture navigation | Любое задание снимает в свой scope; permissions можно повторить без restart; кадр durable сохраняется локально и UI мгновенно переходит к ожидаемому состоянию. |
 | Q5 | Photo → Card → Editor | Любую разрешённую фотографию можно открыть; Card отделена от private gallery; editor работает local-first без сетевого лага. |
@@ -129,14 +129,14 @@ bundle hashes, cache headers и API health `CONFIRMED`; owner acceptance пок�
 | --- | --- | --- |
 | PIN-01 | `OWNER FAILED` | PIN выглядел как обычный text input и keypad не открывался автоматически. Нужен современный passcode screen с dots и numeric keyboard сразу при открытии. |
 | PIN-02 | `OWNER FAILED` | Быстрый набор терял цифры; обработка должна принимать последовательные input events без async race/debounce loss. |
-| PIN-03 | `CONFIRMED PRODUCT RULE` | Normal PIN: 4–8 цифр. Emergency PIN: 6–10 цифр. Они не равны. |
+| PIN-03 | `CONFIRMED PRODUCT RULE` | Normal PIN: 4–6 цифр. Emergency PIN: ровно 2N цифр, состоящий из двух последовательных половин по N. Нельзя включить emergency без normal; половины могут совпадать друг с другом, но ни одна не равна normal. Старые PIN разрешены для миграции без потери доступа. |
 | PIN-04 | `CONFIRMED PRODUCT RULE` | Один и тот же визуальный экран вводит normal и emergency PIN; наблюдатель не видит, какой тип вводит пользователь. Никакого mode switch. |
-| PIN-05 | `CONFIRMED PRODUCT RULE` | Если emergency PIN начинается с полного normal PIN (`4444` / `444466`), auto-submit отключается и появляется `Continue`. Во всех неоднозначно не пересекающихся случаях проверка может быть автоматической по допустимой длине. |
+| PIN-05 | `CONFIRMED PRODUCT RULE` | После каждых N цифр поле очищается сразу без таймера. Correct normal открывает приложение. Correct emergency half 1 скрыто ждёт half 2. Correct half 2 активирует подписанный emergency intent. Wrong half — неверная попытка; экран не раскрывает режим. Для старых несовместимых записей допустима ручная миграционная проверка. |
 | PIN-06 | `OPEN` | При запуске focus/keypad открываются автоматически. Нет служебного текста про PB1/reset; только passcode и действие recover/switch account by Recovery Key. |
 | PIN-07 | `OPEN` | Настройка require PIN: immediately, 10s, 30s, 1m, 5m (точный набор подтвердить в UI). Background/lock timing должен быть monotonic и тестироваться. |
-| PIN-08 | `CONFIRMED PRODUCT RULE` | После нескольких неверных normal PIN устройство блокируется на 30 минут. Экран PIN остаётся; emergency PIN продолжает приниматься и сам не блокируется cooldown. |
+| PIN-08 | `CONFIRMED PRODUCT RULE` | После 5 неверных попыток обычный вход блокируется на 20 минут; после истечения времени начинается новое окно попыток. Экран остаётся, аварийный PIN продолжает приниматься. Забытый normal PIN можно сбросить через подтверждённый Recovery Key. |
 | PIN-09 | `CONFIRMED PRODUCT RULE` | Отдельный Local Delete PIN удалить. Остаются App PIN и один Emergency PIN удаления данных с телефона. |
-| PIN-10 | `BLOCKED` | Emergency PIN должен удалять локальные данные устройства; cloud backup сохраняется у оплаченных пользователей согласно тарифу/backup policy. Не включать destructive action без inventory, crash-safe journal, remote backup proof и tests. |
+| PIN-10 | `BLOCKED` | Аварийный PIN — PIN УНИЧТОЖЕНИЯ ДАННЫХ, не запасной вход. После двух правильных половин сначала локальная очистка, затем удаление live cloud data; независимый подтверждённый backup (если есть) должен сохраниться для Recovery Key. При отсутствии backup удаление безвозвратно — это явно подтверждается при настройке. На текущем backend AccountLifecycle удаляет аккаунт, recovery bundles и всю облачную фотоподсистему: backup-aware deletion/recovery пока НЕ реализованы, production acceptance заблокирована. |
 | PIN-11 | `OPEN` | После установки PIN UI ясно показывает enabled/changed/disabled; не оставляет обрезанные cards и непонятный status. |
 
 ## 9. Тарифы, backups и Web3 payments
