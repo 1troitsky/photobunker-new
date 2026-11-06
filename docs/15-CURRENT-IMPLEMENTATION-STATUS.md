@@ -21,7 +21,7 @@
 | Q1 dock source commit | `595ec85` на `main` и `origin/main` | `CONFIRMED` 2026-11-06 |
 | Активный runtime | `compat/assignment-release/` | `CONFIRMED` |
 | Production URL | `https://photobunker.duckdns.org` | `CONFIRMED` 2026-11-06 |
-| Release marker | `public-card-access-20261107-1` | `CONFIRMED` production 2026-11-07 |
+| Release marker | `public-card-tap-20261107-1` | `CONFIRMED` production 2026-11-07 |
 | Server HTTP/API health | root, health, ready возвращают 200 | `CONFIRMED` 2026-11-06 |
 | Owner mobile acceptance | повторно выявлены критические UX/functional defects | `OWNER FAILED` |
 
@@ -30,6 +30,8 @@
 Public card `main@3233f4b`, release `public-card-20261106-1`, `IMPLEMENTED`: отдельное окно без dock, явное создание защищённой ссылки, параметры полей у фото и задания, capture snapshot только для новых фото. [Состав, снимки и ограничения](PUBLIC-CARD-2026-11-06.md), [deploy proof](evidence/public-card-20261106/deploy.json). 16 targeted tests и production build — exit 0; PHP lint двух validators локально/на сервере — exit 0. Owner mobile/private publish/backend integration — `NOT RUN`, не `ACCEPTED`.
 
 ## 3. Подтверждённые ограниченные результаты
+
+Public card follow-up `9ee2077` / `public-card-tap-20261107-1` — `IMPLEMENTED`. Исправлены два конкретных пути: после восстановления server read proof публикация повторяется, даже если предыдущий запрос ещё завершался отказом; нажатие во время подготовки резервирует внешнее окно и переводит его на ссылку после ACK без второго нажатия. Lock/account/device/photo changes закрывают подготовку; отказ не открывает карточку. Ready-ссылка по-прежнему обычная внешняя. [Команды, screenshot и точные ограничения fixture](evidence/public-card-tap-20261107/observations.json), [deploy proof](evidence/public-card-tap-20261107/deploy.json). Targeted check (7 сценариев) и build exit 0. Настоящий аккаунт не создавался по решению владельца; реальная публикация/чтение public photo, owner account и hardware — `NOT RUN`. Это не доказательство устранения owner defect и не `ACCEPTED`.
 
 Public card access `628cc35` / `public-card-access-20261107-1` — `IMPLEMENTED`. Владелец сообщил, что предыдущая кнопка недоступна на всех фото (`OWNER FAILED`). Воспроизведена блокировка на cached photo без grant/revision, publisher не вызывался; убрана ранняя UI-проверка, добавлено чтение подтверждённого server photo с прежними read/shareExternal checks. Исправлено потерянное слияние publicCard/editedAt в encrypted metadata; capture ceiling сохранён. [Команды и Browser component→publisher→AES→IDB→POST/ACK→URL](evidence/public-card-access-20261107/observations.json), [public deployment](evidence/public-card-access-20261107/deploy.json). Build/checks exit 0; private owner account/hardware — `NOT RUN`.
 

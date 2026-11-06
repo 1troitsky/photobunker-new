@@ -1,0 +1,50 @@
+{
+  "release": "public-card-tap-20261107-1",
+  "commit": "9ee2077",
+  "targetedCheck": {
+    "command": "docker compose -f compat/assignment-release/compose.yaml exec -T web npm test -- tests/public-card-link.test.ts",
+    "exitCode": 0,
+    "checks": 7,
+    "scenarios": [
+      "read-proof refresh during pending publication rejection retries",
+      "first tap opens pending publication",
+      "denial closes preparing window without navigation",
+      "app lock cancels late navigation",
+      "cached DTO does not block publication",
+      "ready direct external link cleared on lock",
+      "captured assignment prohibition is retained"
+    ]
+  },
+  "build": {
+    "command": "docker compose -f compat/assignment-release/compose.yaml exec -T -e PHOTOBUNKER_RELEASE_ID=public-card-tap-20261107-1 web npm run build",
+    "exitCode": 0
+  },
+  "browser": {
+    "tool": "Playwright MCP",
+    "fixture": "compat/assignment-release/apps/web/tests/browser/public-card-availability.html",
+    "viewport": [
+      390,
+      844
+    ],
+    "firstTapOpenedWindow": true,
+    "openerCleared": true,
+    "noReferrer": true,
+    "pendingStatusCentered": true,
+    "navigatedAfterSyntheticAck": true,
+    "privateDockInPublicRoot": false,
+    "screenshot": "preparing-mobile.png",
+    "limit": "Synthetic metadata and POST ACK; no real account was created. Public guest request then returns 404 because the synthetic share does not exist on the server. This proves first-tap navigation, NOT a successful public photo read."
+  },
+  "serverContract": {
+    "check": "Invoked existing validateManifest in local PHP with photo=true, original=false, download=true, metadata=true and synthetic descriptors; no database writes",
+    "exitCode": 0,
+    "result": "photo-only manifest accepted"
+  },
+  "notRun": [
+    "owner private publication",
+    "actual public photo read from owner account",
+    "installed PWA / iPhone / Android hardware",
+    "Lighthouse and broad CI"
+  ],
+  "status": "IMPLEMENTED; owner acceptance NOT RUN"
+}
