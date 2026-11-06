@@ -79,7 +79,7 @@ async function calibrate(): Promise<number> {
   return Math.max(100000, Math.min(600000, Math.round(100000 * (300 / elapsed) / 10000) * 10000))
 }
 async function makeRecord(pin: string): Promise<PinV2> {
-  if (!/^\d{4,8}$/.test(pin)) throw new Error('pin.length')
+  if (!/^\d{4,6}$/.test(pin)) throw new Error('pin.length')
   const salt = hex(crypto.getRandomValues(new Uint8Array(16)))
   const iterations = await calibrate()
   return {
@@ -185,7 +185,7 @@ async function verify(pin: string, id: string, epoch: number, mutation: number) 
       const failures = Math.min(100, previousRecord.failures + 1)
       // Five failed app-PIN attempts lock normal access for 30 minutes. The
       // lock screen remains mounted so an emergency-delete PIN can still run.
-      const wait = failures < 5 ? 0 : 30 * 60 * 1000
+      const wait = failures < 5 ? 0 : 20 * 60 * 1000
       return { ...previousRecord, failures, until: Math.max(previousRecord.until, now + wait),
         lastWall: Math.max(now, previousRecord.lastWall ?? 0) }
     })
@@ -246,7 +246,7 @@ export async function setAppPin(pin: string, oldPin?: string) {
   const id = scope(), epoch = loadEpoch, mutation = guardEpoch
   if (!id || !appLockReady.value || appLockFailure.value || appLocked.value)
     throw new Error('pin.locked')
-  if (!/^\d{4,8}$/.test(pin)) throw new Error('pin.length')
+  if (!/^\d{4,6}$/.test(pin)) throw new Error('pin.length')
   const old = current
   if (appPinEnabled.value) {
     if (!oldPin) throw new Error('pin.confirm_required')
@@ -255,12 +255,10 @@ export async function setAppPin(pin: string, oldPin?: string) {
   const emergency = await import('./emergency')
   if (await emergency.matchesConfiguredEmergencyPin(pin))
     throw new Error('localDelete.samePin')
-  // The sealed emergency PIN cannot reveal all of its prefixes without
-  // weakening it. A normal-PIN change therefore switches the shared lock
-  // screen to explicit neutral confirmation until the emergency PIN is next
-  // configured, preventing either code from being submitted too early.
+  // Two-stage emergency codes have halves tied to the normal PIN length.
+  // Rotate/disable the emergency code first, never silently orphan it.
   if (await emergency.hasConfiguredEmergencyPin())
-    await emergency.markEmergencyManualEntry()
+    throw new Error('pin.emergency_reset_required')
   const next = await makeRecord(pin)
   guard(id, epoch, mutation)
   try {
@@ -285,6 +283,9 @@ export async function removeAppPin(oldPin: string) {
     throw new Error('pin.locked')
   if (!appPinEnabled.value) return
   if (!oldPin) throw new Error('pin.confirm_required')
+  const emergency = await import('./emergency')
+  if (await emergency.hasConfiguredEmergencyPin())
+    throw new Error('pin.emergency_reset_required')
   const old = current
   await verify(oldPin, id, epoch, mutation)
   try {
