@@ -293,7 +293,7 @@ async function deleteSelection() {
     if (!folder || folder.photoIds.length || folders.value.some(row => row.parentId === entry.id)) {
       error.value = bt('folderFailed'); return
     }
-    if (!window.confirm(bt('deleteItemsConfirm'))) return
+    if (!window.confirm(bt('deleteEmptyFolder'))) return
     if (await persist(folders.value.filter(row => row.id !== entry.id))) selectedPath.value = ''
   } else if (entry.kind === 'photo' && canDeletePhoto.value) {
     if (!window.confirm(bt('deleteConfirm'))) return
@@ -406,7 +406,7 @@ onMounted(() => {
             ? folders.find(item => item.id === selected.id)?.name
             : selected.kind === 'assignment' ? taskById.get(selected.id)?.name : bt('currentPath') }}</strong>
           <button v-if="selected.kind === 'folder'" type="button" class="secondary-button"
-            @click="startRename">{{ bt('folderName') }}</button>
+            @click="startRename">{{ bt('renameFolder') }}</button>
           <button v-if="selected.kind === 'folder' || selected.kind === 'photo'" type="button"
             class="secondary-button" @click="moveOpen = true">{{ bt('move') }}</button>
           <button v-if="selected.kind === 'folder' || canDeletePhoto" type="button"
@@ -415,14 +415,14 @@ onMounted(() => {
       </template>
     </div>
 
-    <AppSheet :open="editOpen" :title="editMode === 'create' ? bt('newFolder') : bt('folderName')"
+    <AppSheet :open="editOpen" :title="editMode === 'create' ? bt('newFolder') : bt('renameFolder')"
       :busy="working" @close="editOpen = false">
       <form class="native-form" @submit.prevent="saveFolder">
         <label>{{ bt('folderName') }}
           <input v-model="folderName" maxlength="80" autofocus required /></label>
         <p v-if="error" class="form-error" role="alert">{{ error }}</p>
         <button class="primary-button full-button" :disabled="working || !folderName.trim()">
-          {{ editMode === 'create' ? bt('createFolder') : bt('folderName') }}</button>
+          {{ editMode === 'create' ? bt('createFolder') : bt('renameFolder') }}</button>
       </form>
     </AppSheet>
 
