@@ -17,6 +17,8 @@ const copy = {
   newFolder: ['Новая папка', 'New folder'],
   folderName: ['Название папки', 'Folder name'],
   createFolder: ['Создать папку', 'Create folder'],
+  renameFolder: ['Переименовать папку', 'Rename folder'],
+  deleteEmptyFolder: ['Удалить пустую папку?', 'Delete this empty folder?'],
   move: ['Переместить', 'Move'],
   moveTo: ['Переместить в папку', 'Move to folder'],
   root: ['Корень', 'Root'],
