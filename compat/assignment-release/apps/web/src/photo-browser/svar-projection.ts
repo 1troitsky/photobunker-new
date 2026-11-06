@@ -7,6 +7,7 @@ import type { BrowserFolder } from './cache'
  * photo/assignment/folder id, scoped to the current account.
  */
 export type BrowserScope = 'personal' | `assignment:${string}`
+export const assignmentScope = (id: string): BrowserScope => `assignment:${id}`
 export type BrowserEntry =
   | { kind: 'personal' | 'assignments'; id: string; scope: BrowserScope | '' }
   | { kind: 'assignment' | 'folder'; id: string; scope: BrowserScope }
@@ -71,7 +72,7 @@ export function buildSvarProjection(
   const knownTasks = new Set(tasks.map(task => task.id))
   for (const task of tasks) {
     if (!task.id) continue
-    add(assignments, task.name, { kind: 'assignment', id: task.id, scope: 'assignment:' + task.id },
+    add(assignments, task.name, { kind: 'assignment', id: task.id, scope: assignmentScope(task.id) },
       'folder', now)
   }
 
@@ -90,7 +91,7 @@ export function buildSvarProjection(
         const taskId = folder.parentId.slice('assignment:'.length)
         if (!knownTasks.has(taskId)) continue
         parentPath = paths.get(pathKey('assignment', taskId))!
-        scope = 'assignment:' + taskId
+        scope = assignmentScope(taskId)
       } else if (folder.parentId) {
         const target = paths.get(pathKey('folder', folder.parentId))
         if (!target) { remaining.push(folder); continue }
@@ -125,7 +126,7 @@ export function buildSvarProjection(
       continue
     const assignmentId = photoAssignmentId(photo)
     if (assignmentId && !knownTasks.has(assignmentId)) continue
-    const scope: BrowserScope = assignmentId ? 'assignment:' + assignmentId : 'personal'
+    const scope: BrowserScope = assignmentId ? assignmentScope(assignmentId) : 'personal'
     const defaultParent = assignmentId ? paths.get(pathKey('assignment', assignmentId))! : personal
     const specified = photoFolder.get(scope + ':' + photo.id)
     const base = specified || defaultParent
