@@ -124,3 +124,5 @@ docker compose ps --all
 - final device/PWA upgrade acceptance.
 
 Последняя публикация Status/entry loader: `main@a206f19`, `entry-status-20261106-1`; 15 frontend source files и shell. Backup `/var/www/photobunker/.local/backups/entry-status-20261106-1-before/`. Старые assets сохранены; checksum dry-run пустой, exit 0; index → SW → release marker. [Публичная сверка сборки/headers/health](evidence/entry-status-20261106/deploy.json) — exit 0. Production Playwright подтвердил marker; private login, hardware и installed-PWA update — `NOT RUN`. Backend/данные не менялись.
+
+Публикация Public card: `main@3233f4b`, release `public-card-20261106-1`; 23 frontend source files, 2 PHP validators и shell. Backup `/var/www/photobunker/.local/backups/public-card-20261106-1-before/` содержит shell/source-web/source-api. Новые assets загружены первыми, старые сохранены; checksum dry-run пустой; PHP lint на сервере exit 0. OPcache validate_timestamps On, revalidate_freq 2; restart/migrations/изменения данных не выполнялись. [Публичная сверка](evidence/public-card-20261106/deploy.json). Private owner publish/hardware/PWA — `NOT RUN`.
