@@ -16,11 +16,12 @@
 
 | Объект | Факт | Статус |
 | --- | --- | --- |
-| Handoff branch | `handoff/owner-agent-2026-11-06` | `CONFIRMED` |
+| Рабочая ветка | `main`; handoff baseline `ac6e942` перенесён fast-forward | `CONFIRMED` локально 2026-11-06 |
 | Implementation snapshot | `595be251ae092ae40cd2354bc910afa31ecc76e5` | `CONFIRMED` local Q1 implementation |
+| Q1 dock source commit | `595ec85` на `main` и `origin/main` | `CONFIRMED` 2026-11-06 |
 | Активный runtime | `compat/assignment-release/` | `CONFIRMED` |
-| Production URL | `https://photobunker.duckdns.org` | `CONFIRMED` 2026-11-05 |
-| Release marker | `q1-dock-20261106-1` | `CONFIRMED` production 2026-11-06 |
+| Production URL | `https://photobunker.duckdns.org` | `CONFIRMED` 2026-11-06 |
+| Release marker | `q1-dock-20261106-2` | `CONFIRMED` production 2026-11-06 |
 | Server HTTP/API health | root, health, ready возвращают 200 | `CONFIRMED` 2026-11-06 |
 | Owner mobile acceptance | повторно выявлены критические UX/functional defects | `OWNER FAILED` |
 
@@ -59,6 +60,20 @@
   Статус остаётся ниже `ACCEPTED` до проверки владельца.
 
 Ни один пункт выше не означает, что текущий интерфейс принят или что полный final-branch pipeline пройден.
+
+### Q1 dock candidate 2026-11-06 (текущая правка, до owner acceptance)
+
+- `IMPLEMENTED`: убрана постоянная заливка Camera, все пять пунктов используют один outline icon style; активный раздел показывает тонкий верхний индикатор и `aria-current="page"` без отдельной карточки. На phone dock остаётся у нижней границы, подписи имеют 12 px и не обрезаются на 320/375/390 px.
+- `CONFIRMED` baseline: 2026-11-06 03:25:39 Asia/Tbilisi, `/assignments`, 320×700. До правки Camera была залита акцентом вне своего маршрута, активный пункт имел pill, подписи были 10 px. Снимки [до](evidence/q1-dock-20261106/before-assignments-320x700.png), [после](evidence/q1-dock-20261106/after-assignments-320x700.png) и [светлая тема](evidence/q1-dock-20261106/after-camera-light-390x844.png).
+- `CONFIRMED test`: Playwright MCP на локальном Vue runtime с временным in-memory fixture (без создания аккаунта): 320×700, 375×812, 390×844, 844×390 и 1440×900; на phone нижняя граница dock совпадает с viewport, все targets ≥59 px по высоте, нет horizontal overflow/обрезанных labels; Assignments → Contacts → Camera сохраняет геометрию и единственный active state. Light/dark и клавиатурный focus проверены.
+- `CONFIRMED test`: `PLAYWRIGHT_BASE_URL=http://127.0.0.1:8081 PLAYWRIGHT_COMPAT_URL=http://127.0.0.1:8081 ./node_modules/.bin/playwright test tests/e2e/compat-dock.spec.mjs --project=chromium` — 1 test PASS, exit 0; включая `prefers-reduced-motion: reduce`.
+- `CONFIRMED test`: `docker compose -f compat/assignment-release/compose.yaml exec -T web npm test -- tests/app.test.ts tests/pwa-update.test.ts tests/service-worker.test.ts` — 3 files / 13 tests PASS, exit 0.
+- `CONFIRMED build`: `docker compose -f compat/assignment-release/compose.yaml exec -T -e PHOTOBUNKER_RELEASE_ID=q1-dock-20261106-2 web npm run build` — exit 0; local `dist/release.json` содержит новый marker.
+- `CONFIRMED production`: static bundle из `595ec85` опубликован в `/var/www/photobunker/apps/web/dist`; прежние файлы shell и два исходника сохранены в `/var/www/photobunker/.local/backups/q1-dock-20261106-2-before/`. Новые immutable assets загружены до `index.html`, `sw.js` и последним `release.json`; `rsync -rcn --itemize-changes` для assets — пустой diff, exit 0. Публичные `index.html`, `sw.js`, `release.json`, CSS и JS побайтно совпали с локальным build (`cmp -s`, exit 0); marker — `q1-dock-20261106-2`. Root/SW/release — HTTP 200 и `no-store`, CSS — HTTP 200 и `immutable`; `/api/v1/health` — `ok`, `/api/v1/ready` — `ready`. Playwright MCP открыл публичный `/welcome` и получил тот же marker; ответ 401 от `/api/v1/identity/me` ожидаем для гостя.
+- `CONFIRMED` размер CSS в сопоставимом формате: публичный `index-TYbynOX6.css` прежнего release и новый `index-CU41a-Pv.css`, `gzip -n -c | wc -c` — 29 940 → 29 987 bytes (+47). Это размер transfer artifact, не Lighthouse latency или RUM.
+- `NOT RUN`: Lighthouse CI — нет установленного `lhci`/конфигурации и сопоставимого baseline для приватного маршрута; CSS-only изменение не доказывает улучшение latency. Реальный iPhone/Android и installed-PWA upgrade также `NOT RUN`.
+- Локальный API `/api/v1/ready` отвечает 500 (`require_once(/index.php)`), поэтому fixture подтверждает только визуальное поведение dock; server auth/data flows им не проверены. Статус owner mobile acceptance остаётся `OWNER FAILED`.
+- `NOT RUN` owner acceptance: на реальном телефоне закрыть и снова открыть установленную PWA, убедиться, что release обновился без удаления локальных данных; открыть Assignments → Contacts → Camera и проверить dock у нижней safe-area, читаемые подписи, ровно один активный пункт и отсутствие скачка. До ответа владельца Q1 не считать `ACCEPTED`.
 
 ## 4. Код существует, но приёмка не пройдена
 

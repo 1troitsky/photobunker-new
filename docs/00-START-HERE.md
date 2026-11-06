@@ -4,10 +4,10 @@
 
 ## 1. Какая ветка является рабочей
 
-- Рабочая ветка: `handoff/owner-agent-2026-11-06`.
+- Рабочая ветка: `main`; handoff-ветка сохранена как точка передачи.
 - База handoff: `53f7d696d385fd81d3611089873db425c9175e8d` (`wip(handoff): preserve deployed integration state`).
-- `main` не содержит поздние изменения и не является точкой продолжения.
-- Предыдущая сохранённая ветка: `codex/integration-2026-11-04`; она остаётся резервным evidence, но новую работу вести в handoff-ветке.
+- Поздние изменения перенесены в `main` через fast-forward от `handoff/owner-agent-2026-11-06` на `ac6e942`.
+- Предыдущая сохранённая ветка: `codex/integration-2026-11-04`; она остаётся резервным evidence.
 
 ## 2. Почему репозиторий выглядит как два приложения
 
@@ -35,7 +35,7 @@
 
 - Production URL: `https://photobunker.duckdns.org`.
 - Remote directory: `/var/www/photobunker`.
-- Последний release marker: `dock-pwa-20261105-1`.
+- Последний подтверждённый release marker: `q1-dock-20261106-2` (см. `docs/15-*`).
 - `/`, `/api/v1/health`, `/api/v1/ready` отвечали `200` после последнего deploy.
 - `release.json`, `sw.js` и navigation HTML настроены как `no-store`; assets — content-hashed immutable.
 - PWA update code существует, но новый док после этого deploy владелец ещё не подтвердил.
