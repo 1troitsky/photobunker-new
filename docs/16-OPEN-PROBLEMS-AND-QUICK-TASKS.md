@@ -68,6 +68,8 @@ Status / entry loader: прежний overlay при каждом переход
 
 ## 4. Photo view, Photo Card и Editor
 
+Последнее решение владельца подтверждено: Photo-card — публичная страница вне приложения. `3b33912` / `public-photo-card-20261106-1` — `IMPLEMENTED`; частный preview и самодельная browser sheet удалены. Основные поля: фото, title/ID, description, photo expiry, GPS/map при разрешении. Остальные поля — assignment capture snapshot ∩ photo policy. Проверка владельца: открыть фото → Public card → публичная страница в браузере; скопировать URL → открыть без входа; обновить страницу; проверить запрет GPS/дополнительных полей. [Снимки/проверки/NOT RUN](PUBLIC-CARD-2026-11-06.md). Предыдущие два UX-варианта остаются `OWNER FAILED`.
+
 Opening correction `769e3a5` / `public-card-sheet-20261106-1`: in-app bottom browser sheet, close and explicit device-browser control. Previous `public-card-20261106-1` opening is `OWNER FAILED` (white screen/restart). Current candidate `IMPLEMENTED`; owner check: Browser → Public card → bottom sheet → close → same screen without restart. [Evidence/limits](PUBLIC-CARD-2026-11-06.md). External link prepares inside app, then opens by explicit anchor tap. Hardware/PWA/private publish: `NOT RUN`.
 
 Public card `3233f4b`, release `public-card-20261106-1` — `IMPLEMENTED`: новое окно и полевая visibility policy, настройки фото/задания и снимок правил при capture. [Снимки/ограничения](PUBLIC-CARD-2026-11-06.md). Проверка владельца: Photo → Public card → новое окно; отключить GPS в параметрах фото → создать новую ссылку; изменить правила задания → новый снимок, старые фото не меняются. Production private publish и iOS/PWA — `NOT RUN`. Прежние замечания остаются `OWNER FAILED` до приёмки.

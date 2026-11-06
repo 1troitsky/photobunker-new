@@ -1,5 +1,7 @@
 # 17. Deployment и состояние окружения
 
+Последняя публикация: `main@3b33912`, `public-photo-card-20261106-1`; 21 frontend source/index file, 1 PHP metadata validator, shell. Два заменённых Vue source files перемещены в backup/retired; старые compiled assets сохранены. Backup `/var/www/photobunker/.local/backups/public-photo-card-20261106-1-before/` содержит source-web/source-api/shell. PHP lint и checksum validator — exit 0; assets checksum dry-run пустой, index → SW → release. [Публичные файлы/headers/health](evidence/public-photo-card-20261106/deploy.json) совпали со сборкой. Миграции/restart/изменения данных не выполнялись. Private owner publish и реальный телефон — `NOT RUN`.
+
 Latest candidate: `main@769e3a5`, `public-card-sheet-20261106-1`; 9 frontend source files and shell. Backup `/var/www/photobunker/.local/backups/public-card-sheet-20261106-1-before/`. Old assets preserved; checksum dry-run empty, exit 0; index → SW → release. [Public verification](evidence/public-card-sheet-20261106/deploy.json). Backend/data unchanged. Real phone/PWA/private publish: `NOT RUN`.
 
 Дата среза: 2026-11-06. Этот runbook не разрешает destructive операции.
