@@ -137,7 +137,7 @@ export function resumeEmergency():Promise<boolean> {
  * wrong app PIN must NEVER call this method (no destructive side effects).
  */
 export async function tryEmergencyOnLockedScreen(pin:string):Promise<boolean> {
-  if(!/^\d{6,10}$/.test(pin) || !navigator.locks?.request)return false
+  if(!/^\d{6,12}$/.test(pin) || !navigator.locks?.request)return false
   if(await readEmergencyCommand()){stopPrivateAccess();return true}
   const scope={owner:account.value?.id??'',device:deviceId.value}
   if(!scope.owner||!scope.device)return false
