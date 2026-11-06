@@ -1,0 +1,54 @@
+<!doctype html><meta charset="utf-8"><title>Public card synthetic publication check</title><output id="result">Running</output>
+<script type="module">
+import {account,deviceId,sessionState,offlineCaptureIdentity} from '/src/identity/store.ts'
+import {bindIdentity,bindPhotoReadToken} from '/src/identity/api.ts'
+import {appLockReady,appLocked} from '/src/app/lock.ts'
+import {strongUnlocked,warmLocked} from '/src/crypto/state.ts'
+import {commitCardShare,flushCardShares,listCardShareIntents} from '/src/crypto/card-share-outbox.ts'
+import {CARD_ONLY} from '/src/crypto/card-shares.ts'
+const owner='synthetic-publication-20261107'
+account.value={id:owner,publicId:'SYNTHETIC',revision:0,fields:{},visibility:{},matrix:{state:'pending',userId:null}}
+deviceId.value='synthetic-publication-device';sessionState.value='authenticated';offlineCaptureIdentity.value=false
+appLockReady.value=true;appLocked.value=false;strongUnlocked.value=true;warmLocked.value=false
+bindIdentity(owner);bindPhotoReadToken('synthetic-proof')
+let posts=0
+const publishedId=crypto.randomUUID();let publishedPhoto
+const original=fetch.bind(window)
+window.fetch=(url,options)=>{
+ if(String(url).endsWith('/workspace/photos/'+publishedId))return Promise.resolve(new Response(JSON.stringify({photo:publishedPhoto}),{status:200,headers:{'Content-Type':'application/json'}}))
+ if(String(url).includes('/api/v1/identity/secure/photos/')&&String(url).endsWith('/cards')&&options?.method==='POST'){
+  posts++;return Promise.resolve(new Response(JSON.stringify({id:JSON.parse(options.body.get('manifest')).id}),{status:200,headers:{'Content-Type':'application/json'}}))
+ }
+ return original(url,options)
+}
+window.__check={phase:'canvas'}
+try{
+ const canvas=document.createElement('canvas');canvas.width=canvas.height=100
+ canvas.getContext('2d').fillRect(0,0,100,100)
+ const blob=await new Promise(r=>canvas.toBlob(r,'image/jpeg'))
+ const id=crypto.randomUUID()
+ const card={id,title:'Synthetic card',nameId:'TEST0001',namePending:false,expiresAt:Date.now()+86400000}
+ window.__check.phase='commit'
+ const row=await commitCardShare(id,card,{...CARD_ONLY,metadata:true,photo:true,download:true},Date.now()+3600000,3600,{photo:{blob,versionId:crypto.randomUUID()}})
+ window.__check.phase='flush'
+ await flushCardShares()
+ const saved=(await listCardShareIntents(id)).find(x=>x.id===row.id)
+ window.__check={phase:'complete',posts,state:saved?.state,hasPublicUrl:saved?.url.includes('/c/'),error:!!saved?.lastError}
+}catch(error){window.__check={phase:window.__check.phase,error:error?.name,message:error?.message}}
+if(window.__check.phase==='complete'){
+ try{
+  const {createApp,h}=await import('/node_modules/.vite/deps/vue.js')
+  const {default:Link}=await import('/src/components/PublicCardLink.vue')
+  const repository=await import('/src/studio/repository.ts')
+  const c=document.createElement('canvas');c.width=c.height=100;c.getContext('2d').fillRect(0,0,100,100)
+  const image=await new Promise(r=>c.toBlob(r,'image/jpeg'))
+  publishedPhoto={id:publishedId,accountId:owner,remoteRevision:1,title:'Synthetic existing photo',shortId:'TEST0001',note:'Synthetic publication check',favorite:false,createdAt:Date.now(),expiresAt:Date.now()+86400000,width:100,height:100,bytes:image.size,mime:'image/jpeg',method:'demo',workspaceAccess:{role:'owner',read:true,thumbnail:true,edit:true,delete:true,share:true,shareExternal:true}}
+  await repository.save('account:'+owner,'versions:'+publishedId,{id:crypto.randomUUID(),revision:0,parentId:publishedId,createdAt:Date.now(),sync:'synced',conflict:false,blob:image,width:100,height:100,edits:{}},0)
+  const host=document.createElement('div');document.body.append(host)
+  createApp({render:()=>h(Link,{photo:{...publishedPhoto,remoteRevision:undefined,workspaceAccess:undefined},menu:true})}).mount(host)
+  const start=performance.now();while(!host.querySelector('a')&&performance.now()-start<6000)await new Promise(r=>setTimeout(r,25))
+  window.__check.component={ready:!!host.querySelector('a'),externalTarget:host.querySelector('a')?.target==='_blank',noPrivatePanel:!host.querySelector('[role=dialog]'),posts,error:host.querySelector('p')?.textContent||''}
+ }catch(error){window.__check.component={error:error?.name,message:error?.message}}
+}
+document.getElementById('result').textContent=JSON.stringify(window.__check)
+</script>

@@ -27,7 +27,10 @@ async function publishCard(photoId: string) {
   const { publicPhotoCard } = await import('./public-card-policy')
   const { CARD_ONLY } = await import('../crypto/card-shares')
   const { commitCardShare, flushCardShares, listCardShareIntents } = await import('../crypto/card-share-outbox')
-  const card = publicPhotoCard(await readPrivateCardPhoto(photoId))
+  const publishedPhoto = await readPrivateCardPhoto(photoId, true)
+  if (!publishedPhoto.workspaceAccess?.read || !publishedPhoto.workspaceAccess.shareExternal)
+    throw new Error('card_share.denied')
+  const card = publicPhotoCard(publishedPhoto)
   const version = await prepareCardPhotoVersion(photoId)
   const files = await shareCardImages(photoId, version.id, false)
   if (!owner || owner !== account.value?.id || !photoReadAllowed()) throw new Error('card_share.account_changed')
@@ -47,7 +50,7 @@ async function publishCard(photoId: string) {
 export async function prepareCardPhotoVersion(photoId: string) {
   const owner = account.value?.id
   if (!owner || !photoReadAllowed()) throw new Error('card_share.locked')
-  const current = await readPrivateCardPhoto(photoId)
+  const current = await readPrivateCardPhoto(photoId, true)
   const versions = await listPhotoVersions(current)
   if (versions.length) {
     // A pending/redacted edit must never fall back to pixels of the original.
@@ -78,7 +81,7 @@ export async function shareCardImages(photoId:string, versionId:string|null,
 }> {
   const owner=account.value?.id
   if (!owner || !photoReadAllowed()) throw new Error('card_share.locked')
-  const photo:Photo=await readPrivateCardPhoto(photoId)
+  const photo:Photo=await readPrivateCardPhoto(photoId, true)
   if (photo.accountId!==owner || !photo.workspaceAccess?.shareExternal ||
       !photo.workspaceAccess.read || photo.deleteRequested || isExpired(photo))
     throw new Error('card_share.denied')

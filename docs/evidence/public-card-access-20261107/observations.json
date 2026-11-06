@@ -1,0 +1,47 @@
+{
+  "release": "public-card-access-20261107-1",
+  "before": {
+    "command": "docker compose -f compat/assignment-release/compose.yaml exec -T web npm test -- tests/public-card-link.test.ts",
+    "exitCode": 1,
+    "result": "Cached photo missing grant/revision never invoked publisher; reproduced inert Public card button."
+  },
+  "after": {
+    "command": "docker compose -f compat/assignment-release/compose.yaml exec -T web npm test -- tests/public-card-link.test.ts tests/public-card-publication.test.ts tests/public-card-metadata-read.test.ts tests/public-card-image-source.test.ts tests/public-card-policy.test.ts",
+    "exitCode": 0,
+    "result": "14 checks passed; actual publication orchestration, actual card encryption/decryption, mocked photo/version data and HTTP ACK; server denial cannot use stale grant."
+  },
+  "browser": {
+    "url": "http://127.0.0.1:8081/tests/browser/public-card-availability.html",
+    "phase": "complete",
+    "posts": 1,
+    "state": "sent",
+    "hasPublicUrl": true,
+    "error": false,
+    "component": {
+      "ready": true,
+      "externalTarget": true,
+      "noPrivatePanel": true,
+      "posts": 2,
+      "error": ""
+    },
+    "notes": "Real component, publication service, sanitized image export, AES encryption, native IndexedDB+CryptoKey+Web Locks. Synthetic photo/confirmed version; scoped metadata/POST HTTP fixture. No real owner data."
+  },
+  "build": {
+    "command": "docker compose -f compat/assignment-release/compose.yaml exec -T -e PHOTOBUNKER_RELEASE_ID=public-card-access-20261107-1 web npm run build",
+    "exitCode": 0
+  },
+  "serverReadOnlyDiagnostic": {
+    "encryptedPhotos": 10,
+    "encryptedVersions": 6,
+    "activeCardShares": 0,
+    "conflictingVersions": 0,
+    "privateDataPrinted": false
+  },
+  "notRun": [
+    "Exact cause/state inside owner's browser",
+    "Publication from owner's actual account",
+    "Native iOS/Android/PWA",
+    "Lighthouse/performance"
+  ],
+  "limitations": "Removed pre-publication UI gates on missing cached grant/revision and fixed lost metadata settings. Authoritative published-photo reader and server ACL remain mandatory; no permission bypass."
+}

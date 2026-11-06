@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { inject, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { appStatusKey } from '../app/status'
+import { appStatusKey, statusDetailsRequest } from '../app/status'
 import { locale } from '../i18n'
 import AppIcon from './AppIcon.vue'
 
@@ -29,6 +29,11 @@ async function retry() {
 }
 watch(() => route.fullPath, () => close())
 watch(() => status?.value, value => { if (!value) close() })
+watch(statusDetailsRequest, async () => {
+  if (!status?.value) return
+  open.value=true; retryFailed.value=false
+  await nextTick(); toast.value?.focus({preventScroll:true})
+})
 onMounted(() => document.addEventListener('pointerdown', outside))
 onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
 </script>

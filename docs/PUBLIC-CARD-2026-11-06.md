@@ -1,5 +1,13 @@
 # Public card — 2026-11-06
 
+## Доступность кнопки — 2026-11-07
+
+Владелец отклонил `public-photo-card-20261106-1`: обычная Public card недоступна на всех фото при включённых настройках (`OWNER FAILED`). Точно воспроизведён один путь блокировки: неполная cached photo без workspaceAccess/remoteRevision не вызывала publisher вообще. В `public-card-access-20261107-1` убрана эта проверка из UI; publisher читает подтверждённое серверное фото, не использует pending/cached metadata как разрешение. Фактический read/shareExternal grant и server ACL обязательны. Установленный policy deny не публикует данные. Кнопка больше не молчит: повтор/причина доступны через существующий status toast, без нового экрана или изменений viewer layout.
+
+В encrypted metadata reader исправлена отдельная ошибка: сохранённые publicCard/editedAt терялись при слиянии capture/latest. Теперь читаются последние per-photo settings, а capture assignment ceiling остаётся неизменным. Никакие PIN/ключи/криптоалгоритмы/серверные права не ослаблены.
+
+[Наблюдения и команды](evidence/public-card-access-20261107/observations.json): до исправления regression падал (publisher calls 0), после — 14 targeted checks exit 0. Browser harness [public-card-availability.html](../compat/assignment-release/apps/web/tests/browser/public-card-availability.html) выполняет реальный component → publisher → image export → AES → IndexedDB/Web Locks → POST/ACK → external link на synthetic metadata/version/HTTP fixture; результат ready=true, state=sent. Это не проверка аккаунта владельца. Build/diff check exit 0. Причина в реальном browser state владельца и production owner publish, hardware/PWA — `NOT RUN`. Статус `IMPLEMENTED`; приёмку может подтвердить только владелец.
+
 ## Действующее согласованное требование: публичная Photo-card
 
 Опубликован `main@3b33912`, release `public-photo-card-20261106-1`; [сверка публичной сборки, headers и health](evidence/public-photo-card-20261106/deploy.json) — exit 0. На production путь недействительной публичной ссылки показывает собственное unavailable-состояние без App/PIN/private API. Успешный publish от реального владельца и мобильная приёмка — `NOT RUN`.

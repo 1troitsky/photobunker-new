@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import type { Photo } from '../local/photos'
 import AppIcon from './AppIcon.vue'
 import { account, deviceId } from '../identity/store'
@@ -7,31 +7,50 @@ import { appLocked } from '../app/lock'
 import { strongUnlocked, warmLocked } from '../crypto/store'
 import { effectivePublicCardPolicy } from '../studio/public-card-policy'
 import { createPublicCardLink } from '../studio/card-share-images'
-import { usePageLoad } from '../app/page-load'
+import { usePageIssue, usePageLoad } from '../app/page-load'
+import { openStatusDetails } from '../app/status'
 import { q } from '../crypto/text'
 const props = defineProps<{ photo: Photo; menu?: boolean; versionKey?: string }>()
 const url = ref(''), pending = ref(false), failed = ref(false), message = ref('')
 usePageLoad(pending)
-const allowed = computed(() => effectivePublicCardPolicy(props.photo).enabled &&
-  props.photo.workspaceAccess?.read && props.photo.workspaceAccess?.shareExternal)
+// A cached list entry is not an authoritative server grant or upload receipt.
+// The publisher re-reads and checks the current protected photo before exporting.
+const allowed = computed(() => effectivePublicCardPolicy(props.photo).enabled)
+usePageIssue(failed, {detail:() => message.value,retry:() => prepare(true)})
 const scope = computed(() => JSON.stringify([account.value?.id,deviceId.value,appLocked.value,
   strongUnlocked.value,warmLocked.value,props.photo.id,props.photo.remoteRevision,props.photo.expiresAt,
   props.photo.title,props.photo.note,props.photo.tags,props.photo.metadata,props.versionKey,allowed.value]))
 let epoch = 0
-async function prepare() {
+async function prepare(showDetails = false) {
   const token = ++epoch
   url.value = ''; failed.value = false; message.value = ''
-  if (!allowed.value || appLocked.value || !strongUnlocked.value || warmLocked.value) { pending.value=false; return }
-  if (props.photo.remoteRevision === undefined) { message.value=q('Карточка будет доступна после отправки фотографии.'); return }
+  pending.value = false
+  if (appLocked.value) return
+  if (!allowed.value || !strongUnlocked.value || warmLocked.value) {
+    message.value = q(!allowed.value ? 'Публичная карточка выключена разрешениями фотографии или задания.' : 'Откройте доступ к защищённым фотографиям, чтобы опубликовать карточку.')
+    failed.value = showDetails
+    if (showDetails) { await nextTick(); openStatusDetails() }
+    return
+  }
   pending.value = true
   try {
     const result = await createPublicCardLink(props.photo.id, scope.value)
     if (token === epoch) url.value = result
-  } catch {
-    if (token === epoch) { failed.value=true; message.value=q('Не удалось открыть публичную карточку. Проверьте соединение и повторите.'); }
+  } catch (error) {
+    if (token === epoch) {
+      const code = error instanceof Error ? error.message : ''
+      const status = (error as {status?:number})?.status
+      message.value = q(code === 'public_card.disabled' ? 'Публичная карточка выключена разрешениями фотографии или задания.'
+        : code === 'card_share.denied' || status === 403 ? 'Нет разрешения на публичную публикацию этой фотографии.'
+        : code === 'card_share.not_uploaded' || status === 404 ? 'Фотография ещё не отправлена на сервер. Дождитесь синхронизации и повторите.'
+        : code === 'version.unavailable' ? 'Обработка фотографии ещё не отправлена на сервер. Дождитесь синхронизации и повторите.'
+        : 'Не удалось подготовить публичную карточку. Проверьте соединение и повторите.')
+      failed.value=true
+      if (showDetails) { await nextTick(); openStatusDetails() }
+    }
   } finally { if (token === epoch) pending.value=false }
 }
-watch(scope, prepare, {immediate:true,flush:'sync'})
+watch(scope, () => {void prepare()}, {immediate:true,flush:'sync'})
 onBeforeUnmount(() => {epoch++;url.value='';pending.value=false})
 async function share() {
   if (!url.value) return
@@ -44,7 +63,7 @@ async function share() {
 <template>
   <a v-if="url" :href="url" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer"
     :class="['public-card-link',{'public-card-menu-link':menu}]" :aria-label="q('Открыть Public card в браузере')"><AppIcon name="profiles" /><span>Public card</span></a>
-  <button v-else type="button" :class="['public-card-link',{'public-card-menu-link':menu}]" :disabled="!failed" :title="message || (!allowed ? q('Публичная карточка запрещена разрешениями фотографии или задания.') : '')" @click="prepare"><AppIcon name="profiles" /><span>{{ q(pending ? 'Public card…' : failed ? 'Повторить Public card' : 'Public card') }}</span></button>
+  <button v-else type="button" :class="['public-card-link',{'public-card-menu-link':menu}]" :disabled="pending || appLocked" :title="message" @click="prepare(true)"><AppIcon name="profiles" /><span>{{ q(pending ? 'Public card…' : failed ? 'Повторить Public card' : 'Public card') }}</span></button>
   <button v-if="menu && url" class="public-card-link public-card-menu-link" type="button" @click="share"><AppIcon name="share" /><span>{{ q('Поделиться карточкой') }}</span></button>
   <p v-if="menu && message" class="field-hint" role="status">{{ message }}</p>
 </template>

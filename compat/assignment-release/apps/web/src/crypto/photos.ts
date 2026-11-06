@@ -695,6 +695,9 @@ async function metadata(remote: Remote): Promise<Photo> {
       location: m.location,
       locationStatus: m.locationStatus,
       locationEditedAt: m.locationEditedAt,
+      publicCard: m.publicCard ?? captured.metadata?.publicCard,
+      publicCardAssignment: captured.metadata?.publicCardAssignment ?? m.publicCardAssignment,
+      editedAt: m.editedAt,
     }
   }
   if (gpsValue) {

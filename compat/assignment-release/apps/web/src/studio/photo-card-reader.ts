@@ -19,24 +19,24 @@ export function privateCardScopeAllowed(): boolean {
  * Local metadata first; remote metadata only if no authorized local photo
  * exists. No original, preview, thumbnail or blob URL requested.
  */
-export async function readPrivateCardPhoto(id: string): Promise<Photo> {
+export async function readPrivateCardPhoto(id: string, published = false): Promise<Photo> {
   const owner = account.value?.id
   if (!owner || !privateCardScopeAllowed()) throw new Error('photo_card.locked')
   if (protectionEnabled.value) {
     if (!photoReadAllowed()) throw new Error('photo_card.locked')
-    const cached = await readLocalCardMetadata(id)
+    const cached = published ? undefined : await readLocalCardMetadata(id)
     if (owner !== account.value?.id || !privateCardScopeAllowed()) throw new Error('photo_card.locked')
     // A published photo may have been revoked/deleted server-side.
     // Online, always re-check authenticated grants; only a local pending
     // capture or a genuinely offline trusted device may use this snapshot.
-    if (cached && (cached.remoteRevision === undefined ||
+    if (!published && cached && (cached.remoteRevision === undefined ||
         !navigator.onLine || !hasConfirmedIdentity())) return cached
   } else {
     // Non-E2EE local prototype: only this account's unsent photo, not a
     // stale copy of an already uploaded server object with revocable ACL.
-    const local = await readMetadata(id).catch(() => undefined)
+    const local = published ? undefined : await readMetadata(id).catch(() => undefined)
     if (owner !== account.value?.id || !privateCardScopeAllowed()) throw new Error('photo_card.locked')
-    if (local?.accountId === owner && local.remoteRevision === undefined &&
+    if (!published && local?.accountId === owner && local.remoteRevision === undefined &&
         !local.uiVersionOf && !local.deleteRequested && !isExpired(local) &&
         localVisible(local) && pendingAccess(local)) {
       return { ...local, workspaceAccess: pendingGrant(local) }

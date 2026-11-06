@@ -9,6 +9,8 @@ export type AppStatus = {
 } | null
 
 export const appStatusKey: InjectionKey<ComputedRef<AppStatus>> = Symbol('app-status')
+export const statusDetailsRequest = ref(0)
+export function openStatusDetails() { statusDetailsRequest.value++ }
 
 export type DiagnosticEvent = {
   id: number

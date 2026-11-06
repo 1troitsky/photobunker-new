@@ -14,6 +14,14 @@ import type { Photo } from '../src/local/photos'
 const photo=():Photo=>({id:'photo',accountId:'owner',remoteRevision:1,encrypted:true,title:'Synthetic',note:'',favorite:false,createdAt:Date.now(),expiresAt:Date.now()+3600000,width:10,height:10,bytes:100,mime:'image/jpeg',method:'demo',workspaceAccess:{role:'owner',read:true,thumbnail:true,edit:true,delete:true,share:true,shareExternal:true}})
 beforeEach(()=>{appLocked.value=false;publish.mockReset();publish.mockResolvedValue('https://example.test/c/synthetic#public-capability')})
 describe('Direct public card link',()=>{
+  it('checks the publisher instead of permanently disabling a cached photo without grant/revision fields',async()=>{
+    const input=photo();delete input.remoteRevision;delete input.workspaceAccess
+    const wrapper=mount(PublicCardLink,{props:{photo:input}})
+    await flushPromises()
+    expect(publish).toHaveBeenCalled()
+    expect(wrapper.find('a').exists()).toBe(true)
+    wrapper.unmount()
+  })
   it('prepares an ordinary external link and removes it when the app locks',async()=>{
     const open=vi.spyOn(window,'open')
     const wrapper=mount(PublicCardLink,{props:{photo:photo()}})
@@ -33,7 +41,9 @@ describe('Direct public card link',()=>{
     const wrapper=mount(PublicCardLink,{props:{photo:input}})
     await flushPromises()
     expect(publish).not.toHaveBeenCalled();expect(wrapper.find('a').exists()).toBe(false)
-    expect(wrapper.get('button').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('button').attributes('disabled')).toBeUndefined()
+    await wrapper.get('button').trigger('click');await flushPromises()
+    expect(publish).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 })
