@@ -21,7 +21,7 @@
 | Q1 dock source commit | `595ec85` на `main` и `origin/main` | `CONFIRMED` 2026-11-06 |
 | Активный runtime | `compat/assignment-release/` | `CONFIRMED` |
 | Production URL | `https://photobunker.duckdns.org` | `CONFIRMED` 2026-11-06 |
-| Release marker | `pr55-browser-20261106-1` | `CONFIRMED` production 2026-11-06 |
+| Release marker | `pr54-pin-20261106-1` | `CONFIRMED` production 2026-11-06 |
 | Server HTTP/API health | root, health, ready возвращают 200 | `CONFIRMED` 2026-11-06 |
 | Owner mobile acceptance | повторно выявлены критические UX/functional defects | `OWNER FAILED` |
 
@@ -78,8 +78,6 @@
 - `NOT RUN` owner acceptance: на реальном телефоне закрыть и снова открыть установленную PWA, убедиться, что release обновился без удаления локальных данных; открыть Assignments → Contacts → Camera и проверить dock у нижней safe-area, читаемые подписи, ровно один активный пункт и отсутствие скачка. До ответа владельца Q1 не считать `ACCEPTED`.
 
 ## 4. Код существует, но приёмка не пройдена
-
-PR #55 интегрирован в main (`1cf7b32`, исправления `7f9e959`) и опубликован как `pr55-browser-20261106-1`. `/browser` использует SVAR 2.6.0, pinned lockfile, локальные шрифты и EN/RU labels; вывод названий папок из upstream render удалён при сборке. Playwright MCP на синтетической local identity проверил создание вложенной папки, отмену без записи, rename/move, Personal/A/B isolation, list/cards и сохранение folder UI при ошибке фото-библиотеки; 320/390/1440 px без document overflow. Минимальный Node-сценарий account/scope/expiry/thumbnail filtering и production build завершились exit 0. Public HTML/SW/release/main assets/Browser chunk/CSS/font совпали с build, health/ready — 200. Backup: `/var/www/photobunker/.local/backups/pr55-browser-20261106-1-before/`. `READY FOR OWNER REVIEW`: переоткрыть PWA → Browser → Мои фото, создать вложенную папку, затем проверить собственные фото задания A и B. Реальные photo open/thumbnail/server CRUD и установленная PWA агентом не проверены; owner acceptance отсутствует. Защита аварийного удаления из PR #54 сохранена.
 
 PR #54 интегрирован в main (`b701503`) и опубликован по прямой команде владельца с защитой аварийного удаления (`7eee94e`), release `pr54-pin-20261106-1`. Публичные HTML/SW/release/CSS/JS побайтно совпали с build, health/ready — 200. Обычный PIN 4–6 цифр, последовательный ввод без таймеров и второй keypad доступны на `/profile/security`; существующие legacy PIN сохранены. Аварийная настройка, trigger, replay и отправка cloud command явно заблокированы до доказательства сохранения backup. `READY FOR OWNER REVIEW` для обычного PIN; emergency — `BLOCKED`. Backup deploy: `/var/www/photobunker/.local/backups/pr54-pin-20261106-1-before/`. Владелец также отклонил dock release `-3`; Q1 остаётся `OWNER FAILED`.
 

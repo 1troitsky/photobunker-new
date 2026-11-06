@@ -49,15 +49,7 @@ export default defineConfig(({ mode }) => {
   const buildId = env.PHOTOBUNKER_RELEASE_ID?.trim() ||
     `${new Date().toISOString().replace(/[-:.TZ]/g, '')}-${process.pid}`
   return {
-    plugins: [vue(), {
-      name: 'photobunker-private-filemanager',
-      enforce: 'pre',
-      transform(code, id) {
-        // SVAR 2.6 logs private folder names during tree rendering.
-        if (/node_modules\/(?:@svar-ui\/vue-filemanager\/dist\/|\.vite\/deps\/@svar-ui_vue-filemanager)/.test(id))
-          return code.replaceAll('console.log(', '(() => undefined)(')
-      },
-    }, appShellWorker(buildId)],
+    plugins: [vue(), appShellWorker(buildId)],
     define: { 'import.meta.env.VITE_BUILD_ID': JSON.stringify(buildId) },
     optimizeDeps: { exclude: ['@matrix-org/matrix-sdk-crypto-wasm'] },
     server: {
