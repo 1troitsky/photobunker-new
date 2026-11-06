@@ -22,7 +22,7 @@
 
 | ID | Статус | Проблема / критерий |
 | --- | --- | --- |
-| UI-01 | `OWNER FAILED` | Q1 candidate 2026-11-06: Camera больше не выделена вне своего маршрута; активный пункт имеет один тонкий индикатор без pill; подписи 12 px, 320/375/390 px без обрезания. Playwright MCP/CLI подтверждают геометрию, но локальный API 500 потребовал in-memory fixture. Владелец должен проверить установленную PWA на телефоне, прежде чем менять статус. |
+| UI-01 | `OWNER FAILED` | Владелец отклонил release `q1-dock-20261106-2`: кнопки по-прежнему слишком высоко. По его команде опубликован `q1-dock-20261106-3` (`main@96c7fce`): резерв нижнего safe-area убран, public CSS имеет `--dock-safe-bottom: 0px`. `READY FOR OWNER REVIEW` — закрыть/открыть установленную PWA и проверить низ дока на Assignments; приёмки владельца ещё нет. |
 | UI-02 | `IMPLEMENTED` | На `595be25` release marker имеет deterministic test; `q1-dock-20261106-2` подтверждён на production по marker, hash, headers и health. Upgrade установленной PWA ещё `NOT RUN`; до проверки владельцем не ставить `ACCEPTED`. |
 | UI-03 | `OWNER FAILED` | На локальном Playwright Assignments ↔ Contacts после загрузки: 4.4–15.7 ms и стабильный dock. Production/RUM и owner mobile recheck ещё `NOT RUN`; прежний owner defect не закрыт. |
 | UI-04 | `OPEN` | После capture навигация не мгновенная. Durable local commit и визуальный результат должны предшествовать фоновой доставке. |

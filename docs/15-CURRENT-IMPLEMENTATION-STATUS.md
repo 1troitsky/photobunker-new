@@ -21,7 +21,7 @@
 | Q1 dock source commit | `595ec85` на `main` и `origin/main` | `CONFIRMED` 2026-11-06 |
 | Активный runtime | `compat/assignment-release/` | `CONFIRMED` |
 | Production URL | `https://photobunker.duckdns.org` | `CONFIRMED` 2026-11-06 |
-| Release marker | `q1-dock-20261106-2` | `CONFIRMED` production 2026-11-06 |
+| Release marker | `q1-dock-20261106-3` | `CONFIRMED` production 2026-11-06 |
 | Server HTTP/API health | root, health, ready возвращают 200 | `CONFIRMED` 2026-11-06 |
 | Owner mobile acceptance | повторно выявлены критические UX/functional defects | `OWNER FAILED` |
 
@@ -62,6 +62,8 @@
 Ни один пункт выше не означает, что текущий интерфейс принят или что полный final-branch pipeline пройден.
 
 ### Q1 dock candidate 2026-11-06 (текущая правка, до owner acceptance)
+
+Последняя проверка владельца release `-2`: `OWNER FAILED`, кнопки остались выше нижнего края. В `main@96c7fce` убран резерв `--dock-safe-bottom`; при сравнении с inset 34 px кнопки в локальном runtime опустились на 29 px, осталось 5 px padding. По прямой команде владельца опубликован `q1-dock-20261106-3` из main, без PR #54/#55. Публичные HTML/SW/release/CSS/JS совпали с build (`cmp -s`, exit 0), API health/ready — 200. Playwright MCP на production подтвердил новый marker и `--dock-safe-bottom: 0px`. Backup: `/var/www/photobunker/.local/backups/q1-dock-20261106-3-before/`. `READY FOR OWNER REVIEW`: закрыть/открыть установленную PWA и проверить низ дока на Assignments. Реальный телефон ещё не проверен агентом.
 
 - `IMPLEMENTED`: убрана постоянная заливка Camera, все пять пунктов используют один outline icon style; активный раздел показывает тонкий верхний индикатор и `aria-current="page"` без отдельной карточки. На phone dock остаётся у нижней границы, подписи имеют 12 px и не обрезаются на 320/375/390 px.
 - `CONFIRMED` baseline: 2026-11-06 03:25:39 Asia/Tbilisi, `/assignments`, 320×700. До правки Camera была залита акцентом вне своего маршрута, активный пункт имел pill, подписи были 10 px. Снимки [до](evidence/q1-dock-20261106/before-assignments-320x700.png), [после](evidence/q1-dock-20261106/after-assignments-320x700.png) и [светлая тема](evidence/q1-dock-20261106/after-camera-light-390x844.png).
