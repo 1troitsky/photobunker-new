@@ -17,7 +17,6 @@ import {
   localTasks,
   removeItem,
   startTask,
-  studioError,
 } from '../studio/store'
 import { photos } from '../local/library'
 import { receipts } from '../workspace/state'
@@ -134,7 +133,8 @@ function navigate(kind: 'edit' | 'duplicate') {
   )
 }
 onMounted(() => {
-  void Promise.allSettled([loadStudio(), refreshAssignments()]).finally(() => { preparing.value = false })
+  if (!account.value) void Promise.allSettled([loadStudio(), refreshAssignments()])
+  preparing.value = false
 })
 </script>
 <template>
@@ -184,11 +184,8 @@ onMounted(() => {
           {{ s(value) }}
         </button>
       </div>
-      <div v-if="studioError || failed" class="form-error assignment-sync-error" role="alert">
-        <span>{{ q(studioError
-          ? 'Не удалось обновить задания с сервера. Локальные задания и изменения сохранены на устройстве.'
-          : 'Не удалось удалить выбранное задание. Откройте «Статус» для подробностей и повторите.') }}</span>
-        <RouterLink to="/status">{{ q('Открыть статус') }}</RouterLink>
+      <div v-if="failed" class="form-error assignment-sync-error" role="alert">
+        <span>{{ q('Не удалось удалить выбранное задание. Повторите попытку.') }}</span>
       </div>
       <article v-for="item in rows" :key="item.id" class="assignment-tile">
         <div class="assignment-tile-heading">

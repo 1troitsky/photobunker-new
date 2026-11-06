@@ -890,5 +890,5 @@ export async function receiveLink() {
 
 export function resumeTrustedPhotos() {
   autoAttempt.clear()
-  void loadProtection()
+  return loadProtection()
 }

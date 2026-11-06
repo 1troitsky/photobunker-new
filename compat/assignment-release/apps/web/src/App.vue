@@ -26,8 +26,9 @@ import {
   photoReadAllowed,
   strongUnlocked,
   warmLocked,
+  cryptoError,
 } from './crypto/store'
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { c } from './collaboration/text'
 import { account } from './identity/store'
 import { profileReturnTo } from './identity/person'
@@ -35,10 +36,11 @@ import { useRoute, useRouter } from 'vue-router'
 import AppIcon from './components/AppIcon.vue'
 import PasscodeInput from './components/PasscodeInput.vue'
 import AppLoader from './components/AppLoader.vue'
-import { pageLoading } from './app/page-load'
+import AppStatusIndicator from './components/AppStatusIndicator.vue'
+import { pageIssues, pageLoading } from './app/page-load'
 import { locale, t } from './i18n'
 import { localPrototype } from './local/photos'
-import { libraryError, libraryLoading, serverError, startLibrary } from './local/library'
+import { libraryError, libraryFailure, libraryRefreshing, refreshLibrary, serverError, startLibrary } from './local/library'
 import { p } from './profiles/text'
 import { delivery, startDelivery } from './delivery/queue'
 import { accessCode, accessSaved } from './server/api'
@@ -54,7 +56,8 @@ import {
   queueBusy as workspaceBusy,
   queueError as workspaceError,
 } from './workspace/state'
-import { startStudio } from './studio/store'
+import { startStudio, loadStudio, studioError, studioLoading } from './studio/store'
+import { refreshProfiles } from './profiles/store'
 import { startActivity } from './identity/activity'
 import { purgeAccountFromDevice } from './identity/storage'
 import { locationEnabled, startGrantedLocation, stopLocation } from './profiles/location'
@@ -104,16 +107,35 @@ const showScopedLocal = computed(() =>
   (offlineCaptureIdentity.value && !!account.value && offlineLocalRoute.value &&
    (sessionState.value === 'offline' || sessionState.value === 'checking')),
 )
-const loaderVisible = ref(false), unlockPreparing = ref(false)
+const loaderVisible = ref(false), entryLoading = ref(false), entryFinished = ref(false)
+let entryScope = '', entryEpoch = 0
 const loaderEnabled = computed(() => !emergencyBlocked.value && !deletionBlocked.value &&
   !['shared-photo', 'shared-card', 'account-auth'].includes(String(route.name)) &&
   !(account.value && (!appLockReady.value || appLocked.value)))
-const workspaceLoading = computed(() => routePending.value || unlockPreparing.value ||
-  (privatePending.value && ['initial', 'checking'].includes(sessionState.value)) ||
-  (route.name === 'welcome' && !!account.value) ||
-  (!!account.value && appLockReady.value && !appLocked.value &&
-    (!protectionReady.value || pageLoading.value || (libraryLoading.value && !libraryError.value &&
-      (!protectionEnabled.value || photoReadAllowed())))))
+// Route/page work belongs to the status indicator. Only entry owns the overlay.
+const workspaceLoading = computed(() => entryLoading.value)
+async function prepareWorkspace() {
+  if (!account.value || !deviceId.value || !appLockReady.value || appLocked.value) {
+    entryEpoch++; entryScope = ''; entryLoading.value = false; entryFinished.value = false
+    return
+  }
+  if (!route.name || ['shared-photo', 'shared-card', 'account-auth', 'welcome'].includes(String(route.name)) ||
+      !showScopedLocal.value) return
+  const scope = account.value.id + ':' + deviceId.value
+  if (entryScope === scope) return
+  entryScope = scope
+  const epoch = ++entryEpoch
+  entryLoading.value = true; entryFinished.value = false
+  try {
+    // Restore keys before asking for a photo index. View navigation uses the
+    // resulting shared stores; it never restarts this entry sequence.
+    await Promise.allSettled([resumeTrustedPhotos(), loadStudio(true), refreshProfiles()])
+    if (epoch !== entryEpoch) return
+    await refreshLibrary()
+  } finally {
+    if (epoch === entryEpoch) { entryFinished.value = true; entryLoading.value = false }
+  }
+}
 const privateMessage = computed(() =>
   sessionState.value === 'initial' || sessionState.value === 'checking' ? a('sessionChecking')
     : sessionState.value === 'unavailable' ? a('sessionNetwork')
@@ -229,11 +251,10 @@ watch([appLockReady, appLocked], ([ready, locked]) => {
     resetPinEntry()
   } else {
     resetPinEntry()
-    unlockPreparing.value = !!account.value
-    resumeTrustedPhotos()
-    void nextTick(() => { unlockPreparing.value = false })
   }
 }, { flush: 'sync' })
+watch([() => account.value?.id, deviceId, appLockReady, appLocked, sessionState,
+  offlineCaptureIdentity, () => route.name], () => { void prepareWorkspace() }, { immediate: true, flush: 'sync' })
 function updatePrivatePresence() {
   if (backgroundReady.value && hasConfirmedIdentity() && appLockReady.value &&
       !appLocked.value && !hidden.value &&
@@ -252,27 +273,62 @@ function pageHidden() { scheduleBackgroundLock() }
 function pageShown() { resumeBackgroundLock(); locationPageShow() }
 function retrySession() { void loadIdentity(true) }
 const offline = ref(!navigator.onLine)
+async function retryWorkspaceData() {
+  await Promise.allSettled([refreshLibrary(), loadStudio(true)])
+}
 const appStatus = computed<AppStatus>(() => {
   const ru = locale.value === 'ru'
-  if (offline.value) return {
-    label: ru ? 'Офлайн' : 'Offline',
-    detail: ru ? 'Работаем с данными на устройстве' : 'Using data stored on this device',
-    tone: 'warning',
-  }
-  if (sessionState.value === 'checking') return {
-    label: ru ? 'Подключение' : 'Connecting',
-    detail: ru ? 'Проверяем защищённое подключение' : 'Checking the secure connection',
+  if (!account.value || !appLockReady.value || appLocked.value || !showScopedLocal.value) return null
+  if (entryLoading.value || !entryFinished.value) return {
+    label: ru ? 'Подготовка' : 'Preparing',
+    detail: ru ? 'Подготавливаем настройки, локальные данные и список фотографий.' : 'Preparing settings, local data and the photo index.',
     tone: 'progress',
   }
-  if (libraryError.value || serverError.value || workspaceError.value || delivery.value.storageFailed)
+  if (delivery.value.storageFailed) return {
+    label: ru ? 'Ошибка сохранения' : 'Storage error',
+    detail: ru ? 'Не удалось прочитать очередь на устройстве. Проверьте доступное место и разрешение браузера на хранение данных. Не очищайте данные приложения.' : 'The device queue could not be read. Check available space and browser storage access. Keep the app data.',
+    tone: 'error',
+  }
+  if (offline.value) return {
+    label: ru ? 'Офлайн' : 'Offline',
+    detail: ru ? 'Нет соединения. Доступные локальные данные остаются на устройстве; обновление продолжится после подключения.' : 'No connection. Available local data stays on this device; updates will resume online.',
+    tone: 'warning',
+  }
+  if ((cryptoError.value && !photoReadAllowed()) || (protectionEnabled.value && !photoReadAllowed())) return {
+    label: ru ? 'Нужен доступ' : 'Access needed',
+    detail: ru ? 'Для фотографий нужно подключить ключ аккаунта. Откройте защиту фотографий в профиле; локальные данные сохранены.' : 'Connect your account key to open photos. Open photo protection in your profile; local data is preserved.',
+    tone: 'warning',
+    retry: () => { void router.push('/profile/photos-security') },
+  }
+  if (pageIssues.value.length) return {
+    label: ru ? 'Не удалось открыть' : 'Could not open',
+    detail: pageIssues.value.map(issue => issue.detail()).join('\n\n'),
+    tone: 'error',
+    retry: pageIssues.value.some(issue => issue.retry) ? async () => {
+      await Promise.allSettled(pageIssues.value.map(issue => issue.retry?.()))
+    } : undefined,
+  }
+  if (libraryError.value || serverError.value || workspaceError.value || studioError.value)
     return {
-      label: ru ? 'Нужна проверка' : 'Check status',
-      detail: ru ? 'Часть данных не удалось обновить' : 'Some data could not be refreshed',
+      label: ru ? 'Ошибка обновления' : 'Update failed',
+      detail: [
+        libraryError.value || serverError.value ? [
+          libraryFailure.value === 'server' ? (ru ? 'Сервер фотографий временно недоступен.' : 'The photo server is temporarily unavailable.')
+            : libraryFailure.value === 'network' ? (ru ? 'Соединение с сервером фотографий прервалось или истекло время ожидания.' : 'The connection to the photo server failed or timed out.')
+              : libraryFailure.value === 'denied' ? (ru ? 'Сервер не подтвердил доступ к фотографиям. Проверьте вход в аккаунт.' : 'The server did not authorize photo access. Check your account sign-in.')
+                : (ru ? 'Не удалось обновить фотографии.' : 'Photos could not be refreshed.'),
+          ru ? 'Уже сохранённые снимки и папки остаются на устройстве.' : 'Saved photos and folders remain on this device.',
+        ].join(' ') : '',
+        studioError.value ? (ru ? 'Не удалось обновить задания и команды. Доступные локальные данные сохранены.' : 'Assignments and teams could not be refreshed. Available local data is preserved.') : '',
+        workspaceError.value ? (ru ? 'Синхронизация ожидает повторного подключения.' : 'Sync is waiting to reconnect.') : '',
+        ru ? 'Проверьте соединение и повторите обновление. Ошибка сервера или сети не требует заново создавать аккаунт.' : 'Check your connection and retry. A network or server failure does not require a new account.',
+      ].filter(Boolean).join('\n\n'),
       tone: 'error',
+      retry: retryWorkspaceData,
     }
-  if (libraryLoading.value) return {
+  if (routePending.value || pageLoading.value || !protectionReady.value || libraryRefreshing.value || studioLoading.value || sessionState.value === 'checking') return {
     label: ru ? 'Обновление' : 'Updating',
-    detail: ru ? 'Обновляем библиотеку в фоне' : 'Refreshing the library in the background',
+    detail: ru ? 'Открываем страницу или обновляем данные. Можно продолжать работу с уже загруженным содержимым.' : 'Opening the page or updating data. Previously loaded content remains available.',
     tone: 'progress',
   }
   const pending = delivery.value.pending + delivery.value.deleting + workspacePending.value
@@ -286,7 +342,11 @@ const appStatus = computed<AppStatus>(() => {
     detail: ru ? 'Фотографии сохранены на устройстве и будут отправлены автоматически' : 'Photos are safe on this device and will upload automatically',
     tone: 'warning',
   }
-  return null
+  return {
+    label: ru ? 'Готово' : 'Ready',
+    detail: ru ? 'Подготовка завершена. Загруженные данные доступны, новые изменения синхронизируются в фоне.' : 'Preparation is complete. Loaded data is available; new changes sync in the background.',
+    tone: 'success',
+  }
 })
 provide(appStatusKey, appStatus)
 const main = ref<HTMLElement>()
@@ -659,8 +719,7 @@ watch(
           ><span class="brand-mark"><AppIcon name="camera" /></span
           ><span>PhotoBunker</span></RouterLink
         ><span class="app-context">{{ title }}</span
-        ><RouterLink v-if="appStatus" to="/status" :class="['app-status-pill', `is-${appStatus.tone}`]"><span />{{ appStatus.label }}</RouterLink
-        ><span v-if="localPrototype" class="app-mode">{{
+        ><AppStatusIndicator /><span v-if="localPrototype" class="app-mode">{{
           u('localMode')
         }}</span>
       </header>
@@ -760,7 +819,7 @@ watch(
             </template>
           </form>
         </section>
-        <section v-else-if="routePending || (route.name === 'welcome' && account)" class="native-screen app-route-skeleton" role="status" aria-label="Loading" aria-busy="true">
+        <section v-else-if="route.name === 'welcome' && account" class="native-screen app-route-skeleton" role="status" aria-label="Loading" aria-busy="true">
           <div class="screen-body"><span class="route-skeleton-title" /><span class="route-skeleton-card" /><span class="route-skeleton-card" /></div>
         </section>
         <template v-else-if="account && privatePhotoRoute && (!protectionReady || !protectionEnabled || !photoReadAllowed())">

@@ -6,9 +6,9 @@ import AppIcon from '../components/AppIcon.vue'
 import AppSheet from '../components/AppSheet.vue'
 import PhotoThumbnail from '../components/PhotoThumbnail.vue'
 import { account, deviceId } from '../identity/store'
-import { usePageLoad } from '../app/page-load'
-import { photos, libraryError, libraryLoading, serverError, refreshLibrary } from '../local/library'
-import { localTasks, loadStudio } from '../studio/store'
+import { usePageIssue, usePageLoad } from '../app/page-load'
+import { photos, libraryLoading } from '../local/library'
+import { localTasks } from '../studio/store'
 import { readOrganizer, saveBrowser, type BrowserOrganizer } from '../photo-browser/cache'
 import { buildExplorer, ancestors, descendants, explorerRows, writable, canMove, folderKey,
   isSection, type BrowserSection, type BrowserSort, type ExplorerEntry, type OrganizerAction } from '../photo-browser/explorer'
@@ -42,6 +42,7 @@ const ready = computed(browserReadable)
 const organizer = ref<BrowserOrganizer>({ version: 1, folders: [] })
 const organizerLoading = ref(false), organizerLoaded = ref(false), organizerFailed = ref(false)
 usePageLoad(organizerLoading)
+usePageIssue(organizerFailed, { detail: () => bt('storageUnavailable'), retry: loadOrganizer })
 const working = ref(false), error = ref('')
 const query = ref(''), tag = ref(''), searchOpen = ref(false), settingsOpen = ref(false)
 const selectionMode = ref(false), selected = ref(new Set<string>()), expanded = ref(new Set<string>())
@@ -335,8 +336,7 @@ watch([location, display], () => {
 watch([query, tag, display, sort], () => { pageSize.value = 50 })
 onMounted(() => {
   window.addEventListener('focus', loadOrganizer)
-  // Local organizer loading is independent of HTTP/photo reconciliation.
-  void Promise.allSettled([loadStudio(), refreshLibrary()])
+  // Entry prepares the shared photo/studio stores. Navigation reads them.
   if (!route.query.folder && !route.query.assignment && !route.query.section)
     void router.replace({ path: '/browser', query: { section: start.value } })
 })
@@ -391,12 +391,6 @@ onBeforeUnmount(() => window.removeEventListener('focus', loadOrganizer))
         <p v-if="current?.key === 'archive'" class="field-hint">{{ bt('archiveHint') }}</p>
         <p v-if="recovered" class="field-hint" role="status">{{ bt('recovered') }}</p>
         <p v-if="error" class="form-error" role="alert">{{ error }}</p>
-        <div v-if="organizerFailed" class="explorer-notice" role="alert">
-          <span>{{ bt('storageUnavailable') }}</span><button type="button" @click="loadOrganizer">{{ bt('retryFolders') }}</button>
-        </div>
-        <div v-if="libraryError || serverError" class="explorer-notice" role="status">
-          <span>{{ bt('libraryRefreshFailed') }}</span><button type="button" :disabled="libraryLoading" @click="refreshLibrary">{{ bt('retry') }}</button>
-        </div>
         <div v-if="organizerLoading && !organizerLoaded" class="browser-skeleton" aria-busy="true" aria-label="Loading">
           <span v-for="index in 4" :key="index" />
         </div>

@@ -3,6 +3,7 @@ import { appLockReady, appLocked } from '../app/lock'
 import { index as secureIndex } from '../crypto/photos'
 import { receipts } from '../workspace/state'
 import { account } from '../identity/store'
+import { IdentityError, IdentityNetworkError, IdentityTimeoutError } from '../identity/api'
 import { photoIndex } from '../workspace/api'
 import { localVisible } from '../collaboration/access'
 import { computed, shallowRef, watch } from 'vue'
@@ -23,7 +24,9 @@ import {
 export const photos = shallowRef<Photo[]>([])
 export const libraryError = shallowRef(false)
 export const libraryLoading = shallowRef(false)
+export const libraryRefreshing = shallowRef(false)
 export const serverError = shallowRef(false)
+export const libraryFailure = shallowRef<'' | 'network' | 'server' | 'denied' | 'unknown'>('')
 export const usedBytes = computed(() =>
   photos.value.reduce((sum, photo) => sum + photo.bytes, 0),
 )
@@ -75,6 +78,11 @@ async function performRefresh(current: number) {
         !appLockReady.value || appLocked.value) return
     receipts.value = remote.status === 'fulfilled' ? remote.value.receipts : []
     serverError.value = remote.status === 'rejected'
+    const failure = remote.status === 'rejected' ? remote.reason : undefined
+    libraryFailure.value = remote.status !== 'rejected' ? ''
+      : failure instanceof IdentityNetworkError || failure instanceof IdentityTimeoutError ? 'network'
+        : failure instanceof IdentityError && failure.status >= 500 ? 'server'
+          : failure instanceof IdentityError && [401, 403].includes(failure.status) ? 'denied' : 'unknown'
     const pending =
       !protectionEnabled.value && local.status === 'fulfilled'
         ? local.value.filter(
@@ -132,8 +140,9 @@ export function refreshLibrary(): Promise<void> {
     return activeRefresh.promise.catch(() => {}).then(() => refreshLibrary())
   }
   const current = ++generation
+  libraryRefreshing.value = !!account.value && appLockReady.value && !appLocked.value
   const promise = performRefresh(current).finally(() => {
-    if (activeRefresh?.promise === promise) activeRefresh = undefined
+    if (activeRefresh?.promise === promise) { activeRefresh = undefined; libraryRefreshing.value = false }
   })
   activeRefresh = { generation: current, promise }
   return promise
@@ -153,6 +162,7 @@ watch(
       photos.value = []
       receipts.value = []
       libraryLoading.value = false
+      libraryError.value = false; serverError.value = false; libraryFailure.value = ''
     }
     if (appLockReady.value && !appLocked.value &&
         (!account.value || protectionReady.value)) scheduleRefresh()

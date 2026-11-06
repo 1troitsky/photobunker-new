@@ -18,7 +18,7 @@ import {
   startTask,
   studioReady,
 } from '../studio/store'
-import { photos, refreshLibrary } from '../local/library'
+import { photos } from '../local/library'
 import { locale } from '../i18n'
 import { q } from '../crypto/text'
 import WorkspaceReceipts from '../components/WorkspaceReceipts.vue'
@@ -103,7 +103,7 @@ async function remove() {
   }
 }
 onMounted(() => {
-  void Promise.allSettled([loadStudio(), refreshLibrary()]).finally(() => { preparingScreen.value = false })
+  void (studioReady.value ? Promise.resolve() : loadStudio()).finally(() => { preparingScreen.value = false })
 })
 </script>
 <template>

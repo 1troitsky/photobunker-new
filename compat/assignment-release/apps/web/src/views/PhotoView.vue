@@ -54,7 +54,7 @@ import { photoCardPath } from '../studio/private-photo-card'
 import { inAppId } from '../identity/display'
 import { listPhotoVersions, type PhotoVersion } from '../studio/versions'
 import { recordDiagnostic } from '../app/status'
-import { usePageLoad } from '../app/page-load'
+import { usePageIssue, usePageLoad } from '../app/page-load'
 import { lockScroll } from '../studio/scroll-lock'
 import { formatDate } from '../i18n'
 import { q } from '../crypto/text'
@@ -294,6 +294,10 @@ const loading = ref(true)
 usePageLoad(loading)
 const loadFailure = ref(false)
 const loadAttempt = ref(0)
+usePageIssue(loadFailure, {
+  detail: () => locale.value === 'ru' ? 'Не удалось открыть фотографию. Она могла стать недоступна или соединение прервалось. Повторите открытие; сохранённые данные не удаляются.' : 'The photo could not be opened. It may be unavailable or the connection was interrupted. Retry opening it; saved data is preserved.',
+  retry: () => { loadAttempt.value++ },
+})
 const busy = ref(false)
 const deleted = ref(false)
 const status = ref<Parameters<typeof t>[0]>()

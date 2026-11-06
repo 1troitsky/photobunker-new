@@ -1,0 +1,66 @@
+{
+  "release": "entry-status-20261106-1",
+  "environment": "Playwright MCP, actual local UI, synthetic account and scoped HTTP fixture, 390x844 and 320x700. No real photos or production identity.",
+  "entry": {
+    "overlays": 1,
+    "loaderGone": true,
+    "inlinePhotoError": false
+  },
+  "slowNavigation": {
+    "oldPageRemains": true,
+    "noOverlay": true,
+    "noRouteSkeleton": true,
+    "status": "Готово"
+  },
+  "navigation": {
+    "routes": [
+      {
+        "path": "/profile",
+        "loader": false
+      },
+      {
+        "path": "/browser?section=personal",
+        "loader": false
+      },
+      {
+        "path": "/browser?section=all",
+        "loader": false
+      }
+    ],
+    "extraOverlays": 0,
+    "extraStudioRequests": 0
+  },
+  "error": {
+    "label": "Ошибка обновления",
+    "color": "rgb(239, 109, 109)",
+    "noOverlay": true,
+    "noInlineBanner": true
+  },
+  "toast": {
+    "text": "Ошибка обновления\n\nСервер фотографий временно недоступен. Уже сохранённые снимки и папки остаются на устройстве.\n\nПроверьте соединение и повторите обновление. Ошибка сервера или сети не требует заново создавать аккаунт.\n\nПовторить",
+    "notStatusPage": true
+  },
+  "retry": {
+    "disabled": true,
+    "noOverlay": true,
+    "errorCleared": true,
+    "status": "Готово",
+    "recoveredLabel": "Готово"
+  },
+  "progress": {
+    "label": "Обновление",
+    "color": "rgb(244, 192, 77)",
+    "noOverlay": true
+  },
+  "narrow": {
+    "width": 320,
+    "noHorizontalOverflow": true,
+    "titleVisible": true,
+    "status": "Готово"
+  },
+  "limitations": [
+    "Production private login and installed-PWA update NOT RUN",
+    "Real-device behavior NOT RUN",
+    "Performance baseline and Lighthouse NOT RUN"
+  ]
+}

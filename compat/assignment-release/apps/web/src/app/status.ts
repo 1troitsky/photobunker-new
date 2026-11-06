@@ -4,7 +4,8 @@ import type { Router } from 'vue-router'
 export type AppStatus = {
   label: string
   detail: string
-  tone: 'progress' | 'warning' | 'error'
+  tone: 'success' | 'progress' | 'warning' | 'error'
+  retry?: () => Promise<unknown> | void
 } | null
 
 export const appStatusKey: InjectionKey<ComputedRef<AppStatus>> = Symbol('app-status')

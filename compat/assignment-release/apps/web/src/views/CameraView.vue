@@ -771,7 +771,8 @@ onMounted(async () => {
   window.addEventListener('pagehide', pagehide)
   window.addEventListener('beforeunload', beforeUnload)
   void refreshClock(true).catch(() => {})
-  await Promise.allSettled([refreshProfiles(), refreshAssignments(), loadStudio()])
+  if (!account.value) await Promise.allSettled([refreshProfiles(), refreshAssignments(), loadStudio()])
+  else await loadStudio()
   // Entering Camera is the explicit user action that re-arms both sensors.
   // Already granted permissions resolve without another browser prompt.
   if (alive) enableCameraLocation()

@@ -41,7 +41,8 @@ export const personalCategories = ref<string[]>([])
 let categoryRevision = 0
 export const selectedCategory = ref('')
 export const studioReady = ref(false),
-  studioError = ref(false)
+  studioError = ref(false),
+  studioLoading = ref(false)
 export const studioSession = ref<Session | null>(null)
 const scope = () =>
   account.value
@@ -166,13 +167,14 @@ export async function loadStudio(force = false): Promise<void> {
   if (account.value) await restoreTeamsFromDevice(owner).catch(() => {})
   if (loadingStudio?.owner === owner) return loadingStudio.promise
   if (!force && studioReady.value && !studioError.value &&
-      recentStudio?.owner === owner && Date.now() - recentStudio.at < 10_000) return
+      recentStudio?.owner === owner) return
+  studioLoading.value = true
   const promise = loadStudioData()
   loadingStudio = { owner, promise }
   void promise.then(() => {
     if (owner === scope() && !studioError.value) recentStudio = { owner, at: Date.now() }
   }).finally(() => {
-    if (loadingStudio?.promise === promise) loadingStudio = undefined
+    if (loadingStudio?.promise === promise) { loadingStudio = undefined; studioLoading.value = false }
   }).catch(() => {})
   return promise
 }

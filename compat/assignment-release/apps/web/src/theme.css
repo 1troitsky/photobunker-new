@@ -15,6 +15,9 @@
   --danger: #f1b7ad;
   --danger-dim: #f1b7ad0a;
   --success: #b8dcab;
+  --status-success: #7acb74;
+  --status-warning: #f4c04d;
+  --status-error: #ef6d6d;
   --dock: #1b1d23f5;
 }
 :root[data-theme='light'] {
@@ -34,6 +37,9 @@
   --danger: #a7352d;
   --danger-dim: #a7352d08;
   --success: #356331;
+  --status-success: #34864d;
+  --status-warning: #c18b05;
+  --status-error: #cc4848;
   --dock: #fffffff5;
 }
 
