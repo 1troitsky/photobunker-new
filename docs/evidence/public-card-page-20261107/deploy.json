@@ -1,0 +1,92 @@
+{
+  "release": "public-card-page-20261107-1",
+  "commit": "4e8327e",
+  "command": "python3 /tmp/photobunker-card-page-verify.py",
+  "exitCode": 0,
+  "checks": [
+    {
+      "path": "index.html",
+      "equalsBuild": true,
+      "cache": "no-store, no-cache, must-revalidate",
+      "sha256": "c6495f9f423ed254e1d943b1807dc52eb3a9a6462253e8ab4f5e2be8f280cc18"
+    },
+    {
+      "path": "sw.js",
+      "equalsBuild": true,
+      "cache": "no-store, no-cache, must-revalidate",
+      "sha256": "aa6307413c3ba0f5a692b113fbc59c9d562faec4f25d927359d504ff87402d33"
+    },
+    {
+      "path": "release.json",
+      "equalsBuild": true,
+      "cache": "no-store, no-cache, must-revalidate",
+      "sha256": "82b4677461247f34ca52eb6cc7caabc7793a5fea7b391c0f8a6026db8ce4bac8"
+    },
+    {
+      "path": "public-card.html",
+      "equalsBuild": true,
+      "cache": "no-store",
+      "sha256": "19684907c9691877828bab5552cbd8bebe0cb55a353f54966330e0bad05ba018",
+      "csp": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'"
+    },
+    {
+      "path": "assets/index-B-7b0eaO.js",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "c65c8e09d644ec0833452a3c42495e70ff2536139e4dbb3aec1f1b725011ad13"
+    },
+    {
+      "path": "assets/index-CRXMOa-C.js",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "520d569f947dd0cdbcefc2ea5b0ed1f926d3bb507fe7d6e262c232c2577423a9"
+    },
+    {
+      "path": "assets/index-DuPqPxBC.js",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "dbf40b605c8c045ca401b4c99a0e924ad82f964f2fd829d72e307bb31255cfa4"
+    },
+    {
+      "path": "assets/index-Kg1sgZd-.js",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "981096efbaffc8e9aa58ed13499bbaba764ce55f99f2265a5445c95003077407"
+    },
+    {
+      "path": "assets/index-DqKE3lT-.js",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "954d9381751f9a3b1169b7e06bd94bb64d0a0f1f83f74d842a50a5707f8e6e32"
+    },
+    {
+      "path": "assets/index-B8f8N9i0.css",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "f20fc82c866251181424d85b44e626e317df97a87137692bb59bbabcc39cba53"
+    },
+    {
+      "path": "assets/PublicCardLink-zWZRTlUj.js",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "66935d2574c391d6b78dcb69cbfeb6daaae247e2776ac92a17ead923a08c997b"
+    },
+    {
+      "path": "api/v1/health",
+      "http": 200,
+      "body": {
+        "status": "ok"
+      }
+    },
+    {
+      "path": "api/v1/ready",
+      "http": 200,
+      "body": {
+        "status": "ready"
+      }
+    }
+  ],
+  "backup": "/var/www/photobunker/.local/backups/public-card-page-20261107-1-before/",
+  "assetsChecksumDryRun": "empty, exit 0",
+  "privateProductionAcceptance": "NOT RUN"
+}

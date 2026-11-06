@@ -21,7 +21,7 @@
 | Q1 dock source commit | `595ec85` на `main` и `origin/main` | `CONFIRMED` 2026-11-06 |
 | Активный runtime | `compat/assignment-release/` | `CONFIRMED` |
 | Production URL | `https://photobunker.duckdns.org` | `CONFIRMED` 2026-11-06 |
-| Release marker | `public-card-tap-20261107-1` | `CONFIRMED` production 2026-11-07 |
+| Release marker | `public-card-page-20261107-1` | `CONFIRMED` production 2026-11-07 |
 | Server HTTP/API health | root, health, ready возвращают 200 | `CONFIRMED` 2026-11-06 |
 | Owner mobile acceptance | повторно выявлены критические UX/functional defects | `OWNER FAILED` |
 
@@ -30,6 +30,8 @@
 Public card `main@3233f4b`, release `public-card-20261106-1`, `IMPLEMENTED`: отдельное окно без dock, явное создание защищённой ссылки, параметры полей у фото и задания, capture snapshot только для новых фото. [Состав, снимки и ограничения](PUBLIC-CARD-2026-11-06.md), [deploy proof](evidence/public-card-20261106/deploy.json). 16 targeted tests и production build — exit 0; PHP lint двух validators локально/на сервере — exit 0. Owner mobile/private publish/backend integration — `NOT RUN`, не `ACCEPTED`.
 
 ## 3. Подтверждённые ограниченные результаты
+
+Public text page `4e8327e` / `public-card-page-20261107-1` — `READY FOR OWNER REVIEW` в новом уменьшенном scope владельца: Public card сразу открывает нижнее web-окно с Close/Open in browser и самостоятельным `/public-card.html`, без фото, публикации и ожидания прав. Обычная disabled-заглушка в PhotoView убрана; раньше открытие зависело от загрузки photo DTO. Публичная HTML-страница не запускает App/PIN/identity. Для неё одной добавлен CSP frame-ancestors self; private frame-ancestors none сохранён. [Screenshot/команды/границы](evidence/public-card-page-20261107/observations.json), [deploy proof](evidence/public-card-page-20261107/deploy.json). Реальные local component→iframe→Close/external и production guest text подтверждены; private owner button/hardware NOT RUN. Это web-sheet, не подтверждённый native OS browser. Подключение фото отложено прямым решением владельца.
 
 Public card follow-up `9ee2077` / `public-card-tap-20261107-1` — `IMPLEMENTED`. Исправлены два конкретных пути: после восстановления server read proof публикация повторяется, даже если предыдущий запрос ещё завершался отказом; нажатие во время подготовки резервирует внешнее окно и переводит его на ссылку после ACK без второго нажатия. Lock/account/device/photo changes закрывают подготовку; отказ не открывает карточку. Ready-ссылка по-прежнему обычная внешняя. [Команды, screenshot и точные ограничения fixture](evidence/public-card-tap-20261107/observations.json), [deploy proof](evidence/public-card-tap-20261107/deploy.json). Targeted check (7 сценариев) и build exit 0. Настоящий аккаунт не создавался по решению владельца; реальная публикация/чтение public photo, owner account и hardware — `NOT RUN`. Это не доказательство устранения owner defect и не `ACCEPTED`.
 

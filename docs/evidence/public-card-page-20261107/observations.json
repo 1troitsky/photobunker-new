@@ -1,0 +1,38 @@
+{
+  "release": "public-card-page-20261107-1",
+  "commit": "4e8327e",
+  "scope": "Owner requested a text-only public page first, opened in a bottom browser window with close and open-in-device-browser controls. Photo publication is deliberately not part of this step.",
+  "build": {
+    "command": "docker compose -f compat/assignment-release/compose.yaml exec -T -e PHOTOBUNKER_RELEASE_ID=public-card-page-20261107-1 web npm run build",
+    "exitCode": 0
+  },
+  "check": {
+    "command": "docker compose -f compat/assignment-release/compose.yaml exec -T web npm test -- tests/public-card-link.test.ts",
+    "exitCode": 0
+  },
+  "browser": {
+    "tool": "Playwright MCP",
+    "viewport": [
+      390,
+      844
+    ],
+    "local": "Real PublicCardLink mounted on a guest welcome page without photo/account props; real standalone HTML requested through Nginx, no HTTP mocks. Click opened bottom sheet; iframe text visible; Close restored route and focus; Open in device browser opened standalone HTML in a new tab.",
+    "sheetBottom": 844,
+    "sheetScreenshot": "sheet-mobile-local.png",
+    "production": "Actual public-card.html on production opened without login: expected heading visible, zero images, zero scripts, no private App and no horizontal overflow.",
+    "productionScreenshot": "page-mobile-production.png",
+    "productionPrivateButton": "NOT RUN; attempt to mount shipped component in a temporary guest test route was redirected to Profile twice, then stopped. No account was created and no auth checks were disabled."
+  },
+  "nginx": {
+    "production": "Added one exact static location with frame-ancestors self, default-src none; private app frame-ancestors none unchanged. nginx -t exit 0 before reload.",
+    "local": "Allowed same-origin frame source and exact public HTML route. Existing gateway file mount was stale; gateway restarted without data removal; nginx -t exit 0."
+  },
+  "notRun": [
+    "real iPhone / Android / installed PWA",
+    "owner private button acceptance",
+    "native OS browser chrome; implemented web browser sheet",
+    "aesthetic acceptance without approved reference",
+    "Lighthouse / broad CI"
+  ],
+  "status": "READY FOR OWNER REVIEW"
+}

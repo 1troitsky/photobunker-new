@@ -68,6 +68,8 @@ Status / entry loader: прежний overlay при каждом переход
 
 ## 4. Photo view, Photo Card и Editor
 
+Решение владельца 2026-11-07: сначала только Public card → выезжающее снизу окно браузера с Close/Open in browser → публичная страница с произвольным текстом, без фото. `4e8327e`, `public-card-page-20261107-1`: этот scope реализован; [страница](https://photobunker.duckdns.org/public-card.html), [реальный local sheet и production text](evidence/public-card-page-20261107/observations.json). Проверка владельца: открыть фото → Public card → увидеть текст в нижнем окне → закрыть → снова открыть → Open in browser. Private button/hardware NOT RUN, не ACCEPTED. Полная карточка с фотографией остаётся отдельным незавершённым шагом.
+
 Недоступная обычная кнопка Public card — `OWNER FAILED` владельцем 2026-11-07. Последующая коррекция `9ee2077`, `public-card-tap-20261107-1` — `IMPLEMENTED`: повтор после восстановления server read proof и открытие подготовленной карточки по первому нажатию на pending/retry кнопку. Ready-ссылка остаётся внешней; отказ/lock не обходятся. [Команды и границы проверки](evidence/public-card-tap-20261107/observations.json). Проверяемый путь: существующее фото → Public card → публичная фотография в отдельном браузере, затем тот же URL без входа. Реальная публикация/чтение public photo, аккаунт владельца и телефон — `NOT RUN`; тестовый аккаунт не создавать по решению владельца. Owner defect не закрыт синтетическим ACK.
 
 Предыдущий кандидат `628cc35`, `public-card-access-20261107-1`: cached grant/revision больше не отключают кнопку до server check; актуальные settings не теряются; разрешение/ошибка объясняются существующим status toast. [Evidence/ограничения](PUBLIC-CARD-2026-11-06.md).
