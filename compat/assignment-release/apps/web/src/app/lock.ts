@@ -195,6 +195,28 @@ async function verify(pin: string, id: string, epoch: number, mutation: number) 
   if (!allowed) throw new Error('pin.wrong')
   return record
 }
+/** A wrong second emergency segment is also one failed entry attempt.
+ * This updates only the regular lockout meter; it cannot block emergency entry.
+ */
+export async function recordFailedEmergencyConfirmation() {
+  const id=scope(), epoch=loadEpoch, mutation=guardEpoch
+  guard(id,epoch,mutation)
+  try {
+    await writePin(id,previous=>{
+      if(!previous||!valid(previous)||('version' in previous&&previous.version===0))
+        throw new Error('pin.corrupt')
+      const record=previous as LegacyPin|PinV2, now=Date.now()
+      if(now<(record.lastWall??0))throw new Error('pin.clock_rollback')
+      if(record.until>now)return record // A blocked normal PIN stays blocked; no extension.
+      const freshWindow=record.until>0&&record.until<=now
+      const failures=Math.min(100,(freshWindow?0:record.failures)+1)
+      return {...record,failures,until:failures>=5?now+20*60*1000:0,
+        lastWall:Math.max(now,record.lastWall??0)}
+    })
+  } catch(error) {storageFailure(error)}
+  guard(id,epoch,mutation)
+  changed('attempt')
+}
 export async function unlockApp(pin: string) {
   const id = scope(), epoch = loadEpoch, mutation = guardEpoch
   if (appLockFailure.value || !appLockReady.value) throw new Error('pin.storage_failed')
