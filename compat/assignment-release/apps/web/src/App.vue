@@ -41,7 +41,9 @@ import { p } from './profiles/text'
 import { delivery, startDelivery } from './delivery/queue'
 import { accessCode, accessSaved } from './server/api'
 import { u } from './app/text'
-import { lockDelayMs, rememberSection } from './app/preferences'
+import { launchPath, lockDelayMs, rememberSection } from './app/preferences'
+import { createBackgroundLock } from './app/background-lock'
+import { routePending } from './router'
 import { a } from './identity/text'
 import { s } from './studio/text'
 import { startWorkspace } from './workspace/service'
@@ -91,7 +93,8 @@ const offlineLocalRoute = computed(() =>
     'profile', 'settings', 'payment', 'status'].includes(String(route.name)),
 )
 const privatePending = computed(() =>
-  !openRoute.value && !hasConfirmedIdentity() &&
+  !(account.value && (!appLockReady.value || appLocked.value) && route.name !== 'account-auth') &&
+  (!openRoute.value || (route.name === 'welcome' && !!account.value)) && !hasConfirmedIdentity() &&
   !((sessionState.value === 'offline' || sessionState.value === 'checking') && offlineCaptureIdentity.value && !!account.value && offlineLocalRoute.value),
 )
 const showScopedLocal = computed(() =>
@@ -110,14 +113,19 @@ const privateMessage = computed(() =>
 const appPin = ref(''),
   appPinError = ref(''),
   appPinOpening = ref(false)
+const backgroundDeadline = createBackgroundLock({
+  enabled: () => appPinEnabled.value && !appLocked.value,
+  delay: () => lockDelayMs.value,
+  lock: lockApp,
+})
 
 // Complete N-digit segments are queued instantly; PBKDF2 never drops rapid input.
 const pendingPinParts: string[] = []
 let drainingPin = false
 let emergencyFirstPart = ''
-let pinInputGeneration = 0
+const pinInputGeneration = ref(0)
 function resetPinEntry() {
-  pinInputGeneration++
+  pinInputGeneration.value++
   pendingPinParts.length = 0
   emergencyFirstPart = ''
   appPin.value = ''
@@ -135,16 +143,16 @@ function onPinPart(part: string) {
 async function drainPinParts() {
   if (drainingPin) return
   drainingPin = true
-  const generation = pinInputGeneration
+  const generation = pinInputGeneration.value
   try {
-    while (pendingPinParts.length && generation === pinInputGeneration && appLocked.value) {
+    while (pendingPinParts.length && generation === pinInputGeneration.value && appLocked.value) {
       const part = pendingPinParts.shift()!
       appPinError.value = ''
       if (emergencyFirstPart) {
         const fullCode = emergencyFirstPart + part
         emergencyFirstPart = ''
         const triggered = await tryEmergencyOnLockedScreen(fullCode).catch(() => false)
-        if (generation !== pinInputGeneration) break
+        if (generation !== pinInputGeneration.value) break
         if (triggered) { pendingPinParts.length = 0; break }
         try {
           await recordFailedEmergencyConfirmation()
@@ -154,14 +162,14 @@ async function drainPinParts() {
       }
       try {
         const firstPartMatched = await matchesLockedEmergencyFirstHalf(part)
-        if (generation !== pinInputGeneration || !appLocked.value) break
+        if (generation !== pinInputGeneration.value || !appLocked.value) break
         if (firstPartMatched) {
           emergencyFirstPart = part
           continue
         }
         await unlockApp(part)
       } catch (error) {
-        if (generation === pinInputGeneration) appPinError.value = pinError(error)
+        if (generation === pinInputGeneration.value) appPinError.value = pinError(error)
       }
     }
   } finally {
@@ -202,6 +210,7 @@ watch([() => account.value?.id, deviceId, appLocked, appLockReady, appPinLength]
   }, { immediate: true })
 watch([appLockReady, appLocked], ([ready, locked]) => {
   if (!ready || locked) {
+    backgroundDeadline.clear()
     // Synchronous cleanup before any protected Vue view can paint.
     hardLock()
     void import('./messages/store').then(module => module.stopMessaging())
@@ -215,38 +224,9 @@ function updatePrivatePresence() {
     refreshPresenceHeartbeat()
   else stopPresenceHeartbeat()
 }
-const hiddenAtKey = 'photobunker.app-hidden-at.v1'
-let appLockTimer: number | undefined
-function clearAppLockTimer() {
-  if (appLockTimer !== undefined) window.clearTimeout(appLockTimer)
-  appLockTimer = undefined
-}
-function clearHiddenAt() {
-  try { sessionStorage.removeItem(hiddenAtKey) } catch { /* unavailable storage must not block locking */ }
-}
-function savedHiddenAt(): number {
-  try { return Number(sessionStorage.getItem(hiddenAtKey) ?? 0) || 0 } catch { return 0 }
-}
-function lockAfterBackground() {
-  clearAppLockTimer()
-  clearHiddenAt()
-  lockApp()
-}
-function scheduleBackgroundLock() {
-  if (!appPinEnabled.value || appLocked.value) return
-  const now = Date.now(), delay = lockDelayMs.value
-  try { sessionStorage.setItem(hiddenAtKey, String(now)) } catch { /* timer remains authoritative */ }
-  clearAppLockTimer()
-  if (delay === 0) lockAfterBackground()
-  else appLockTimer = window.setTimeout(lockAfterBackground, delay)
-}
-function resumeBackgroundLock() {
-  if (!appPinEnabled.value || appLocked.value) { clearAppLockTimer(); clearHiddenAt(); return }
-  const hiddenAt = savedHiddenAt()
-  clearAppLockTimer()
-  if (hiddenAt && Date.now() - hiddenAt >= lockDelayMs.value) lockAfterBackground()
-  else clearHiddenAt()
-}
+const clearAppLockTimer = backgroundDeadline.clear
+const scheduleBackgroundLock = backgroundDeadline.hide
+const resumeBackgroundLock = backgroundDeadline.show
 function backgroundLock() {
   if (document.hidden) scheduleBackgroundLock()
   else resumeBackgroundLock()
@@ -587,9 +567,12 @@ onBeforeUnmount(() => {
   stopPrivateRuntime()
 })
 watch(
-  [sessionState, () => route.path, () => route.query.returnTo],
+  [sessionState, () => route.path, () => route.query.returnTo, () => account.value?.id, offlineCaptureIdentity],
   ([state, path, intended]) => {
-    if ((state === 'signed-out' || state === 'revoked') && !openRoute.value) {
+    if (path === '/welcome' && (hasConfirmedIdentity() ||
+        (account.value && offlineCaptureIdentity.value && ['offline', 'checking'].includes(state)))) {
+      void router.replace(launchPath())
+    } else if ((state === 'signed-out' || state === 'revoked') && !openRoute.value) {
       const safe = profileReturnTo(path)
       void router.replace({ path: '/profile', query: safe === '/profile' ? {} : { returnTo: safe } })
     } else if (state === 'authenticated' && path === '/profile' && typeof intended === 'string') {
@@ -644,7 +627,8 @@ watch(
         {
           'camera-shell': immersive,
           'native-shell': native,
-          'welcome-shell': route.name === 'welcome',
+          'welcome-shell': route.name === 'welcome' && !account,
+          'passcode-shell': account && (!appLockReady || appLocked) && route.name !== 'account-auth',
           'editor-shell': editor,
           'privacy-screen': hidden,
           'messenger-shell': route.matched.some(record => record.name === 'messages'),
@@ -746,23 +730,20 @@ watch(
             </template>
             <template v-else-if="appLockReady">
               <p class="passcode-prompt">{{ pt('title') }}</p>
-              <PasscodeInput v-model="appPin"
+              <PasscodeInput :key="pinInputGeneration" v-model="appPin"
                 :length="emergencyManualEntry ? Math.max(10, emergencyPinLength, appPinLength) : appPinLength"
                 :auto-clear="!emergencyManualEntry" :label="pt('title')"
-                :disabled="appPinOpening && emergencyManualEntry" autofocus
+                :disabled="appPinOpening && emergencyManualEntry" autofocus prevent-scroll
                 @complete="onPinPart" />
               <button v-if="emergencyManualEntry" class="primary-button passcode-submit"
                 :disabled="appPinOpening || appPin.length < 4">{{ pt('unlock') }}</button>
-              <button
-                type="button"
-                class="quiet-button passcode-recovery"
-                @click="router.push('/profile/account?mode=recover&pinReset=1')"
-              >
-                {{ pt('forgot') }}
-              </button>
+              <RouterLink class="passcode-recovery" to="/profile/account?mode=recover&pinReset=1"><AppIcon name="key" />{{ pt('forgot') }}</RouterLink>
               <p v-if="appPinError" class="form-error passcode-error" role="alert">{{ appPinError }}</p>
             </template>
           </form>
+        </section>
+        <section v-else-if="routePending || (route.name === 'welcome' && account)" class="native-screen app-route-skeleton" role="status" aria-label="Loading" aria-busy="true">
+          <div class="screen-body"><span class="route-skeleton-title" /><span class="route-skeleton-card" /><span class="route-skeleton-card" /></div>
         </section>
         <template v-else-if="account && privatePhotoRoute && (!protectionReady || !protectionEnabled || !photoReadAllowed())">
           <section v-if="!protectionReady" class="native-screen app-loading-shell" aria-busy="true" aria-label="Loading">

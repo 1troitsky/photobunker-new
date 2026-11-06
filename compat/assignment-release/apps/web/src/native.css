@@ -19,16 +19,17 @@
 .app-icon-button:hover { background: var(--accent-dim); color: var(--text); border-color: transparent; }
 .app-icon-button svg { width: 21px; height: 21px; }
 .app-icon-button[aria-pressed=true] { color: var(--accent); background: var(--accent-dim); }
-.app-passcode-screen { min-height:100%; display:grid; place-items:center; padding:0; }
-.app-passcode-form { width:min(460px,100%); min-height:min(720px,calc(100dvh - 68px - env(safe-area-inset-bottom))); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; text-align:center; }
+.app-shell.passcode-shell { padding-bottom: 0; }
+.app-passcode-screen { min-height:0; padding:0; }
+.app-passcode-form { width:min(460px,100%); margin-inline:auto; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:16px; padding:calc(24px + env(safe-area-inset-top)) 20px 24px; text-align:center; }
 .passcode-brand { color:var(--muted); font-size:16px; font-weight:650; letter-spacing:-.02em; }
-.app-passcode-form h1 { margin:0 0 34px; font-size:clamp(30px,8vw,44px); line-height:1.06; letter-spacing:-.04em; }
+.app-passcode-form h1 { margin:0; font-size:clamp(24px,7vw,36px); line-height:1.15; letter-spacing:-.04em; }
 .passcode-prompt { margin:0; color:var(--secondary); font-size:17px; }
 .passcode-entry { position:relative; display:block !important; width:min(320px,88vw); min-height:70px; cursor:text; }
 .passcode-entry > input { position:absolute !important; inset:0; z-index:2; width:100% !important; height:100%; min-height:0 !important; opacity:.01; padding:0 !important; border:0 !important; font-size:16px !important; }
 .passcode-dots { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:clamp(7px,2.5vw,14px); pointer-events:none; }
-.passcode-dots i { display:block; width:15px; height:15px; border:2px solid var(--secondary); border-radius:50%; transition:background .12s,border-color .12s,transform .12s; }
-.passcode-dots i.filled { background:var(--accent); border-color:var(--accent); transform:scale(1.08); }
+.passcode-dots i { display:block; width:15px; height:15px; border:2px solid var(--secondary); border-radius:50%; }
+.passcode-dots i.filled { background:var(--accent); border-color:var(--accent); }
 .passcode-keypad { display:grid; grid-template-columns:repeat(3,72px); gap:10px 18px; justify-content:center; }
 .passcode-keypad button { display:grid; place-items:center; width:72px; height:52px; padding:0; border:1px solid var(--border); border-radius:18px; background:var(--surface); color:var(--text); font:600 24px/1 inherit; }
 .passcode-keypad button:active { background:var(--accent-dim); transform:scale(.96); }
@@ -36,8 +37,10 @@
 .passcode-keypad .passcode-delete { background:transparent; border-color:transparent; color:var(--secondary); }
 .passcode-keypad .passcode-delete svg { width:24px; height:24px; }
 .passcode-submit { width:min(360px,92vw); min-height:54px; margin-top:8px; }
-.passcode-recovery { margin-top:10px; }
+.passcode-recovery { display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:8px 12px; color:var(--accent); text-decoration:underline; text-underline-offset:4px; font-size:14px; }
 .passcode-error { max-width:390px; margin:0; }
+.emergency-pin-step h3 { margin:0; font-size:18px; }
+.emergency-pin-step .passcode-entry { width:100%; min-height:64px; }
 .pin-settings { gap:18px; }
 .pin-status-card { display:flex; align-items:center; gap:14px; padding:16px; border:1px solid var(--border); border-radius:14px; background:var(--background); }
 .pin-status-card.active { border-color:color-mix(in srgb,var(--success) 38%,var(--border)); }

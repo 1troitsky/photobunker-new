@@ -1,4 +1,6 @@
 import { appLockReady, appLocked, appPinEnabled } from '../app/lock'
+import { lockDelayMs } from '../app/preferences'
+import { IdentityError, IdentityNetworkError, IdentityTimeoutError } from '../identity/api'
 import { rememberKit, rememberedKit } from './trusted'
 import { accountKey, readAccountSecrets, saveAccountSecrets } from '../identity/vault'
 import { observe, rememberClock, restoreClock } from './time'
@@ -363,6 +365,22 @@ async function authenticateRead() {
   if (photoReadAllowed()) await rememberClock(id, time)
   return time
 }
+async function refreshTrustedRead() {
+  const id = account.value?.id, generation = lockGeneration.value
+  try { await authenticateRead(); changed() }
+  catch (error) {
+    if (id !== account.value?.id || generation !== lockGeneration.value) return
+    // A transport failure revokes the remote read session, not the previously
+    // verified local keys. Actual authorization/proof failures still hard-lock.
+    if (trusted && (error instanceof IdentityNetworkError || error instanceof IdentityTimeoutError ||
+        (error instanceof IdentityError && error.status >= 500))) {
+      setReadToken('', 0)
+      changed()
+    } else {
+      hardLock(); autoAttempt.clear(); void loadProtection()
+    }
+  }
+}
 async function captureDevice() {
   const id = scope(),
     name = `device:${id}:${deviceId.value}`
@@ -417,12 +435,8 @@ async function opened(id: string, generation: number) {
   cryptoError.value = ''
   failures = 0
   renew = setInterval(() => {
-    if (strongUnlocked.value && !warmLocked.value)
-      void authenticateRead().catch(() => {
-        hardLock()
-        autoAttempt.clear()
-        void loadProtection()
-      })
+    if (strongUnlocked.value && !warmLocked.value && !document.hidden)
+      void refreshTrustedRead()
   }, 240000)
   touch()
   changed()
@@ -639,28 +653,23 @@ export function startProtection() {
     },
     { immediate: true },
   )
+  const withinAppGrace = () => trusted && !candidateKit.value && appPinEnabled.value &&
+    appLockReady.value && !appLocked.value && lockDelayMs.value > 0
   const hide = () => {
       document.documentElement.dataset.photoBackground = 'true'
       // Closing/reloading one document must not lock another tab, and the
       // retiring document must not race the replacement page's auto-unlock.
       // Explicit app/account/security locks still broadcast via hardLock().
-      hardLock(false)
-      autoAttempt.clear()
+      if (!withinAppGrace()) { hardLock(false); autoAttempt.clear() }
     },
     visibility = () => {
       if (document.hidden) {
         document.documentElement.dataset.photoBackground = 'true'
         if (candidateKit.value) hardLock()
-        else if (!trusted || appPinEnabled.value) warmLock()
+        else if (!withinAppGrace() && (!trusted || appPinEnabled.value)) warmLock()
       } else {
         if (trusted && strongUnlocked.value && !appLocked.value)
-          void authenticateRead()
-            .then(changed)
-            .catch(() => {
-              hardLock()
-              autoAttempt.clear()
-              void loadProtection()
-            })
+          void refreshTrustedRead()
         checkLifetime()
         void nextTick(() => {
           delete document.documentElement.dataset.photoBackground
@@ -682,7 +691,9 @@ export function startProtection() {
       void loadProtection()
     },
     show = () => {
-      void loadProtection()
+      // A BFCache return within the PIN grace period keeps the existing local
+      // keys; don't re-gate the UI on a fresh HTTP /keys request.
+      if (!withinAppGrace() || !strongUnlocked.value) void loadProtection()
       void nextTick(() => {
         delete document.documentElement.dataset.photoBackground
       })

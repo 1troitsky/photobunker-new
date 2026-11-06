@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import { appPinEnabled, appPinLegacy, appPinLength, setAppPin, removeAppPin, lockApp } from '../app/lock'
+import { appPinEnabled, appPinLegacy, appPinLength, setAppPin, removeAppPin, lockApp, conflictsWithAppPinPrefix } from '../app/lock'
 import { pt, pinError } from '../app/pin-text'
 import { emergencyDeletionAvailable,emergencyReady,emergencyActive,emergencyFailure,emergencyBusy,loadEmergencyRegistration,clearEmergencyView,configureEmergencyPin,disableEmergencyPin } from '../app/emergency'
 import { et,emergencyError } from '../app/emergency-text'
@@ -11,17 +11,42 @@ const appPin = ref(''), repeatPin = ref(''), oldPin = ref(''), pinNotice = ref('
 const pinMode = ref<'summary' | 'edit' | 'disable'>('summary')
 type SecurityPanel = 'app' | 'emergency' | 'devices'
 const panel = ref<SecurityPanel>()
-const emergencyNew=ref(''),emergencyRepeat=ref(''),emergencyOld=ref(''),
-  emergencyNotice=ref(''), emergencyAcknowledged=ref(false)
+const emergencyOld=ref(''), emergencyNotice=ref(''), emergencyAcknowledged=ref(false)
+const emergencyStep = ref<number | null>(null), emergencyPart = ref(''), emergencyChecking = ref(false)
+const emergencyParts = ref(['', '', '', ''])
+const emergencySteps = ['firstHalf', 'secondHalf', 'repeatFirstHalf', 'repeatSecondHalf'] as const
+function resetEmergencyDraft() {
+  emergencyStep.value = null; emergencyPart.value = ''; emergencyParts.value = ['', '', '', '']
+  emergencyOld.value = ''; emergencyNotice.value = ''; emergencyAcknowledged.value = false
+}
+async function advanceEmergency() {
+  const step = emergencyStep.value, value = emergencyPart.value
+  if (step === null || step >= 4 || emergencyChecking.value || !appPinEnabled.value ||
+      value.length !== appPinLength.value || !/^\d+$/.test(value)) return
+  const owner = account.value?.id, device = deviceId.value, length = appPinLength.value
+  emergencyChecking.value = true; emergencyNotice.value = ''
+  try {
+    if (step < 2 && await conflictsWithAppPinPrefix(value)) throw new Error('emergency.samePin')
+    if (step >= 2 && value !== emergencyParts.value[step - 2]) throw new Error('pin.mismatch')
+    if (owner !== account.value?.id || device !== deviceId.value || length !== appPinLength.value ||
+        appLocked.value || panel.value !== 'emergency' || emergencyStep.value !== step) return
+    emergencyParts.value[step] = value
+    emergencyPart.value = ''; emergencyStep.value = step + 1
+  } catch (error) {
+    emergencyNotice.value = error instanceof Error && error.message === 'pin.mismatch' ? pt('mismatch') : emergencyError(error)
+    emergencyPart.value = ''
+  } finally { emergencyChecking.value = false }
+}
 async function saveEmergency() {
   if(emergencyBusy.value)return
   if(!emergencyAcknowledged.value){emergencyNotice.value=et('warning');return}
-  const next=emergencyNew.value,repeat=emergencyRepeat.value,old=emergencyOld.value
-  emergencyNew.value='';emergencyRepeat.value=''
+  if (emergencyStep.value !== 4) return
+  const [first, second, repeatFirst, repeatSecond] = emergencyParts.value
+  const next=first+second,repeat=repeatFirst+repeatSecond,old=emergencyOld.value
   emergencyNotice.value=''
-  try{await configureEmergencyPin(next,repeat,old);emergencyNotice.value=et('saved');emergencyAcknowledged.value=false}
+  try{await configureEmergencyPin(next,repeat,old);resetEmergencyDraft();emergencyNotice.value=et('saved')}
   catch(e){emergencyNotice.value=emergencyError(e)}
-  finally{emergencyOld.value=''}
+  finally{emergencyOld.value='';emergencyParts.value=['','','',''];emergencyPart.value='';emergencyStep.value=null}
 }
 async function removeEmergency() {
   if(emergencyBusy.value)return
@@ -98,15 +123,15 @@ async function refresh() {
 watch([() => account.value?.id, deviceId, appLocked, appLockReady], () => {
   panel.value = undefined
   clearEmergencyView()
-  emergencyNew.value='';emergencyRepeat.value='';emergencyOld.value=''
-  emergencyNotice.value='';emergencyAcknowledged.value=false
+  resetEmergencyDraft()
   if (account.value?.id && !appLocked.value && appLockReady.value) {
     void loadEmergencyRegistration()
   }
 }, { immediate: true, flush: 'sync' })
 onBeforeUnmount(() => {
-  emergencyNew.value='';emergencyRepeat.value='';emergencyOld.value=''
+  resetEmergencyDraft()
 })
+watch([panel, appPinLength], resetEmergencyDraft)
 onMounted(async () => {
   await loadIdentity()
   if (account.value)
@@ -200,7 +225,7 @@ async function revoke(id: string) {
           </template>
           <template v-else-if="pinMode === 'edit'">
             <div v-if="appPinEnabled" class="passcode-setting-field"><strong>{{ pt('oldPin') }}</strong>
-              <PasscodeInput v-model="oldPin" :label="pt('oldPin')" :disabled="pinBusy" /></div>
+              <PasscodeInput v-model="oldPin" :length="appPinLength" :label="pt('oldPin')" :disabled="pinBusy" /></div>
             <div class="passcode-setting-field"><strong>{{ pt('newPin') }}</strong>
               <PasscodeInput v-model="appPin" :length="6" :label="pt('newPin')" :disabled="pinBusy" /></div>
             <div class="passcode-setting-field"><strong>{{ pt('repeatPin') }}</strong>
@@ -212,7 +237,7 @@ async function revoke(id: string) {
           <template v-else>
             <p class="field-hint">{{ pt('disableConfirm') }}</p>
             <div class="passcode-setting-field"><strong>{{ pt('oldPin') }}</strong>
-              <PasscodeInput v-model="oldPin" :label="pt('oldPin')" :disabled="pinBusy" /></div>
+              <PasscodeInput v-model="oldPin" :length="appPinLength" :label="pt('oldPin')" :disabled="pinBusy" /></div>
             <div class="inline-actions"><button type="button" class="danger-button" :disabled="pinBusy || oldPin.length < 4" @click="disablePin">{{ pt('disable') }}</button>
               <button type="button" class="quiet-button" @click="cancelPin">{{ pt('cancel') }}</button></div>
           </template>
@@ -220,27 +245,44 @@ async function revoke(id: string) {
         </form>
         <section v-if="panel === 'emergency'" class="native-form form-card security-detail" aria-labelledby="emergency-setup-title">
           <h2 id="emergency-setup-title">{{ et('title') }}</h2>
-          <div :class="['pin-status-card', { active: emergencyActive }]">
+          <div v-if="emergencyStep === null" :class="['pin-status-card', { active: emergencyActive }]">
             <span class="pin-status-icon"><AppIcon :name="emergencyActive ? 'check' : 'trash'" /></span>
             <span><strong>{{ emergencyActive ? et('saved') : et('enable') }}</strong>
               <small>{{ et('hint') }}</small></span>
           </div>
-          <p class="field-hint" role="alert">{{ et('warning') }}</p>
-          <p v-if="!emergencyDeletionAvailable" class="field-hint" role="status">{{ et('blocked') }}</p>
-           <p v-if="!appPinEnabled || appPinLength > 6" class="field-hint" role="status">{{ et('requiresAppPin') }}</p>
-          <p v-if="emergencyFailure" role="alert">{{ et('offline') }}</p>
-          <button v-if="emergencyFailure" type="button" class="secondary-button"
+          <p v-if="!emergencyDeletionAvailable && (emergencyStep === null || emergencyStep === 4)" class="field-hint" role="status">{{ et('blocked') }}</p>
+          <template v-if="!appPinEnabled">
+            <p class="field-hint">{{ et('requiresAppPin') }}</p>
+            <button type="button" class="primary-button" @click="panel = 'app'; startPin('edit')">{{ pt('enable') }}</button>
+          </template>
+          <p v-else-if="appPinLength > 6" class="field-hint">{{ et('legacyPin') }}</p>
+          <p v-if="emergencyFailure && emergencyStep === null" role="alert">{{ et('offline') }}</p>
+          <button v-if="emergencyFailure && emergencyStep === null" type="button" class="secondary-button"
             :disabled="emergencyBusy" @click="loadEmergencyRegistration">{{ et('retry') }}</button>
-          <template v-if="emergencyReady">
-            <div v-if="emergencyActive" class="passcode-setting-field"><strong>{{ et('old') }}</strong>
+          <template v-if="appPinEnabled && appPinLength <= 6">
+            <p class="field-hint">{{ et('same') }}</p>
+            <button v-if="emergencyStep === null" type="button" class="primary-button"
+              :disabled="emergencyBusy" @click="emergencyStep = 0">{{ et(emergencyActive ? 'change' : 'enable') }}</button>
+            <form v-else-if="emergencyStep < 4" class="native-form emergency-pin-step" @submit.prevent="advanceEmergency">
+              <span class="field-hint">{{ emergencyStep + 1 }} / 4</span>
+              <h3>{{ et(emergencySteps[emergencyStep]!) }}</h3>
+              <PasscodeInput :key="emergencyStep" v-model="emergencyPart" :length="appPinLength"
+                :label="et(emergencySteps[emergencyStep]!)" :disabled="emergencyChecking" autofocus />
+              <button class="primary-button" :disabled="emergencyChecking || emergencyPart.length !== appPinLength">{{ pt('unlock') }}</button>
+              <button type="button" class="quiet-button" :disabled="emergencyChecking" @click="resetEmergencyDraft">{{ pt('cancel') }}</button>
+            </form>
+            <template v-else>
+              <p class="field-hint">{{ et('confirmedParts') }}</p>
+              <p class="field-hint" role="alert">{{ et('warning') }}</p>
+              <div v-if="emergencyActive" class="passcode-setting-field"><strong>{{ et('old') }}</strong>
+                <PasscodeInput v-model="emergencyOld" :length="12" :label="et('old')" :disabled="emergencyBusy" /></div>
+              <label class="field-hint"><input type="checkbox" v-model="emergencyAcknowledged" /> {{ et('acknowledge') }}</label>
+              <button class="primary-button" type="button" :disabled="!emergencyDeletionAvailable || !emergencyReady || emergencyBusy || !emergencyAcknowledged || (emergencyActive && emergencyOld.length < 8)"
+                @click="saveEmergency">{{ et(emergencyActive ? 'change' : 'enable') }}</button>
+              <button type="button" class="quiet-button" :disabled="emergencyBusy" @click="resetEmergencyDraft">{{ pt('cancel') }}</button>
+            </template>
+            <div v-if="emergencyActive && emergencyStep === null" class="passcode-setting-field"><strong>{{ et('old') }}</strong>
               <PasscodeInput v-model="emergencyOld" :length="12" :label="et('old')" :disabled="emergencyBusy" /></div>
-            <div class="passcode-setting-field"><strong>{{ et('next') }}</strong>
-              <PasscodeInput v-model="emergencyNew" :length="12" :label="et('next')" :disabled="emergencyBusy" /></div>
-            <div class="passcode-setting-field"><strong>{{ et('repeat') }}</strong>
-              <PasscodeInput v-model="emergencyRepeat" :length="12" :label="et('repeat')" :disabled="emergencyBusy" /></div>
-            <label class="field-hint"><input type="checkbox" v-model="emergencyAcknowledged" /> {{ et('acknowledge') }}</label>
-             <button class="primary-button" type="button" :disabled="!emergencyDeletionAvailable || emergencyBusy || !emergencyAcknowledged || !appPinEnabled || appPinLength > 6 || emergencyNew.length !== appPinLength * 2 || emergencyNew !== emergencyRepeat || (emergencyActive && emergencyOld.length < 6)"
-              @click="saveEmergency">{{ et(emergencyActive ? 'change' : 'enable') }}</button>
             <button v-if="emergencyActive" class="quiet-button" type="button"
               :disabled="emergencyBusy || !emergencyOld"
               @click="removeEmergency">{{ et('disable') }}</button>

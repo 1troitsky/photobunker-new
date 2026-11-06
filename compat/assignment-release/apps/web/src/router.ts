@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { ref } from 'vue'
 import type { RouterHistory } from 'vue-router'
 import { account, sessionState, offlineCaptureIdentity, hasConfirmedIdentity } from './identity/store'
 import { launchPath } from './app/preferences'
@@ -39,6 +40,7 @@ const TeamProfileView = () => import('./views/TeamProfileView.vue')
 const PhotoEditView = () => import('./views/PhotoEditView.vue')
 const StatusView = () => import('./views/StatusView.vue')
 const PaymentView = () => import('./views/PaymentView.vue')
+export const routePending = ref(false)
 
 // Warm the five dock destinations after the first paint. Navigation remains
 // local and synchronous even on a high-latency mobile connection; none of
@@ -171,6 +173,7 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
   // Guard decisions are synchronous. App.vue keeps private views unmounted
   // while the background server/device proof is still unresolved.
   router.beforeEach((to) => {
+    routePending.value = true
     if (to.name === 'welcome') {
       // A recognized account never sees the guest landing as its home.
       // Local scoped capture cannot authorize a server API call here.
@@ -186,5 +189,7 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
       return { path: '/profile', query: intended === '/profile' ? {} : { returnTo: intended }, replace: true }
     }
   })
+  router.afterEach(() => { routePending.value = false })
+  router.onError(() => { routePending.value = false })
   return router
 }

@@ -33,7 +33,7 @@ const entries = {
   changed: ['PIN изменён в другой вкладке. Повторите после обновления.', 'PIN changed in another tab. Retry after refreshing.'],
   emergencyResetRequired: ['Сначала отключите аварийный PIN, затем меняйте или отключайте обычный.', 'Disable the emergency PIN before changing or removing the normal PIN.'],
   account: ['Аккаунт или устройство изменились', 'Account or device changed'],
-  forgot: ['Восстановить или сменить аккаунт по ключу', 'Recover or change account with a key'],
+  forgot: ['Восстановить аккаунт', 'Recover account'],
   lockAfter: ['Требовать PIN', 'Require PIN'],
   immediately: ['Сразу', 'Immediately'],
   after10s: ['Через 10 секунд', 'After 10 seconds'],

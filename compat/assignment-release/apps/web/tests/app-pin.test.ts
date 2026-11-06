@@ -30,6 +30,7 @@ vi.mock('../src/app/pin-store', () => ({
 import {
   appPinEnabled, appPinLegacy, appLocked, appLockFailure, appLockReady,
   loadAppLock, setAppPin, unlockApp, lockApp, removeAppPin,
+  conflictsWithAppPinPrefix,
 } from '../src/app/lock'
 
 const pinScope = () => `app-pin:${fixtures.owner.value!.id}:${fixtures.device.value}`
@@ -43,6 +44,15 @@ beforeEach(() => {
   vi.restoreAllMocks()
 })
 describe('R1-06 D3 PIN security boundary', () => {
+  it('checks both proposed emergency halves against the real app verifier without recording failed attempts', async () => {
+    await loadAppLock()
+    await setAppPin('1234')
+    const before = structuredClone(fixtures.data.get(pinScope()))
+    expect(await conflictsWithAppPinPrefix('1234')).toBe(true)
+    expect(await conflictsWithAppPinPrefix('5678')).toBe(false)
+    expect(await conflictsWithAppPinPrefix('9012')).toBe(false)
+    expect(fixtures.data.get(pinScope())).toEqual(before)
+  })
   it('writes versioned PBKDF2 for 4–6 digits and requires the old PIN for change and disable', async () => {
     await loadAppLock()
     expect(appLockReady.value).toBe(true)

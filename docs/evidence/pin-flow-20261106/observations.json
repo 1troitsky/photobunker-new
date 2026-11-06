@@ -1,0 +1,53 @@
+{
+  "earlierVerified": {
+    "inputTopFull": 152.890625,
+    "inputTopReduced": 152.890625,
+    "dots": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "unlockWithoutWelcome": true
+  },
+  "emergency": {
+    "noRangeHint": true,
+    "sameAsNormalRejected": true,
+    "repeatMismatchRejected": true,
+    "noPinGate": {
+      "message": true,
+      "noFields": true
+    },
+    "stepLabels": [
+      "Введите первую часть PIN",
+      "Введите вторую часть PIN",
+      "Повторите первую часть PIN",
+      "Повторите вторую часть PIN"
+    ],
+    "review": {
+      "confirmed": true,
+      "activationBlocked": true,
+      "noRangeHint": true
+    }
+  },
+  "finalViewport": {
+    "inputTopFull": 152.890625,
+    "recovery": "Восстановить аккаунт",
+    "link": "A",
+    "inputTopReduced": 152.890625,
+    "stable": true
+  },
+  "background": {
+    "fiveMinuteQuickReturnUnblocked": true,
+    "immediateLocks": true
+  },
+  "routeWrapper": {
+    "skeleton": true,
+    "noWelcome": true,
+    "locked": false,
+    "pending": true,
+    "body": "",
+    "arrived": true,
+    "hmrNote": "First HMR session had two router module instances; repeated from clean page load."
+  }
+}
