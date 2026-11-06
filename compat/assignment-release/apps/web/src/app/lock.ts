@@ -186,7 +186,7 @@ async function verify(pin: string, id: string, epoch: number, mutation: number) 
       const failures = Math.min(100, (freshWindow ? 0 : previousRecord.failures) + 1)
       // After five failures, lock normal access for 20 minutes. Emergency remains usable.
       const wait = failures < 5 ? 0 : 20 * 60 * 1000
-      return { ...previousRecord, failures, until: Math.max(previousRecord.until, now + wait),
+      return { ...previousRecord, failures, until: wait ? now + wait : 0,
         lastWall: Math.max(now, previousRecord.lastWall ?? 0) }
     })
   } catch (error) { storageFailure(error) }
