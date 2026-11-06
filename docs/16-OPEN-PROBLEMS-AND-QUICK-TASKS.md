@@ -64,6 +64,8 @@ bundle hashes, cache headers и API health `CONFIRMED`; owner acceptance пок�
 | CAM-13 | `CONFIRMED PRODUCT RULE` | Start date автоматически = current time и является минимальным значением. Finish date по умолчанию отсутствует; не показывать ложное «через час/день». |
 | CAM-14 | `CONFIRMED PRODUCT RULE` | Needed photos 1–9999 — только progress indicator, не блокировка assignment. |
 
+Status / entry loader: прежний overlay при каждом переходе — `OWNER FAILED`. В `main@a206f19`, release `entry-status-20261106-1`, overlay ограничен входом/разблокировкой. Меню использует общий cache/store, фоновые операции и ошибки показываются компактным зелёным/жёлтым/красным Status с подробностями и Retry. [Наблюдения и ограничения](WORKSPACE-VIEWER-2026-11-06.md), [deploy](evidence/entry-status-20261106/deploy.json). `READY FOR OWNER REVIEW`: PIN → один loader → Browser/Assignments/Camera без fullscreen пауз. Hardware и private production entry — `NOT RUN`.
+
 ## 4. Photo view, Photo Card и Editor
 
 Кандидат wrapper/viewer `365095d`, release `workspace-viewer-20261106-1`: общий loader минимум 1.5 s/fade и регистрация initial page work, стабильный image stage/footer, natural image-only mode с vertical swipe. [Evidence и ограничения](WORKSPACE-VIEWER-2026-11-06.md). `READY FOR OWNER REVIEW`, hardware acceptance не выполнена. Public card/policy остаются отдельным следующим этапом; task policy должна сниматься при capture только новых фото, без ретроактивного изменения existing photos.

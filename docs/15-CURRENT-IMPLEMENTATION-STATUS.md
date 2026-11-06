@@ -21,9 +21,11 @@
 | Q1 dock source commit | `595ec85` на `main` и `origin/main` | `CONFIRMED` 2026-11-06 |
 | Активный runtime | `compat/assignment-release/` | `CONFIRMED` |
 | Production URL | `https://photobunker.duckdns.org` | `CONFIRMED` 2026-11-06 |
-| Release marker | `workspace-viewer-20261106-1` | `CONFIRMED` production 2026-11-06 |
+| Release marker | `entry-status-20261106-1` | `CONFIRMED` production 2026-11-06 |
 | Server HTTP/API health | root, health, ready возвращают 200 | `CONFIRMED` 2026-11-06 |
 | Owner mobile acceptance | повторно выявлены критические UX/functional defects | `OWNER FAILED` |
+
+Последняя коррекция `main@a206f19`, release `entry-status-20261106-1`: fullscreen loader только при входе/разблокировке (минимум 1500 ms + fade), общий preload/stores, компактный Status для работы/ошибок с подробностями и повтором. Прежнее поведение loader на переходах отклонено владельцем (`OWNER FAILED`). [Локальные наблюдения](evidence/entry-status-20261106/observations.json), [публичная сверка сборки, headers и health](evidence/entry-status-20261106/deploy.json) — exit 0. Production Playwright подтвердил marker в гостевом контексте. `READY FOR OWNER REVIEW`; реальное устройство, private production entry и installed-PWA upgrade — `NOT RUN`.
 
 ## 3. Подтверждённые ограниченные результаты
 

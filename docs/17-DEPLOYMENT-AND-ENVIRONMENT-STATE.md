@@ -122,3 +122,5 @@ docker compose ps --all
 - воспроизводимый clean-clone Compose текущего deployed runtime;
 - production monitoring без утечки private data;
 - final device/PWA upgrade acceptance.
+
+Последняя публикация Status/entry loader: `main@a206f19`, `entry-status-20261106-1`; 15 frontend source files и shell. Backup `/var/www/photobunker/.local/backups/entry-status-20261106-1-before/`. Старые assets сохранены; checksum dry-run пустой, exit 0; index → SW → release marker. [Публичная сверка сборки/headers/health](evidence/entry-status-20261106/deploy.json) — exit 0. Production Playwright подтвердил marker; private login, hardware и installed-PWA update — `NOT RUN`. Backend/данные не менялись.

@@ -35,7 +35,7 @@
 
 - Production URL: `https://photobunker.duckdns.org`.
 - Remote directory: `/var/www/photobunker`.
-- Последний подтверждённый release marker: `workspace-viewer-20261106-1` (см. `docs/15-*`).
+- Последний подтверждённый release marker: `entry-status-20261106-1` (см. `docs/15-*`).
 - `/`, `/api/v1/health`, `/api/v1/ready` отвечали `200` после последнего deploy.
 - `release.json`, `sw.js` и navigation HTML настроены как `no-store`; assets — content-hashed immutable.
 - PWA update code существует, но новый док после этого deploy владелец ещё не подтвердил.

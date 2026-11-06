@@ -1,0 +1,85 @@
+{
+  "release": "entry-status-20261106-1",
+  "commit": "a206f19",
+  "command": "python3 /tmp/photobunker-entry-status-verify.py",
+  "exitCode": 0,
+  "checks": [
+    {
+      "path": "index.html",
+      "equalsBuild": true,
+      "cache": "no-store, no-cache, must-revalidate",
+      "sha256": "70c7ad28d1b971580b78fcbaeeeb2dbec283044a6190eec3290cadab7693741c"
+    },
+    {
+      "path": "sw.js",
+      "equalsBuild": true,
+      "cache": "no-store, no-cache, must-revalidate",
+      "sha256": "61bcb295530777d0e5009c931c068f1b6277ec2113dfcd8b916294e950152978"
+    },
+    {
+      "path": "release.json",
+      "equalsBuild": true,
+      "cache": "no-store, no-cache, must-revalidate",
+      "sha256": "7b3aa830005e9ded39ab35c5571443e667e5dea643c9b2a45dfd86d1032bb0cc"
+    },
+    {
+      "path": "assets/index-B-7b0eaO.js",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "c65c8e09d644ec0833452a3c42495e70ff2536139e4dbb3aec1f1b725011ad13"
+    },
+    {
+      "path": "assets/index-BHLD5vhj.js",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "092bfd03d0ec071438c739ab9919ce0efc4986ef3daa61c27db849a828a8f5ad"
+    },
+    {
+      "path": "assets/index-RzTJHz9C.js",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "f7675978a2685e2832aa241ca6db11fcd9ca5e7ab4755572fb622760d56c4d34"
+    },
+    {
+      "path": "assets/index-DuPqPxBC.js",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "dbf40b605c8c045ca401b4c99a0e924ad82f964f2fd829d72e307bb31255cfa4"
+    },
+    {
+      "path": "assets/index-B61LbXB_.js",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "f31193a3b0d3d0b219b018dc7361c0d42c4018607dc04039a6b84fcad9d6dc37"
+    },
+    {
+      "path": "assets/index-DNp3RPyx.css",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "ffdf3bac8e48d5af84079ab91be9738b4b2c69af55b3318c1a5c747a6c4fa50e"
+    },
+    {
+      "path": "assets/PhotoBrowserIndexView-Ct3IVPLQ.js",
+      "equalsBuild": true,
+      "cache": "public, max-age=31536000, immutable",
+      "sha256": "1c8d053ac90164127caf58f5a3f2530605d190262a3c6adacb2cc073d89dc9e7"
+    },
+    {
+      "path": "api/v1/health",
+      "http": 200,
+      "body": {
+        "status": "ok"
+      }
+    },
+    {
+      "path": "api/v1/ready",
+      "http": 200,
+      "body": {
+        "status": "ready"
+      }
+    }
+  ],
+  "backup": "/var/www/photobunker/.local/backups/entry-status-20261106-1-before/",
+  "assetsChecksumDryRun": "empty, exit 0",
+  "privateProductionAcceptance": "NOT RUN"
+}
