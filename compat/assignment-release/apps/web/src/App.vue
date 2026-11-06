@@ -37,7 +37,6 @@ import AppIcon from './components/AppIcon.vue'
 import PasscodeInput from './components/PasscodeInput.vue'
 import AppLoader from './components/AppLoader.vue'
 import AppStatusIndicator from './components/AppStatusIndicator.vue'
-import PublicCardBrowser from './components/PublicCardBrowser.vue'
 import { pageIssues, pageLoading } from './app/page-load'
 import { locale, t } from './i18n'
 import { localPrototype } from './local/photos'
@@ -704,7 +703,6 @@ watch(
       :class="[
         'app-shell',
         {
-          'public-card-shell': route.name === 'photo-card',
           'camera-shell': immersive,
           'native-shell': native,
           'welcome-shell': route.name === 'welcome' && !account,
@@ -843,6 +841,5 @@ watch(
         </RouterView>
       </main>
     </div>
-    <PublicCardBrowser />
   </template>
 </template>

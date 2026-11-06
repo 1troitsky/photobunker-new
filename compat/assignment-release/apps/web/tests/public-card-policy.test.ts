@@ -21,6 +21,23 @@ beforeAll(() => {
   Object.defineProperty(globalThis,'Blob',{value:NodeBlob,configurable:true})
 })
 describe('Public card field policy', () => {
+  it('keeps the assignment snapshot as a ceiling for every per-photo override', () => {
+    const input = photo()
+    input.metadata!.publicCardAssignment = publicCardPolicy({location:false,tags:false,description:false})
+    input.metadata!.publicCard = publicCardPolicy({location:true,tags:true,description:true,contributor:true})
+    const card = publicPhotoCard(input)
+    expect(card.location).toBeUndefined(); expect(card.tags).toBeUndefined(); expect(card.description).toBeUndefined()
+    expect(card.author).toBeUndefined()
+    input.metadata!.publicCardAssignment.enabled=false
+    expect(() => publicPhotoCard(input)).toThrow('public_card.disabled')
+  })
+  it('publishes the approved basic fields by default and keeps optional fields absent', () => {
+    const card=publicPhotoCard(photo())
+    expect(card.title).toBe('Synthetic card'); expect(card.nameId).toBe('TEST0001')
+    expect(card.description).toBe('Allowed description'); expect(card.expiresAt).toBeGreaterThan(Date.now())
+    expect(card.location).toEqual({latitude:41.7,longitude:44.8})
+    for (const key of ['tags','capturedAt','editedAt','author','teamName','metadata']) expect(card).not.toHaveProperty(key)
+  })
   it('snapshots assignment defaults without changing an existing photo when task rules change', () => {
     const task = publicCardPolicy({location:false,tags:true})
     const captured = photo(); captured.metadata!.publicCard = publicCardPolicy(task)

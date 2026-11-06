@@ -9,7 +9,7 @@ import { profileReturnTo } from './identity/person'
 // out of the first render. The shell and dock can paint without waiting for
 // Matrix, image editors or collection export code.
 const SharedPhotoView = () => import('./views/SharedPhotoView.vue')
-const SharedCardView = () => import('./views/SharedCardView.vue')
+const SharedCardView = () => import('./views/PhotoCardView.vue')
 const WelcomeView = () => import('./views/WelcomeView.vue')
 const AccountAuthView = () => import('./views/AccountAuthView.vue')
 const AccountEditView = () => import('./views/AccountEditView.vue')
@@ -23,7 +23,6 @@ const GalleryView = () => import('./views/GalleryView.vue')
 const SettingsView = () => import('./views/SettingsView.vue')
 const DataStorageView = () => import('./views/DataStorageView.vue')
 const PhotoView = () => import('./views/PhotoView.vue')
-const PhotoCardView = () => import('./views/PhotoCardView.vue')
 const PhotoBrowserIndexView = () => import('./views/PhotoBrowserIndexView.vue')
 const PhotoBrowserView = () => import('./views/PhotoBrowserView.vue')
 const ProfilesView = () => import('./views/ProfilesView.vue')
@@ -162,7 +161,7 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
         path: '/photo-cards/:id',
         alias: '/gallery/:id/card',
         name: 'photo-card',
-        component: PhotoCardView,
+        redirect: to => '/gallery/' + encodeURIComponent(String(to.params.id)),
       },
       { path: '/gallery/:id', name: 'photo', component: PhotoView },
       { path: '/settings', name: 'settings', component: SettingsView },

@@ -27,6 +27,6 @@ function locked(field: 'title' | 'note' | 'category') { return !metadataEditable
     <button v-if="photo.uiOnly && (modelValue.latitude || modelValue.longitude)" class="quiet-button" type="button" @click="emit('update:modelValue', {...modelValue, latitude:'', longitude:''})">{{ s('clearLocation') }}</button>
     <p class="field-hint">{{ s(photo.uiOnly ? 'coordinatesHint' : 'legacyCoordinates') }}</p>
     <label>{{ s('tags') }}<input :value="modelValue.tags" maxlength="820" :placeholder="s('tagsHint')" @input="patch('tags', $event)"></label>
-    <PublicCardSettings :model-value="modelValue.publicCard" :busy="busy || readonly || !metadataEditable(photo)" @update:model-value="emit('update:modelValue', {...modelValue, publicCard:$event})" />
+    <PublicCardSettings :model-value="modelValue.publicCard" :ceiling="photo.metadata?.publicCardAssignment" :busy="busy || readonly || !metadataEditable(photo)" @update:model-value="emit('update:modelValue', {...modelValue, publicCard:$event})" />
   </fieldset>
 </template>

@@ -1,5 +1,4 @@
 import type { Photo } from '../local/photos'
-import { shallowRef } from 'vue'
 import { privatePhotoCard, type PrivatePhotoCard } from './private-photo-card'
 
 export type PublicCardPolicy = {
@@ -19,9 +18,16 @@ export function publicCardPolicy(value?: Partial<PublicCardPolicy>): PublicCardP
     if (typeof value?.[key] === 'boolean') defaults[key] = value[key]!
   return defaults
 }
+export function effectivePublicCardPolicy(photo: Photo): PublicCardPolicy {
+  const policy = publicCardPolicy(photo.metadata?.publicCard)
+  const ceiling = photo.metadata?.publicCardAssignment
+  if (ceiling) for (const key of Object.keys(policy) as (keyof PublicCardPolicy)[])
+    policy[key] = policy[key] && ceiling[key] === true
+  return policy
+}
 /** Narrows an authorized read; it never grants read/share/image permissions. */
 export function publicPhotoCard(photo: Photo): PrivatePhotoCard {
-  const policy = publicCardPolicy(photo.metadata?.publicCard)
+  const policy = effectivePublicCardPolicy(photo)
   if (!policy.enabled) throw new Error('public_card.disabled')
   const card = privatePhotoCard(photo)
   if (!policy.description) delete card.description
@@ -42,6 +48,3 @@ export function publicPhotoCard(photo: Photo): PrivatePhotoCard {
   if (full && policy.editedAt && photo.metadata?.editedAt) card.editedAt = photo.metadata.editedAt
   return card
 }
-export const publicCardPreview = shallowRef<{ id: string; share: boolean }>()
-export function openPublicCard(id: string, share = false) { publicCardPreview.value = { id, share } }
-export function closePublicCard() { publicCardPreview.value = undefined }

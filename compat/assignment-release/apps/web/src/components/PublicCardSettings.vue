@@ -2,7 +2,7 @@
 import ToggleRow from './ToggleRow.vue'
 import { publicCardPolicy, type PublicCardPolicy } from '../studio/public-card-policy'
 import { locale } from '../i18n'
-const props = defineProps<{ modelValue?: PublicCardPolicy; busy?: boolean; assignment?: boolean }>()
+const props = defineProps<{ modelValue?: PublicCardPolicy; busy?: boolean; assignment?: boolean; ceiling?: PublicCardPolicy }>()
 const emit = defineEmits<{ 'update:modelValue': [value: PublicCardPolicy] }>()
 const labels: Record<keyof PublicCardPolicy, [string,string]> = {
   enabled: ['Разрешить Public card', 'Allow Public card'], contributor: ['Автор и команда', 'Contributor and team'],
@@ -20,10 +20,11 @@ function patch(key: keyof PublicCardPolicy, value: boolean) {
     <p class="field-hint">{{ locale === 'ru'
       ? (assignment ? 'Эти параметры получат только новые фотографии задания. Уже снятые не изменятся.' : 'Отдельная карточка по ссылке. Выберите, что увидит получатель. Параметры действуют для новых ссылок; прежние можно отозвать.')
       : (assignment ? 'Applied only to new assignment photos. Existing photos stay unchanged.' : 'A separate card shared by link. Choose what recipients see. Changes apply to new links; existing links can be revoked.') }}</p>
-    <ToggleRow :model-value="publicCardPolicy(modelValue).enabled" :label="labels.enabled[locale === 'ru' ? 0 : 1]" @update:model-value="patch('enabled', $event)" />
+    <ToggleRow :disabled="ceiling?.enabled === false" :model-value="publicCardPolicy(modelValue).enabled" :label="labels.enabled[locale === 'ru' ? 0 : 1]" @update:model-value="patch('enabled', $event)" />
+    <p v-if="ceiling" class="field-hint">{{ locale === 'ru' ? 'Выключенные правилами задания поля нельзя включить у фотографии.' : 'Fields prohibited by the captured assignment rules cannot be enabled for this photo.' }}</p>
     <template v-if="publicCardPolicy(modelValue).enabled">
       <ToggleRow v-for="key in (['contributor','capturedAt','editedAt','location','description','tags','metadata'] as const)" :key="key"
-        :model-value="publicCardPolicy(modelValue)[key]" :label="labels[key][locale === 'ru' ? 0 : 1]" @update:model-value="patch(key, $event)" />
+        :disabled="ceiling?.[key] === false" :model-value="publicCardPolicy(modelValue)[key]" :label="labels[key][locale === 'ru' ? 0 : 1]" @update:model-value="patch(key, $event)" />
     </template>
   </fieldset>
 </template>

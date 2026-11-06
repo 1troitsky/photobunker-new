@@ -22,6 +22,6 @@ export function detailsChanges(photo: Photo, draft: PhotoDetailsDraft): PhotoCha
     if (!empty && (!draft.latitude.trim() || !draft.longitude.trim() || !Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180)) throw new PhotoDetailsError(s('invalidCoordinates'))
     changes.metadata = { ...photo.metadata, location: empty ? undefined : { latitude, longitude, source: 'manual' }, locationStatus: undefined, locationEditedAt: Date.now() }
   }
-  changes.metadata = { ...(changes.metadata ?? photo.metadata), publicCard: publicCardPolicy(draft.publicCard), editedAt: Date.now() }
+  changes.metadata = { ...(changes.metadata ?? photo.metadata), ...(photo.workspaceAssignmentId && !photo.metadata?.publicCardAssignment ? {publicCardAssignment:publicCardPolicy(photo.metadata?.publicCard)} : {}), publicCard: publicCardPolicy(draft.publicCard), editedAt: Date.now() }
   return changes
 }

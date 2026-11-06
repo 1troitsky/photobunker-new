@@ -49,7 +49,7 @@ import {
 } from '../studio/disclosure'
 import { downloadFile, externalPhotoFile, shareFile } from '../studio/export'
 import { nameText } from '../local/photo-name-text'
-import { openPublicCard } from '../studio/public-card-policy'
+import PublicCardLink from '../components/PublicCardLink.vue'
 import { inAppId } from '../identity/display'
 import { listPhotoVersions, type PhotoVersion } from '../studio/versions'
 import { recordDiagnostic } from '../app/status'
@@ -635,7 +635,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="photo-action-bar">
         <button type="button" :disabled="!photo" @click="infoOpen = true"><AppIcon name="info" /><span>{{ s('info') }}</span></button>
-        <button type="button" :disabled="!photo" @click="photo && openPublicCard(photo.id)"><AppIcon name="profiles" /><span>Public card</span></button>
+        <PublicCardLink v-if="photo" :photo="photo" :version-key="versions.map(item => item.id + ':' + item.sync).join(',')" /><button v-else type="button" disabled>Public card</button>
         <button type="button" :disabled="!photo || !canEdit || busy" @click="photo && router.push({ path: '/gallery/' + encodeURIComponent(photo.id) + '/edit', query: { ...(versionId ? { version: versionId } : {}), ...(assignmentScope ? { assignment: assignmentScope } : {}), ...(folderScope ? { folder: folderScope } : {}), ...(personalScope ? { personal: '1' } : {}) } })"><AppIcon name="edit" /><span>{{ s('edit') }}</span></button>
       </div>
       <div class="photo-pagination">

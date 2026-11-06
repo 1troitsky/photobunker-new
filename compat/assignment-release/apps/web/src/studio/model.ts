@@ -1,3 +1,4 @@
+import { publicCardPolicy } from './public-card-policy'
 import {
   aspectRatio,
   defaultRules,
@@ -110,6 +111,7 @@ export function contributorRules(): ContributorRules {
     // Participant-only delivery is an explicit opt-in rule.
     participantsOnly: false,
     useAssignmentPhotoId: true,
+    publicCard: publicCardPolicy(),
   }
 }
 export function newPreset(name: string, source?: Profile): Preset {

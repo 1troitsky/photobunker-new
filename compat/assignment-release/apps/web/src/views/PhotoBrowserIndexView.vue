@@ -13,7 +13,7 @@ import { readOrganizer, saveBrowser, type BrowserOrganizer } from '../photo-brow
 import { buildExplorer, ancestors, descendants, explorerRows, writable, canMove, folderKey,
   isSection, type BrowserSection, type BrowserSort, type ExplorerEntry, type OrganizerAction } from '../photo-browser/explorer'
 import { browserReadable, browserTasks, organize, editBrowserPhoto, deleteBrowserPhotos } from '../photo-browser/organizer'
-import { openPublicCard } from '../studio/public-card-policy'
+import PublicCardLink from '../components/PublicCardLink.vue'
 import { PhotoDetailsError } from '../studio/details'
 import { metadataEditable } from '../collaboration/access'
 import { bt } from '../photo-browser/text'
@@ -275,13 +275,10 @@ async function removeSelection() {
   } catch (reason) { error.value = errorText(reason) }
   finally { working.value = false }
 }
-function photoAction(entry: ExplorerEntry, action: 'card' | 'share' | 'original' | 'edit') {
+function photoAction(entry: ExplorerEntry, action: 'original' | 'edit') {
   menuKey.value = ''
   if (entry.kind !== 'photo') return
-  if (action === 'card' || action === 'share') {
-    if (action === 'share' && !entry.shareable) return
-    openPublicCard(entry.id, action === 'share')
-  } else if (action === 'edit' && entry.editable)
+  if (action === 'edit' && entry.editable)
     void router.push({ path: '/gallery/' + encodeURIComponent(entry.id) + '/edit', query: photoQuery(entry) })
   else if (action === 'original' && entry.readable)
     void router.push({ path: '/gallery/' + encodeURIComponent(entry.id), query: { ...photoQuery(entry), action: 'original' } })
@@ -470,11 +467,10 @@ onBeforeUnmount(() => window.removeEventListener('focus', loadOrganizer))
       <div v-if="menuEntry" class="action-list explorer-menu">
         <button type="button" :disabled="menuEntry.kind === 'photo' && !menuEntry.readable" @click="openEntry(menuEntry, true); menuKey = ''"><AppIcon :name="menuEntry.kind === 'photo' ? 'gallery' : 'folder'" />{{ bt(menuEntry.kind === 'photo' ? 'openPhoto' : 'currentPath') }}</button>
         <template v-if="menuEntry.kind === 'photo'">
-          <button type="button" @click="photoAction(menuEntry, 'card')"><AppIcon name="profiles" />{{ bt('card') }}</button>
+          <PublicCardLink v-if="menuEntry.photo" :photo="menuEntry.photo" menu />
           <button v-if="menuEntry.readable" type="button" @click="photoAction(menuEntry, 'original')"><AppIcon name="gallery" />{{ bt('original') }}</button>
           <button v-if="menuEntry.editable" type="button" @click="photoAction(menuEntry, 'edit')"><AppIcon name="edit" />{{ bt('editPhoto') }}</button>
           <button v-if="menuEntry.editable" type="button" @click="startEdit('tags', menuEntry)"><AppIcon name="edit" />{{ bt('editTags') }}</button>
-          <button v-if="menuEntry.shareable" type="button" @click="photoAction(menuEntry, 'share')"><AppIcon name="share" />{{ bt('shareCard') }}</button>
           <button v-if="menuEntry.scope === 'personal'" type="button" :disabled="working" @click="archive(!!menuEntry.archived, menuEntry)"><AppIcon name="archive" />{{ bt(menuEntry.archived ? 'restore' : 'archiveAction') }}</button>
         </template>
         <button v-if="menuEntry.kind === 'folder' || (menuEntry.editable && menuEntry.photo && (metadataEditable(menuEntry.photo) || !menuEntry.photo.title))" type="button" @click="startEdit('rename', menuEntry)"><AppIcon name="edit" />{{ bt('rename') }}</button>

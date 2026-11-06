@@ -632,7 +632,8 @@ async function capture() {
     Math.abs(candidate.measuredAt - createdAt) <= settings.locationWindow * 1000
       ? candidate
       : undefined
-  const metadata: PhotoMetadata = { publicCard: publicCardPolicy(studioSession.value?.rules.publicCard) }
+  const metadata: PhotoMetadata = { publicCard: publicCardPolicy(studioSession.value?.rules.publicCard),
+    ...(studioSession.value?.taskId ? {publicCardAssignment:publicCardPolicy(studioSession.value.rules.publicCard)} : {}) }
   if (settings.keepDate) metadata.capturedAt = createdAt
   pendingPreset = clone(effectiveSession.value.preset!)
   if (pendingPreset) {

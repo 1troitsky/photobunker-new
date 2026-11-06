@@ -500,6 +500,8 @@ final class EncryptedPhotosTest extends TestCase
         $this->post($path, $make($m))->assertOk()->assertJsonPath('id', $share);
         $this->assertDatabaseCount('encrypted_shares', 1);
         $this->assertDatabaseCount('photo_card_share_objects', 2);
+        $this->call('GET', $public, [], [], [], ['HTTP_ACCEPT' => 'application/json'])->assertOk();
+        $this->call('GET', $public.'/content/photo')->assertOk();
         foreach (['', '/photo', '/original'] as $suffix) {
             $this->get($public.'/content'.$suffix)->assertOk();
         }

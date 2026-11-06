@@ -1,0 +1,90 @@
+{
+  "release": "public-photo-card-20261106-1",
+  "scenario": "Production build served on a separate localhost origin. Synthetic encrypted card/photo API only; real AES-GCM decrypt. Fresh guest, no auth cookie. No owner data.",
+  "publicRoot": {
+    "title": "Public card · PhotoBunker",
+    "photo": true,
+    "noPrivateShell": true,
+    "noDrawer": true,
+    "noPin": true,
+    "publicCapabilityRetained": true,
+    "nameId": true,
+    "description": true,
+    "gps": true,
+    "mapWidget": true,
+    "noCamera": true,
+    "noCaptureDate": true,
+    "photoExpiryNotLinkExpiry": true,
+    "publicLink": true,
+    "noHorizontalOverflow": true,
+    "noAuthCookie": true,
+    "language": "ru"
+  },
+  "requests": {
+    "privateRequests": 0,
+    "cardRequests": 2,
+    "imageRequests": 2,
+    "originalRequests": 0
+  },
+  "fullReloadWorked": true,
+  "desktop": {
+    "width": 1280,
+    "noHorizontalOverflow": true,
+    "imageWidth": 720,
+    "imageHeight": 510
+  },
+  "narrow": {
+    "width": 320,
+    "noHorizontalOverflow": true,
+    "buttons": [
+      {
+        "width": 42,
+        "height": 42
+      },
+      {
+        "width": 42,
+        "height": 42
+      },
+      {
+        "width": 42,
+        "height": 42
+      }
+    ]
+  },
+  "commands": [
+    {
+      "command": "docker compose -f compat/assignment-release/compose.yaml exec -T web npm test -- tests/public-card-policy.test.ts tests/public-card-image-source.test.ts tests/card-share-crypto.test.ts",
+      "exitCode": 0,
+      "result": "18 tests"
+    },
+    {
+      "command": "docker compose -f compat/assignment-release/compose.yaml exec -T web npm test -- tests/public-card-link.test.ts",
+      "exitCode": 0,
+      "result": "2 tests: ordinary external anchor, no drawer/window.open, scope lock/assignment deny"
+    },
+    {
+      "command": "docker compose -f compat/assignment-release/compose.yaml exec -T api php artisan test tests/Feature/EncryptedPhotosTest.php --filter='test_private_card_v2_is_ciphertext_only_scope_limited_and_isolated_from_legacy|test_photo_card_multi_object_share_is_all_or_nothing_and_revokes_every_kind'",
+      "exitCode": 0,
+      "result": "2 tests / 78 assertions; SQLite :memory:, fake storage; explicit guest requests without cookies; revoke endpoints"
+    },
+    {
+      "command": "docker compose -f compat/assignment-release/compose.yaml exec -T -e PHOTOBUNKER_RELEASE_ID=public-photo-card-20261106-1 web npm run build",
+      "exitCode": 0
+    },
+    {
+      "command": "git diff --check -- compat/assignment-release/apps",
+      "exitCode": 0
+    }
+  ],
+  "notRun": [
+    "Owner account publish through production UI",
+    "Native iOS/Android browser window behavior and installed-PWA return",
+    "Legacy non-E2EE capture end-to-end",
+    "Lighthouse/performance baseline"
+  ],
+  "notes": [
+    "First fixture POST from Vite was blocked by existing connect-src CSP; moved synthetic setup to its own origin without changing application CSP.",
+    "A same-document hash navigation was not a full reload; final reload check used location.reload().",
+    "Guest capability remains in public URL for reload and native browser handoff; no-referrer is set, no private app/diagnostics starts, no capability is stored in cache/localStorage."
+  ]
+}

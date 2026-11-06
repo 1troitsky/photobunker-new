@@ -117,8 +117,10 @@ final class WorkspacePhotoController extends Controller
         abort_unless(hash_equals($data['originalChecksum'], hash_file('sha256', $original->getRealPath())) && hash_equals($data['thumbnailChecksum'], hash_file('sha256', $thumbnail->getRealPath())) && hash_equals($data['previewChecksum'], hash_file('sha256', $preview->getRealPath())), 503);
         $fingerprint = hash('sha256', json_encode([$actor, $vault->id, $data['id'], $data['originalChecksum'], $data['thumbnailChecksum'], $data['previewChecksum'], $data['createdAt'], $data['width'], $data['height'], $data['mime'], $data['method']]));
         $metadata = $this->metadata($data['metadata'] ?? []);
-        if (isset($capture['rules']['publicCard'])) {
-            $metadata['publicCard'] = $capture['rules']['publicCard'];
+        if ($task) {
+            $policy = $capture['rules']['publicCard'] ?? ['enabled' => true, 'contributor' => false, 'capturedAt' => false, 'editedAt' => false, 'location' => true, 'description' => true, 'tags' => false, 'metadata' => false];
+            $metadata['publicCard'] = $policy;
+            $metadata['publicCardAssignment'] = $policy;
         }
         $owner = DB::table('identity_accounts')->find($actor);
         $profile = $capture['preset'] ?? (isset($data['profile']) ? Validator::make($data['profile'], ['id' => 'required|string|max:120', 'name' => 'required|string|max:80', 'version' => 'required|integer|min:0', 'description' => 'sometimes|nullable|string|max:1000', 'rules' => 'required|array'])->validate() : null);
@@ -252,7 +254,12 @@ final class WorkspacePhotoController extends Controller
             $manifest = $this->photos->manifest($row);
             if (isset($data['metadata'])) {
                 $metadata = $this->metadata($data['metadata']);
-                foreach (['capturedAt', 'camera', 'resolutionLimited'] as $field) {
+                foreach (['capturedAt', 'camera', 'resolutionLimited', 'publicCardAssignment'] as $field) {
+                    if ($field === 'publicCardAssignment' && $row->assignment_id && ! isset($manifest['metadata'][$field])) {
+                        $previous = $manifest['metadata']['publicCard'] ?? ['enabled' => true, 'contributor' => false, 'capturedAt' => false, 'editedAt' => false, 'location' => true, 'description' => true, 'tags' => false, 'metadata' => false];
+                        abort_if(isset($metadata[$field]) && $metadata[$field] !== $previous, 403);
+                        continue;
+                    }
                     abort_if(($metadata[$field] ?? null) !== ($manifest['metadata'][$field] ?? null), 403);
                 }
                 $data['metadata'] = $metadata;
@@ -391,6 +398,10 @@ final class WorkspacePhotoController extends Controller
         $publicCard = ['publicCard' => 'sometimes|array:enabled,contributor,capturedAt,editedAt,location,description,tags,metadata', 'editedAt' => 'sometimes|integer|min:0'];
         foreach (['enabled', 'contributor', 'capturedAt', 'editedAt', 'location', 'description', 'tags', 'metadata'] as $field) {
             $publicCard['publicCard.'.$field] = 'required_with:publicCard|boolean';
+        }
+        $publicCard['publicCardAssignment'] = 'sometimes|array:enabled,contributor,capturedAt,editedAt,location,description,tags,metadata';
+        foreach (['enabled', 'contributor', 'capturedAt', 'editedAt', 'location', 'description', 'tags', 'metadata'] as $field) {
+            $publicCard['publicCardAssignment.'.$field] = 'required_with:publicCardAssignment|boolean';
         }
         return Validator::make($value, ['date' => 'sometimes|string|max:40', 'time' => 'sometimes|string|max:40', 'camera' => 'sometimes|string|max:120', 'capturedAt' => 'sometimes|integer|min:0', 'resolutionLimited' => 'sometimes|boolean',
             'locationStatus' => 'sometimes|in:pending,unavailable', 'locationEditedAt' => 'sometimes|integer|min:0', 'location' => 'sometimes|array:source,latitude,longitude,accuracy,measuredAt',

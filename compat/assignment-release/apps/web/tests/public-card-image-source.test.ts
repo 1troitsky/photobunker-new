@@ -4,8 +4,9 @@ const fixture = vi.hoisted(() => ({
   read: vi.fn(), versions: vi.fn(), save: vi.fn(),
   photo: { id:'photo',accountId:'owner',workspaceAccess:{read:true,edit:true,shareExternal:true} },
 }))
-vi.mock('../src/identity/store', () => ({ account:{value:{id:'owner'}} }))
-vi.mock('../src/crypto/store', () => ({ photoReadAllowed:()=>true }))
+vi.mock('../src/identity/store', async () => {const {ref}=await import('vue');return {account:ref({id:'owner'}),deviceId:ref('device')}})
+vi.mock('../src/crypto/store', async () => {const {ref}=await import('vue');return {photoReadAllowed:()=>true,strongUnlocked:ref(true),warmLocked:ref(false)}})
+vi.mock('../src/app/lock', async () => {const {ref}=await import('vue');return {appLocked:ref(false)}})
 vi.mock('../src/studio/photo-card-reader', () => ({ readPrivateCardPhoto:async()=>fixture.photo }))
 vi.mock('../src/studio/versions', () => ({listPhotoVersions:fixture.versions,savePhotoVersion:fixture.save,emptyEdits:()=>({})}))
 vi.mock('../src/server/photos', () => ({ readPhoto:fixture.read }))

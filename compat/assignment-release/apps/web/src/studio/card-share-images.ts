@@ -3,12 +3,26 @@ import { readPrivateCardPhoto } from './photo-card-reader'
 import { listPhotoVersions, savePhotoVersion, emptyEdits } from './versions'
 import { externalPhotoFile } from './export'
 import { readPhoto } from '../server/photos'
-import { account } from '../identity/store'
-import { photoReadAllowed } from '../crypto/store'
+import { account, deviceId } from '../identity/store'
+import { watch } from 'vue'
+import { appLocked } from '../app/lock'
+import { photoReadAllowed, strongUnlocked, warmLocked } from '../crypto/store'
 import { isExpired } from '../delivery/clock'
 
-/** Explicit "Open in browser" uses the existing protected share flow. */
-export async function createPublicCardLink(photoId: string): Promise<string> {
+const links = new Map<string,{expiresAt:number;promise:Promise<string>}>()
+watch([() => account.value?.id,deviceId,appLocked,strongUnlocked,warmLocked], () => links.clear(), {flush:'sync'})
+export function createPublicCardLink(photoId: string, revisionKey = ''): Promise<string> {
+  if (!account.value || appLocked.value || !photoReadAllowed()) return Promise.reject(new Error('card_share.locked'))
+  const key = JSON.stringify([account.value.id,deviceId.value,photoId,revisionKey])
+  const existing = links.get(key)
+  if (existing && existing.expiresAt > Date.now()+60000) return existing.promise
+  const entry = {expiresAt:Date.now()+604800000,promise:Promise.resolve('')}
+  entry.promise = publishCard(photoId).then(result => {entry.expiresAt=result.expiresAt;return result.url}).catch(error => {if (links.get(key)===entry) links.delete(key);throw error})
+  links.set(key,entry)
+  return entry.promise
+}
+/** Prepare a public URL before its ordinary browser link is clicked. */
+async function publishCard(photoId: string) {
   const owner = account.value?.id
   const { publicPhotoCard } = await import('./public-card-policy')
   const { CARD_ONLY } = await import('../crypto/card-shares')
@@ -17,12 +31,16 @@ export async function createPublicCardLink(photoId: string): Promise<string> {
   const version = await prepareCardPhotoVersion(photoId)
   const files = await shareCardImages(photoId, version.id, false)
   if (!owner || owner !== account.value?.id || !photoReadAllowed()) throw new Error('card_share.account_changed')
-  const row = await commitCardShare(photoId, card, {...CARD_ONLY, metadata:true, photo:true},
-    Math.min(Date.now()+3600000,card.expiresAt ?? 0), 3600, files)
+  const row = await commitCardShare(photoId, card, {...CARD_ONLY, metadata:true, photo:true, download:true},
+    Math.min(Date.now()+604800000,card.expiresAt ?? 0), 604800, files)
   await flushCardShares()
-  const published = (await listCardShareIntents(photoId)).find(item => item.id === row.id)
+  let published = (await listCardShareIntents(photoId)).find(item => item.id === row.id)
+  if (published && published.state !== 'sent' && !published.lastError) {
+    await flushCardShares()
+    published = (await listCardShareIntents(photoId)).find(item => item.id === row.id)
+  }
   if (published?.state !== 'sent' || published.lastError) throw new Error('card_share.unavailable')
-  return published.url
+  return {url:published.url,expiresAt:published.expiresAt}
 }
 
 /** Explicit Publish prepares a sanitized derivative; it never shares raw original bytes. */

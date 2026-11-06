@@ -1,5 +1,17 @@
 # Public card — 2026-11-06
 
+## Действующее согласованное требование: публичная Photo-card
+
+Владелец подтвердил: существующая Photo-card должна стать самостоятельной публичной страницей. Приватный предпросмотр и собственная browser sheet отклонены (`OWNER FAILED`). Кандидат `public-photo-card-20261106-1`: `PhotoCardView.vue` теперь содержит публичную страницу `/c/:id#capability`, отдельного SharedCardView/PrivateCardBrowser нет. Guest entry монтирует только эту страницу, не запускает App/PIN/identity recovery/private outbox/diagnostics/PWA reloader. Внутри приложения Public card — обычная внешняя ссылка; URL готовится до её нажатия, без промежуточного preview/Create link. Browser menu и photo viewer используют один PublicCardLink; ссылка очищается при lock/scope change, ошибки подготовки можно повторить. Приватные старые `/photo-cards/:id` перенаправляются на соответствующий private viewer, а не выдают UUID за публичный grant.
+
+По умолчанию публикуются фото, название/ID, описание, срок удаления самой фотографии, GPS+существующий map widget (если не запрещены). Дополнительные даты/теги/автор-команда/metadata проходят пересечение per-photo policy и `publicCardAssignment` snapshot, сохранённого при capture. Photo Edit не может расширить snapshot. Текущие правила задания не применяются к уже снятым фото. Public card содержит C/D/S, естественную высоту изображения, собственную ссылку с copy icon. Primary public grant: photo+download, без original; TTL ограничен фото и прежним максимумом link contract (7 дней). Истечение ссылки и удаление фото различаются; в карточке показан photoExpiresAt.
+
+Public capability оставлена в fragment, чтобы refresh и нативный Open in Browser передавали работоспособный URL. Она не отправляется HTTP endpoint, не сохраняется в localStorage/cache; index/API/map используют no-referrer, внешний anchor — noopener/noreferrer. Публичная страница не запускает приватную аналитику/diagnostics. Старые immutable share links сохраняют прежнюю семантику до expiry/revoke; существующий revoke не удаляет исходник. Алгоритмы шифрования, server ACL и destructive gates не расширялись.
+
+[Production-build guest check](evidence/public-photo-card-20261106/observations.json): новый origin без auth cookie, реальное шифрование/расшифровка synthetic JPEG, публичные поля и GPS/map видны, camera/capture date скрыты, после настоящего reload фото осталось доступным; private API requests 0, original requests 0. [390 px](evidence/public-photo-card-20261106/public-photo-card-390.png), [desktop](evidence/public-photo-card-20261106/public-photo-card-desktop.png), 320 px без horizontal overflow. 20 targeted frontend checks и 2 backend card tests (78 assertions, SQLite memory/fake storage, включая настоящие guest requests без cookies и revoke) — exit 0. Production build/diff check — exit 0. Owner production publish, реальные iOS/Android/PWA и legacy non-E2EE full flow — `NOT RUN`. Performance/Lighthouse — `NOT RUN`, baseline не измерялся. Статус `IMPLEMENTED`, приёмка владельцем не выполнена.
+
+Ниже — история двух отклонённых вариантов, не инструкция для реализации.
+
 ## Коррекция открытия: окно внутри приложения
 
 Опубликован `main@769e3a5`, release `public-card-sheet-20261106-1`. Production build (`docker compose -f compat/assignment-release/compose.yaml exec -T -e PHOTOBUNKER_RELEASE_ID=public-card-sheet-20261106-1 web npm run build`) и diff check — exit 0. [Deploy proof](evidence/public-card-sheet-20261106/deploy.json). Статус `IMPLEMENTED`; mobile acceptance — `NOT RUN`.

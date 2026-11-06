@@ -920,16 +920,11 @@
 }
 @media (prefers-reduced-motion: reduce) { .browser-skeleton span, .photo-card-loading-image, .photo-view-loading-image, .route-skeleton-card, .app-status-pill > span { animation: none; } }
 
-/* Public card is a separate scrolling document, never a dock destination. */
-.app-shell.public-card-shell { --nav-height:0px; --dock-total-height:0px; --dock-safe-bottom:0px; padding-bottom:0; }
-.public-card-shell .main-content { padding-bottom:0; }
-.public-card-shell .photo-card-screen { margin-inline:auto; width:100%; }
 .public-card-header .screen-actions { gap:2px; }
 .public-card-header .app-icon-button { width:44px; height:44px; }
 .public-card-preview-label { padding:10px 0 0; line-height:1.5; }
 .photo-card-screen .photo-card-image { width:100%; aspect-ratio:auto; }
 .photo-card-screen .photo-card-image img, .shared-card-screen .photo-card-safe-image { display:block; width:100%; max-width:100%; height:auto; max-height:none; object-fit:contain; }
-.public-card-shell .photo-card-body { padding-bottom:calc(24px + env(safe-area-inset-bottom)); }
 @media(max-width:360px) { .public-card-header { gap:6px; } .public-card-header .screen-title h1 { font-size:16px; } .public-card-header .screen-monogram { display:none; } }
 
 .photo-card-screen .photo-card-intro { padding:12px 0 16px; }
@@ -938,5 +933,9 @@
 .public-card-media img { border-radius:14px; }
 .shared-card-screen .photo-card-content { gap:16px; }
 
-.public-card-embedded-header { justify-content:flex-end; min-height:52px; padding-top:4px; padding-bottom:4px; }
-.sheet-browser .photo-card-body { padding-bottom:24px; }
+
+.public-card-url label { display:block; color:var(--secondary); font-size:13px; margin-bottom:8px; }
+.public-card-url > div { display:flex; gap:8px; align-items:center; }
+.public-card-url input { min-width:0; flex:1; width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; color:var(--text); background:var(--background); font:inherit; font-size:14px; }
+.public-card-url button { width:44px; height:44px; flex-shrink:0; }
+.public-card-remaining { display:block; margin-top:4px; color:var(--danger); }

@@ -8,10 +8,11 @@ export function downloadFile(file: File) {
   link.href = url; link.download = file.name; link.click()
   setTimeout(() => URL.revokeObjectURL(url), 10000)
 }
-export async function copyPhotoImage(file: Blob) {
+export async function copyPhotoImage(file: Blob, verify?: () => Promise<unknown>) {
   const png = (async () => {
     const url = URL.createObjectURL(file), image = new Image(), canvas = document.createElement('canvas')
     try {
+      if (verify) await verify()
       image.src = url; await image.decode()
       canvas.width = image.naturalWidth; canvas.height = image.naturalHeight
       canvas.getContext('2d')!.drawImage(image, 0, 0)
