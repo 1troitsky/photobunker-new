@@ -635,7 +635,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="photo-action-bar">
         <button type="button" :disabled="!photo" @click="infoOpen = true"><AppIcon name="info" /><span>{{ s('info') }}</span></button>
-        <PublicCardLink v-if="photo" :photo="photo" :version-key="versions.map(item => item.id + ':' + item.sync).join(',')" /><button v-else type="button" disabled>Public card</button>
+        <PublicCardLink :photo="photo" :version-key="versions.map(item => item.id + ':' + item.sync).join(',')" />
         <button type="button" :disabled="!photo || !canEdit || busy" @click="photo && router.push({ path: '/gallery/' + encodeURIComponent(photo.id) + '/edit', query: { ...(versionId ? { version: versionId } : {}), ...(assignmentScope ? { assignment: assignmentScope } : {}), ...(folderScope ? { folder: folderScope } : {}), ...(personalScope ? { personal: '1' } : {}) } })"><AppIcon name="edit" /><span>{{ s('edit') }}</span></button>
       </div>
       <div class="photo-pagination">
