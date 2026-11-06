@@ -18,12 +18,14 @@ import { profilePath } from '../identity/person'
 import { formatDate, formatNumber, formatBytes } from '../i18n'
 import { localTasks } from '../studio/store'
 import { q } from '../crypto/text'
+import { usePageLoad } from '../app/page-load'
 
 const route = useRoute()
 const card = ref<PrivatePhotoCard>()
 const canShare = ref(false)
 const ownerOfCard = ref('')
 const loading = ref(false)
+usePageLoad(loading)
 const error = ref<'offline' | 'denied' | 'locked' | 'unavailable'>()
 const expanded = ref(false)
 const shareOpen = ref(false)

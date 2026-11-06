@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute } from 'vue-router'
 import ScreenHeader from '../components/ScreenHeader.vue'
+import { usePageLoad } from '../app/page-load'
 import AppIcon from '../components/AppIcon.vue'
 import PhotoThumbnail from '../components/PhotoThumbnail.vue'
 import { account, deviceId, sessionState, offlineCaptureIdentity, hasConfirmedIdentity } from '../identity/store'
@@ -21,6 +22,7 @@ const route = useRoute()
 const id = computed(() => String(route.params.id ?? ''))
 const snapshot = ref<BrowserSnapshot>()
 const status = ref<'loading' | 'ready' | 'offline' | 'pending' | 'locked' | 'denied' | 'revoked' | 'unavailable' | 'failed'>('loading')
+usePageLoad(() => status.value === 'loading')
 const selected = ref<string[]>([])
 const choosing = ref(false)
 const query = ref('')

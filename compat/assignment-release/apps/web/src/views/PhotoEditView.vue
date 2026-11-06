@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { account } from '../identity/store'
 import { securityError } from '../crypto/text'
+import { usePageLoad } from '../app/page-load'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+const preparingScreen = ref(true)
+usePageLoad(preparingScreen)
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { guardReload } from '../studio/unsaved'
 import ScreenHeader from '../components/ScreenHeader.vue'
@@ -476,7 +479,7 @@ onMounted(async () => {
       failure instanceof Error && failure.message === 'version.unavailable'
         ? s('versionUnavailable')
         : s('failed')
-  }
+  } finally { preparingScreen.value = false }
 })
 async function saveDetails() {
   if (!photo.value || busy.value) return

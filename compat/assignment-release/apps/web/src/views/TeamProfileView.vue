@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePageLoad } from '../app/page-load'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ScreenHeader from '../components/ScreenHeader.vue'
@@ -28,6 +29,7 @@ const members = computed(() => teamMembers(team.value))
 const isOwner = computed(() => !!team.value && team.value.canManage === true &&
   team.value.ownerPublicId === account.value?.publicId)
 const draft = ref<Team>(), busy = ref(false), loading = ref(true), error = ref('')
+usePageLoad(loading)
 let loadEpoch = 0, draftSignature = ''
 async function refresh() {
   const current = ++loadEpoch

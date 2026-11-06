@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { usePageLoad } from '../app/page-load'
 import { computed, onMounted, ref } from 'vue'
+const preparingScreen = ref(true)
+usePageLoad(preparingScreen)
 import { useRoute, useRouter } from 'vue-router'
 import LegacyAssignmentView from './LegacyAssignmentView.vue'
 import ScreenHeader from '../components/ScreenHeader.vue'
@@ -100,8 +103,7 @@ async function remove() {
   }
 }
 onMounted(() => {
-  void loadStudio()
-  void refreshLibrary()
+  void Promise.allSettled([loadStudio(), refreshLibrary()]).finally(() => { preparingScreen.value = false })
 })
 </script>
 <template>

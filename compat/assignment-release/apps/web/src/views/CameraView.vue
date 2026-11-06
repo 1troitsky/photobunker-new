@@ -4,6 +4,9 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import AppSheet from '../components/AppSheet.vue'
 import ScreenHeader from '../components/ScreenHeader.vue'
+import { usePageLoad } from '../app/page-load'
+const preparingScreen = ref(true)
+usePageLoad(preparingScreen)
 import {
   activeAssignment as legacyAssignment,
   refreshAssignments,
@@ -753,6 +756,7 @@ function beforeUnload(event: BeforeUnloadEvent) {
   }
 }
 onMounted(async () => {
+  try {
   if (account.value) void warmNames(studioSession.value?.taskId && studioSession.value.rules.useAssignmentPhotoId !== false ? studioSession.value.taskId : null).catch(() => {})
   unsubscribeLocation = subscribeLocation(locationChanged)
   controller = cameraController(video.value!)
@@ -767,7 +771,7 @@ onMounted(async () => {
   window.addEventListener('pagehide', pagehide)
   window.addEventListener('beforeunload', beforeUnload)
   void refreshClock(true).catch(() => {})
-  await Promise.all([refreshProfiles(), refreshAssignments(), loadStudio()])
+  await Promise.allSettled([refreshProfiles(), refreshAssignments(), loadStudio()])
   // Entering Camera is the explicit user action that re-arms both sensors.
   // Already granted permissions resolve without another browser prompt.
   if (alive) enableCameraLocation()
@@ -779,6 +783,8 @@ onMounted(async () => {
     shot.value = String(route.query.shot)
   if (alive && activeProfile.value && !canCapture(activeProfile.value))
     await router.replace('/camera/presets')
+  } catch { cameraError.value = q('Не удалось подготовить камеру. Повторите попытку.') }
+  finally { preparingScreen.value = false }
 })
 watch(
   () =>

@@ -27,13 +27,15 @@ import {
   strongUnlocked,
   warmLocked,
 } from './crypto/store'
-import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { c } from './collaboration/text'
 import { account } from './identity/store'
 import { profileReturnTo } from './identity/person'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from './components/AppIcon.vue'
 import PasscodeInput from './components/PasscodeInput.vue'
+import AppLoader from './components/AppLoader.vue'
+import { pageLoading } from './app/page-load'
 import { locale, t } from './i18n'
 import { localPrototype } from './local/photos'
 import { libraryError, libraryLoading, serverError, startLibrary } from './local/library'
@@ -102,6 +104,16 @@ const showScopedLocal = computed(() =>
   (offlineCaptureIdentity.value && !!account.value && offlineLocalRoute.value &&
    (sessionState.value === 'offline' || sessionState.value === 'checking')),
 )
+const loaderVisible = ref(false), unlockPreparing = ref(false)
+const loaderEnabled = computed(() => !emergencyBlocked.value && !deletionBlocked.value &&
+  !['shared-photo', 'shared-card', 'account-auth'].includes(String(route.name)) &&
+  !(account.value && (!appLockReady.value || appLocked.value)))
+const workspaceLoading = computed(() => routePending.value || unlockPreparing.value ||
+  (privatePending.value && ['initial', 'checking'].includes(sessionState.value)) ||
+  (route.name === 'welcome' && !!account.value) ||
+  (!!account.value && appLockReady.value && !appLocked.value &&
+    (!protectionReady.value || pageLoading.value || (libraryLoading.value && !libraryError.value &&
+      (!protectionEnabled.value || photoReadAllowed())))))
 const privateMessage = computed(() =>
   sessionState.value === 'initial' || sessionState.value === 'checking' ? a('sessionChecking')
     : sessionState.value === 'unavailable' ? a('sessionNetwork')
@@ -215,7 +227,12 @@ watch([appLockReady, appLocked], ([ready, locked]) => {
     hardLock()
     void import('./messages/store').then(module => module.stopMessaging())
     resetPinEntry()
-  } else { resetPinEntry(); resumeTrustedPhotos() }
+  } else {
+    resetPinEntry()
+    unlockPreparing.value = !!account.value
+    resumeTrustedPhotos()
+    void nextTick(() => { unlockPreparing.value = false })
+  }
 }, { flush: 'sync' })
 function updatePrivatePresence() {
   if (backgroundReady.value && hasConfirmedIdentity() && appLockReady.value &&
@@ -494,7 +511,7 @@ function scheduleBackgroundRuntime() {
     const deletedOwner = localStorage.getItem('pb-deleted-account-cleanup')
     if (deletedOwner) void purgeAccountFromDevice(deletedOwner)
       .then(() => localStorage.removeItem('pb-deleted-account-cleanup')).catch(() => {})
-  }, 5000)
+  }, 0)
 }
 function startPrivateRuntime() {
   if (runtimeStarted || emergencyBlocked.value || deletionBlocked.value ||
@@ -621,7 +638,8 @@ watch(
   <RouterView v-else-if="(route.name === 'shared-photo' || route.name === 'shared-card')" :key="route.fullPath" />
   <template v-else>
     <a class="skip-link" href="#main">{{ t('skip') }}</a>
-    <div
+    <AppLoader :active="workspaceLoading" :enabled="loaderEnabled" @visibility="loaderVisible = $event" />
+    <div :inert="loaderVisible"
       :class="[
         'app-shell',
         {

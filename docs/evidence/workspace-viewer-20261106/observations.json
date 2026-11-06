@@ -1,0 +1,91 @@
+{
+  "fixtureState": {
+    "owner": "viewer-audit-20261106",
+    "session": "authenticated",
+    "active": false,
+    "enabled": true,
+    "pending": false
+  },
+  "tall": {
+    "stage": 508,
+    "footerTop": 570,
+    "actionsTop": 660,
+    "pagerTop": 722,
+    "loaded": true,
+    "natural": [
+      800,
+      1600
+    ],
+    "loader": false
+  },
+  "wide": {
+    "stage": 508,
+    "footerTop": 570,
+    "actionsTop": 660,
+    "pagerTop": 722,
+    "natural": [
+      1920,
+      1080
+    ],
+    "loaded": true
+  },
+  "stableControls": true,
+  "imageOnly": {
+    "opened": true,
+    "noControls": true,
+    "size": {
+      "width": 1920,
+      "height": 1080,
+      "naturalWidth": 1920,
+      "naturalHeight": 1080
+    },
+    "shellInert": true,
+    "swipeClosed": true,
+    "returnedGeometry": {
+      "stage": 508,
+      "footerTop": 570,
+      "actionsTop": 660,
+      "pagerTop": 722
+    },
+    "shellInteractive": true
+  },
+  "loader": {
+    "fastReadyStillCovered": true,
+    "visibleMs": 1683,
+    "minimum1500": true,
+    "enterOpacity": 0.638188,
+    "returnedInteractive": true,
+    "slow": {
+      "stillCoveredAfter1900": true,
+      "opacity": 1,
+      "releasedAfterReady": true,
+      "test": "Blocking task registered through usePageLoad; manual ref override was replaced by other jobs."
+    }
+  },
+  "landscape": {
+    "overflow": false,
+    "stage": 170,
+    "actions": {
+      "x": 456,
+      "y": 241.15625,
+      "width": 240,
+      "height": 71.6875,
+      "top": 241.15625,
+      "right": 696,
+      "bottom": 312.84375,
+      "left": 456
+    },
+    "dock": 320
+  },
+  "privacy": {
+    "wasOpen": true,
+    "closedOnAccountChange": true,
+    "noPhotoOnLock": true,
+    "pinScreen": true
+  },
+  "pin": {
+    "inputTop": 204.890625,
+    "recoveryBottom": 334.890625,
+    "padding": "76px"
+  }
+}

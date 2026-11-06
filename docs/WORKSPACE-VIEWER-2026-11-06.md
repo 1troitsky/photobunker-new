@@ -1,0 +1,23 @@
+# Wrapper и просмотр фото — 2026-11-06
+
+Текущее поручение: слегка опустить PIN; единый плавный loader минимум 1.5 секунды до готовности экрана; стабильная область фото и неподвижные относительно неё действия; нажатие открывает натуральный размер без управления, вертикальный свайп закрывает. Статус кода — `IMPLEMENTED`, приёмка владельцем на устройстве ещё не выполнена.
+
+PIN опущен на 52 px относительно прошлого mobile screen без перестройки формы. Исправлена специфичность CSS: общий `.screen-body` ранее перекрывал заданный padding. В viewport 390×450 поле находится на y=204.89, восстановление заканчивается на y=334.89.
+
+Добавлен один AppLoader и регистрация блокирующей подготовки страницы через `usePageLoad`. Во время overlay содержимое монтируется и загружается, но недоступно для взаимодействия. Минимум 1500 ms, fade 180 ms, reduced-motion учитывается. Loader следит за route transition, восстановлением защиты и первым чтением библиотеки, organizer, assignments, camera/contacts, viewer/card/editor, collections и team profile. Фоновые службы запускаются в начале подготовки вместо отдельной паузы 5 секунд. Polling и полная синхронизация не удерживают overlay; ошибки и требование Recovery Key должны показывать свой интерфейс. PIN/identity/crypto guards остаются самостоятельными и не заменяются loader.
+
+PhotoView использует grid: header → постоянная область изображения → footer. Кнопки не fixed/sticky. Портрет и landscape letterbox/contain внутри одинакового stage; краткие данные имеют ограниченную высоту. Info содержит полные сведения, прежние Share/Delete доступны из Info с прежними permission/confirmation checks. Картинка открывается отдельным viewport overlay с intrinsic pixel dimensions, без toolbar/dock; vertical swipe и Escape возвращают просмотр. Горизонтальное перелистывание обычного viewer сохранено. Account change/lock/expiry уничтожают прежний display state через существующие guards.
+
+Решение владельца по следующему этапу Public card: **правила задания относятся только к новым изображениям; при capture нужен снимок настроек. Изменение задания не должно менять параметры существующих фото.** Это правило зафиксировано, реализация Public card/publishing policy не включена в данный UI-релиз. Status и остальные изменения Browser также остаются отдельными задачами. Пользовательские изменения `ts_and_ux.md` сохранены вне этого commit.
+
+## Проверка результата
+
+Playwright MCP открыл действующее локальное приложение. Изолированная synthetic identity, PNG 1920×1080 и 800×1600, scoped fetch fixture только для этих photo IDs; реальные аккаунты и фото не использовались. Локальный API 500; этот сценарий подтверждает UI, а не production crypto/network path. Для fixture потребовался правильный `bindIdentity`; защита account boundary не обходилась в коде приложения.
+
+[Наблюдения](evidence/workspace-viewer-20261106/observations.json): stage 508 px, действия y=660 и pager y=722 одинаковы для обеих ориентаций изображения при 390×844; natural overlay 1920×1080 без controls, swipe вернул те же координаты; account change закрыл фото. Быстрая готовность: overlay существовал 1683 ms с enter opacity 0.638 и восстановлением взаимодействия после fade. Долгая задача, зарегистрированная через настоящий usePageLoad: overlay оставался непрозрачным после 1900 ms и уходил после завершения. Прямая запись тестом в pageLoading ref не была валидным способом удержать job: её перезаписывали реальные page jobs; проверка повторена через composable. При 844×390 controls остаются выше dock, overflow отсутствует.
+
+Снимки: [PIN](evidence/workspace-viewer-20261106/workspace-pin-390x450.png), [loader](evidence/workspace-viewer-20261106/workspace-loader-390.png), [портрет](evidence/workspace-viewer-20261106/viewer-fixed-tall-390.png), [landscape image](evidence/workspace-viewer-20261106/viewer-fixed-wide-390.png), [натуральный размер](evidence/workspace-viewer-20261106/viewer-image-only-390.png).
+
+`docker compose -f compat/assignment-release/compose.yaml exec -T -e PHOTOBUNKER_RELEASE_ID=workspace-viewer-20261106-1 web npm run build` — exit 0, TypeScript + Vite (прежние chunk warnings). `git diff --check -- compat/assignment-release/apps/web` — exit 0. CI/Lighthouse/автотесты не запускались: здесь менялся UI, business rules PIN/crypto/ACL/TTL/delete не менялись. Hardware keyboard/gestures, установленная PWA, реальные фото и cold/warm owner launch — `NOT RUN`. Performance baseline не измерялся; указанные ms относятся только к видимости loader.
+
+Владелец: закрыть/открыть приложение → PIN → увидеть один плавный loader → сравнить портретное и горизонтальное фото → нажать изображение → закрыть vertical swipe → убедиться, что действия остались на месте.

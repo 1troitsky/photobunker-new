@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import {
   onBeforeRouteLeave,
   onBeforeRouteUpdate,
@@ -54,6 +54,11 @@ import { photoCardPath } from '../studio/private-photo-card'
 import { inAppId } from '../identity/display'
 import { listPhotoVersions, type PhotoVersion } from '../studio/versions'
 import { recordDiagnostic } from '../app/status'
+import { usePageLoad } from '../app/page-load'
+import { lockScroll } from '../studio/scroll-lock'
+import { formatDate } from '../i18n'
+import { q } from '../crypto/text'
+import '../styles/photo-viewer.css'
 const route = useRoute()
 const router = useRouter()
 const infoOpen = ref(false),
@@ -240,12 +245,53 @@ function releasePublic() {
 watch(shareOpen, (open) => {
   if (!open) releasePublic()
 })
-let touchX = 0
+let touchX = 0, touchY = 0, singleTouch = false, normalSwiped = false
+const imageOnly = ref<HTMLElement>()
+let unlockImageScroll: (() => void) | undefined
+let coveredShell: HTMLElement | null = null, previousFocus: HTMLElement | null = null
+function closeImageOnly() {
+  unlockImageScroll?.(); unlockImageScroll = undefined
+  if (coveredShell?.isConnected) { coveredShell.inert = false; coveredShell.removeAttribute('aria-hidden') }
+  coveredShell = null
+  if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true })
+  previousFocus = null
+}
+watch(zoom, async open => {
+  if (!open) { closeImageOnly(); return }
+  previousFocus = document.activeElement as HTMLElement
+  coveredShell = document.querySelector('.app-shell')
+  if (coveredShell) { coveredShell.inert = true; coveredShell.setAttribute('aria-hidden', 'true') }
+  unlockImageScroll = lockScroll()
+  await nextTick()
+  imageOnly.value?.focus({ preventScroll: true })
+})
+function imageTouchStart(event: TouchEvent) {
+  singleTouch = event.touches.length === 1
+  touchX = event.touches[0]?.clientX ?? 0; touchY = event.touches[0]?.clientY ?? 0
+}
+function imageTouchEnd(event: TouchEvent) {
+  const dx = (event.changedTouches[0]?.clientX ?? touchX) - touchX
+  const dy = (event.changedTouches[0]?.clientY ?? touchY) - touchY
+  if (singleTouch && Math.abs(dy) > 70 && Math.abs(dy) > Math.abs(dx)) zoom.value = false
+}
+function stageTouchStart(event: TouchEvent) { normalSwiped = false; imageTouchStart(event) }
+function stageTouchEnd(event: TouchEvent) {
+  const dx = (event.changedTouches[0]?.clientX ?? touchX) - touchX
+  const dy = (event.changedTouches[0]?.clientY ?? touchY) - touchY
+  if (singleTouch && Math.abs(dx) > 80 && Math.abs(dx) > Math.abs(dy)) {
+    normalSwiped = true; sibling(dx > 0 ? -1 : 1)
+  }
+}
+function openImageOnly() {
+  if (normalSwiped) { normalSwiped = false; return }
+  zoom.value = true
+}
 
 const photo = ref<Photo>()
 const original = ref<Blob>()
 const url = ref('')
 const loading = ref(true)
+usePageLoad(loading)
 const loadFailure = ref(false)
 const loadAttempt = ref(0)
 const busy = ref(false)
@@ -530,6 +576,7 @@ async function download() {
   }
 }
 function canLeave() {
+  if (zoom.value) { zoom.value = false; return false }
   return deleted.value || !busy.value
 }
 onBeforeRouteLeave(canLeave)
@@ -546,6 +593,7 @@ onBeforeUnmount(() => {
   generation++
   release()
   releasePublic()
+  closeImageOnly()
   window.removeEventListener('beforeunload', beforeUnload)
 })
 </script>
@@ -557,148 +605,59 @@ onBeforeUnmount(() => {
     @keydown.left.self="sibling(-1)"
     @keydown.right.self="sibling(1)"
   >
-    <ScreenHeader
-      :title="photo?.title || photo?.shortId || (photo?.needsName ? nameText('pending') : s('photo'))"
-      back="/gallery"
-      ><button
-        v-if="photo"
-        class="app-icon-button"
-        :aria-label="s('favorites')"
-        :aria-pressed="photo.favorite"
-        :disabled="metadataBusy"
-        @click="favorite"
-      >
-        <AppIcon name="star" /></button
-      ><button
-        v-if="versions.length || photo?.encrypted"
-        class="app-icon-button"
-        :aria-label="s('versions')"
-        @click="versionsOpen = true"
-      >
-        <AppIcon name="copy" /></button
-    ></ScreenHeader>
-    <div v-if="loading && !url" class="photo-view-loading screen-body" role="status" aria-label="Loading">
-      <span class="photo-view-loading-image" />
-      <span class="photo-view-loading-line" />
+    <ScreenHeader :title="photo?.title || photo?.shortId || s('photo')" back="/gallery">
+      <button class="app-icon-button" :aria-label="s('favorites')" :aria-pressed="!!photo?.favorite"
+        :disabled="!photo || metadataBusy" @click="favorite"><AppIcon name="star" /></button>
+      <button class="app-icon-button" :aria-label="s('versions')" :disabled="!photo" @click="versionsOpen = true"><AppIcon name="copy" /></button>
+    </ScreenHeader>
+    <div class="photo-view-stage">
+      <button v-if="url" class="photo-image-control" type="button"
+        :aria-label="q('Открыть изображение в натуральном размере')" @click="openImageOnly"
+        @touchstart.passive="stageTouchStart" @touchend.passive="stageTouchEnd">
+        <img :src="url" :alt="photo?.title || s('photo')" decoding="async" />
+      </button>
+      <div v-else-if="loading" class="photo-view-loading" role="status" aria-label="Loading"><span class="photo-view-loading-image" /></div>
+      <div v-else class="native-empty photo-view-unavailable" role="alert">
+        <AppIcon name="gallery" /><p>{{ t('photoUnavailableHint') }}</p>
+        <button v-if="loadFailure" class="secondary-button" type="button" @click="loadAttempt++">{{ t('retry') }}</button>
+      </div>
     </div>
-    <div v-else-if="!photo" class="native-empty">
-      <AppIcon name="gallery" />
-      <h2>{{ t('photoUnavailable') }}</h2>
-      <p>{{ t('photoUnavailableHint') }}</p>
-      <button v-if="loadFailure" class="primary-button" @click="loadAttempt++">{{ t('retry') }}</button>
-    </div>
-    <template v-else
-      ><div
-        :class="['photo-view-stage', { 'photo-zoomed': zoom }]"
-        @touchstart.passive="touchX = $event.touches[0]?.clientX ?? 0"
-        @touchend.passive="
-          ($event) => {
-            !zoom &&
-              Math.abs(($event.changedTouches[0]?.clientX ?? touchX) - touchX) >
-                80 &&
-              sibling(
-                ($event.changedTouches[0]?.clientX ?? touchX) > touchX ? -1 : 1,
-              )
-          }
-        "
-      >
-        <img
-          v-if="url"
-          :src="url"
-          :alt="photo.title || s('photo')"
-          decoding="async"
-          @dblclick="zoom = !zoom"
-        />
-        <div v-else-if="!loading && loadFailure" class="native-empty" role="alert">
-          <AppIcon name="gallery" />
-          <p>{{ t('photoUnavailableHint') }}</p>
-          <button class="secondary-button" type="button" @click="loadAttempt++">{{ t('retry') }}</button>
-        </div>
+    <div class="photo-view-footer">
+      <div class="photo-summary">
+        <strong>{{ photo?.title || photo?.shortId || s('photo') }} <small v-if="photo?.shortId">{{ photo.shortId }}</small></strong>
+        <p class="photo-summary-description">{{ photo?.note || ' ' }}</p>
+        <div class="photo-summary-dates"><span>{{ photo ? formatDate(photo.metadata?.capturedAt || photo.createdAt) : ' ' }}</span>
+          <span v-if="photo?.expiresAt" class="photo-expiry">{{ s('expires') }}: {{ formatDate(photo.expiresAt) }}</span></div>
+        <p class="photo-summary-status" role="status">{{ versionError || (status ? t(status) : photo?.thumbnailOnly ? w('thumbnailOnly') : ' ') }}</p>
       </div>
-      <p v-if="versionError" class="form-error" role="alert">
-        {{ versionError }}
-      </p>
-      <p v-if="photo.thumbnailOnly" class="field-hint">
-        {{ w('thumbnailOnly') }}
-      </p>
-      <div class="photo-context-caption">
-        <span>{{ s('capturePreset') }}: {{ capturePresetLabel(photo) }}</span
-        ><span v-if="author">{{ s('author') }}: {{ author }}</span>
-      </div>
-      <div class="photo-view-caption">
-        <span
-          >{{ selectedVersion ? s('version') : s('compare')
-          }}<template v-if="selectedVersion">
-            {{
-              versions.findIndex((item) => item.id === versionId) + 1
-            }}</template
-          ></span
-        ><span>{{ photo.category || photo.shot || photo.shortId }}</span>
-      </div>
-      <div v-if="siblings.length > 1" class="photo-pagination">
-        <button
-          class="app-icon-button"
-          :disabled="position <= 0"
-          :aria-label="s('back')"
-          @click="sibling(-1)"
-        >
-          <AppIcon name="back" /></button
-        ><span>{{ formatNumber(position + 1) }} / {{ formatNumber(siblings.length) }}</span
-        ><button
-          class="app-icon-button"
-          :disabled="position >= siblings.length - 1"
-          :aria-label="s('next')"
-          @click="sibling(1)"
-        >
-          <AppIcon name="arrow" />
-        </button>
-      </div>
-      <p v-if="status" class="capture-feedback photo-status" role="status">
-        {{ t(status) }}
-      </p>
       <div class="photo-action-bar">
-        <button v-if="photo" type="button" @click="router.push(photoCardPath(photo.id))">
-          <AppIcon name="profiles" /><span>{{ photoCardText('card') }}</span>
-        </button>
-        <button
-          v-if="canEdit"
-          :disabled="busy"
-          @click="
-            () => {
-              if (!photo) return
-              router.push({
-                path: `/gallery/${photo.id}/edit`,
-                query: {
-                  ...(versionId ? { version: versionId } : {}),
-                  ...(assignmentScope ? { assignment: assignmentScope } : {}),
-                  ...(folderScope ? { folder: folderScope } : {}),
-                  ...(personalScope ? { personal: '1' } : {}),
-                },
-              })
-            }
-          "
-        >
-          <AppIcon name="edit" /><span>{{ s('edit') }}</span></button
-        ><button v-if="canShare" :disabled="busy" @click="share">
-          <AppIcon name="share" /><span>{{ s('share') }}</span></button
-        ><button @click="infoOpen = true">
-          <AppIcon name="info" /><span>{{ s('info') }}</span></button
-        ><button
-          v-if="canDelete"
-          class="subtle-danger"
-          :disabled="busy"
-          @click="deleteOpen = true"
-        >
-          <AppIcon name="trash" /><span>{{ s('remove') }}</span>
-        </button>
-      </div></template
-    >
+        <button type="button" :disabled="!photo" @click="infoOpen = true"><AppIcon name="info" /><span>{{ s('info') }}</span></button>
+        <button type="button" :disabled="!photo" @click="photo && router.push(photoCardPath(photo.id))"><AppIcon name="profiles" /><span>{{ photoCardText('card') }}</span></button>
+        <button type="button" :disabled="!photo || !canEdit || busy" @click="photo && router.push({ path: '/gallery/' + encodeURIComponent(photo.id) + '/edit', query: { ...(versionId ? { version: versionId } : {}), ...(assignmentScope ? { assignment: assignmentScope } : {}), ...(folderScope ? { folder: folderScope } : {}), ...(personalScope ? { personal: '1' } : {}) } })"><AppIcon name="edit" /><span>{{ s('edit') }}</span></button>
+      </div>
+      <div class="photo-pagination">
+        <button class="app-icon-button" type="button" :disabled="!photo || position <= 0" :aria-label="s('back')" @click="sibling(-1)"><AppIcon name="back" /></button>
+        <span>{{ formatNumber(Math.max(1, position + 1)) }} / {{ formatNumber(Math.max(1, siblings.length)) }}</span>
+        <button class="app-icon-button" type="button" :disabled="!photo || position < 0 || position >= siblings.length - 1" :aria-label="s('next')" @click="sibling(1)"><AppIcon name="arrow" /></button>
+      </div>
+    </div>
+    <Teleport to="body">
+      <div v-if="zoom && url" ref="imageOnly" class="photo-image-only" role="dialog" aria-modal="true"
+        :aria-label="q('Изображение. Свайп вверх или вниз, чтобы вернуться.')" tabindex="0"
+        @keydown.esc.prevent.stop="zoom = false" @touchstart.passive="imageTouchStart"
+        @touchmove.passive="singleTouch = singleTouch && $event.touches.length === 1" @touchend.passive="imageTouchEnd">
+        <div class="photo-image-natural"><img :src="url" :alt="photo?.title || s('photo')" draggable="false" /></div>
+      </div>
+    </Teleport>
     <AppSheet
       :open="infoOpen && !!photo"
       :title="s('details')"
       @close="infoOpen = false"
       ><template v-if="photo"
-        ><p v-if="photo.note" class="photo-note">{{ photo.note }}</p>
+        ><div class="inline-actions">
+          <button v-if="canShare" type="button" class="secondary-button" :disabled="busy || !original" @click="infoOpen = false; share()"><AppIcon name="share" />{{ s('share') }}</button>
+          <button v-if="canDelete" type="button" class="quiet-button subtle-danger" :disabled="busy" @click="infoOpen = false; deleteOpen = true"><AppIcon name="trash" />{{ s('remove') }}</button>
+        </div><p v-if="photo.note" class="photo-note">{{ photo.note }}</p>
         <div v-if="missing.length" class="requirement-chips">
           <span
             >{{ s('incomplete') }}:

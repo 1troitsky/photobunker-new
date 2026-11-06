@@ -2,6 +2,9 @@
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import ScreenHeader from '../components/ScreenHeader.vue'
+import { usePageLoad } from '../app/page-load'
+const preparingScreen = ref(true)
+usePageLoad(preparingScreen)
 import AppIcon from '../components/AppIcon.vue'
 import {
   account,
@@ -78,13 +81,13 @@ onMounted(() => {
   window.addEventListener('online', sync)
 })
 onMounted(async () => {
-  await loadIdentity()
-  if (account.value)
-    try {
+  try {
+    await loadIdentity()
+    if (account.value) {
       await refresh()
-    } catch {
-      error.value = a('failed')
     }
+  } catch { error.value = a('failed') }
+  finally { preparingScreen.value = false }
 })
 watch(
   () => account.value?.id,

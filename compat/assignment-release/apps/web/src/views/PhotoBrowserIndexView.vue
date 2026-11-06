@@ -6,6 +6,7 @@ import AppIcon from '../components/AppIcon.vue'
 import AppSheet from '../components/AppSheet.vue'
 import PhotoThumbnail from '../components/PhotoThumbnail.vue'
 import { account, deviceId } from '../identity/store'
+import { usePageLoad } from '../app/page-load'
 import { photos, libraryError, libraryLoading, serverError, refreshLibrary } from '../local/library'
 import { localTasks, loadStudio } from '../studio/store'
 import { readOrganizer, saveBrowser, type BrowserOrganizer } from '../photo-browser/cache'
@@ -40,6 +41,7 @@ watch([display, sort, start], () => {
 const ready = computed(browserReadable)
 const organizer = ref<BrowserOrganizer>({ version: 1, folders: [] })
 const organizerLoading = ref(false), organizerLoaded = ref(false), organizerFailed = ref(false)
+usePageLoad(organizerLoading)
 const working = ref(false), error = ref('')
 const query = ref(''), tag = ref(''), searchOpen = ref(false), settingsOpen = ref(false)
 const selectionMode = ref(false), selected = ref(new Set<string>()), expanded = ref(new Set<string>())

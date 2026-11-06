@@ -4,7 +4,9 @@ import { useRouter } from 'vue-router'
 import { accountKey } from '../identity/vault'
 import { ensureAccountPhotos } from '../identity/setup'
 import { q } from '../crypto/text'
+import { usePageLoad } from '../app/page-load'
 const router = useRouter(), busy = ref(true), missing = ref(false), error = ref('')
+usePageLoad(busy)
 async function connect() {
   busy.value = true; error.value = ''
   try {

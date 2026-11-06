@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import ScreenHeader from '../components/ScreenHeader.vue'
 import AppIcon from '../components/AppIcon.vue'
 import AppSheet from '../components/AppSheet.vue'
+import { usePageLoad } from '../app/page-load'
 import {
   assignments,
   refreshAssignments,
@@ -32,6 +33,8 @@ const router = useRouter(),
   sort = ref<'created' | 'edited' | 'photos'>('created'),
   menu = ref<string>(),
   failed = ref(false)
+const preparing = ref(true)
+usePageLoad(preparing)
 const rows = computed(() =>
   [
     ...localTasks.value.map((item) => ({
@@ -131,8 +134,7 @@ function navigate(kind: 'edit' | 'duplicate') {
   )
 }
 onMounted(() => {
-  void loadStudio()
-  void refreshAssignments()
+  void Promise.allSettled([loadStudio(), refreshAssignments()]).finally(() => { preparing.value = false })
 })
 </script>
 <template>
