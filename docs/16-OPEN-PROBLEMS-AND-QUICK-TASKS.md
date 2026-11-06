@@ -83,7 +83,7 @@ bundle hashes, cache headers и API health `CONFIRMED`; owner acceptance пок�
 
 | ID | Статус | Проблема / критерий |
 | --- | --- | --- |
-| BR-01 | `OWNER FAILED` | Текущий Browser отклонён владельцем. Нужна классическая файловая модель уровня Finder/Explorer/Total Commander/GitHub tree, а не отдельные несвязанные секции «folders» и «files». |
+| BR-01 | `OWNER FAILED` | PR #55 с SVAR отклонён и отменён `da33e7c`; на сервере прежний Browser, release `browser-rollback-20261106-1`. [Аудит](BROWSER-AUDIT-2026-11-06.md) фиксирует воспроизведённые дефекты и пробелы TS. Новая реализация начинается только после проверки аудита владельцем. |
 | BR-02 | `OPEN` | Один ordered content list/tree содержит folders и photos; folder открывает новый current location. |
 | BR-03 | `OWNER FAILED` | Неясно, где root/current folder. Обязательны root label, breadcrumb/back history и устойчивый route/location ID. |
 | BR-04 | `OWNER FAILED` | Create folder создавал только в root. `+` создаёт folder в текущем writable location. |

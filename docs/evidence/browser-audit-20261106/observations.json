@@ -1,0 +1,131 @@
+{
+  "date": "2026-11-06",
+  "timezone": "Asia/Tbilisi",
+  "sourceCommit": "da33e7c",
+  "runtime": "compat/assignment-release",
+  "productionRelease": "browser-rollback-20261106-1",
+  "uiEnvironment": "http://127.0.0.1:8081/browser",
+  "conditions": {
+    "syntheticIdentity": true,
+    "syntheticPhotoMetadata": true,
+    "privatePhotoBytes": false,
+    "localApi": "HTTP 500; identity and library state supplied only in local browser",
+    "libraryErrorScreenshot": "Actual libraryError rendering branch; error flag held in memory during capture",
+    "productionPrivateAccountTested": false,
+    "realPhoneTested": false
+  },
+  "rootHistory": {
+    "length": 16,
+    "back": null,
+    "current": "/browser"
+  },
+  "assignmentHistory": {
+    "length": 16,
+    "back": null,
+    "current": "/browser?folder=assignment:audit-A"
+  },
+  "assignmentBeforeMove": {
+    "url": "http://127.0.0.1:8081/browser?folder=assignment:audit-A",
+    "photos": [
+      "AUDIT Photo A (belongs to A)"
+    ],
+    "tags": [
+      "All",
+      "#audit-tag-A",
+      "#audit-tag-B"
+    ]
+  },
+  "moveTargets": [
+    {
+      "text": "Root",
+      "disabled": false
+    },
+    {
+      "text": "AUDIT Assignment A / AUDIT Folder A",
+      "disabled": false
+    },
+    {
+      "text": "AUDIT Assignment B / AUDIT Folder B",
+      "disabled": false
+    },
+    {
+      "text": "AUDIT Personal folder",
+      "disabled": false
+    },
+    {
+      "text": "AUDIT Personal folder / AUDIT Nested folder",
+      "disabled": false
+    }
+  ],
+  "crossScope": {
+    "url": "http://127.0.0.1:8081/browser?folder=audit-B-folder",
+    "breadcrumb": "Root\nAUDIT Assignment B\nAUDIT Folder B",
+    "photos": [
+      "AUDIT Photo A (belongs to A)"
+    ],
+    "storedDestination": {
+      "id": "audit-B-folder",
+      "name": "AUDIT Folder B",
+      "parentId": "assignment:audit-B",
+      "photoIds": [
+        "audit-photo-A"
+      ],
+      "createdAt": 1793957764900
+    },
+    "originalAssignment": "audit-A"
+  },
+  "tree": {
+    "list": [
+      "AUDIT Assignment A",
+      "AUDIT Assignment B",
+      "AUDIT Personal folder",
+      "AUDIT Personal photo"
+    ],
+    "tree": [
+      "AUDIT Assignment A",
+      "AUDIT Assignment B",
+      "AUDIT Personal folder",
+      "AUDIT Personal photo"
+    ],
+    "expandedControls": 0,
+    "treeRoles": 0,
+    "nestedFolderRendered": false
+  },
+  "desktop": {
+    "width": 1440,
+    "grid": "190px 990px",
+    "headerLeft": 130,
+    "bodyLeft": 320,
+    "sidebarElements": 0
+  },
+  "workingCases": {
+    "cancelledNotSaved": true,
+    "nestedParent": "audit-personal-folder"
+  },
+  "invalidLocation": {
+    "shownBreadcrumb": "Root",
+    "dialogPath": "Current folder: Root",
+    "parentSaved": "audit-missing-folder",
+    "parentExists": false,
+    "visibleAtRoot": false
+  },
+  "mobileExpiry": [
+    {
+      "text": "Nov 6, 2026",
+      "display": "block"
+    },
+    {
+      "text": "Nov 8, 2026",
+      "display": "none"
+    }
+  ],
+  "libraryFailure": {
+    "visibleRows": 0,
+    "alert": "Could not open the library\nRetry",
+    "folderStorageCount": 6
+  },
+  "settings": {
+    "text": "Browser settings\n\nView\n\nGrid\nList\nTree\nNew collection",
+    "scopeTabs": 0
+  }
+}
