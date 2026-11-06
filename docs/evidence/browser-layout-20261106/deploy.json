@@ -1,0 +1,70 @@
+{
+  "release": "browser-layout-20261106-1",
+  "commit": "d5acff3",
+  "command": "Public curl bytes == production build; health/ready; Cache-Control",
+  "exitCode": 0,
+  "checks": [
+    {
+      "path": "index.html",
+      "equalsBuild": true
+    },
+    {
+      "path": "sw.js",
+      "equalsBuild": true
+    },
+    {
+      "path": "release.json",
+      "equalsBuild": true
+    },
+    {
+      "path": "assets/index-7O_dIjsA.js",
+      "equalsBuild": true
+    },
+    {
+      "path": "assets/index-CgjgpXrN.css",
+      "equalsBuild": true
+    },
+    {
+      "path": "assets/PhotoBrowserIndexView-xTmXYyei.css",
+      "equalsBuild": true
+    },
+    {
+      "path": "assets/PhotoBrowserIndexView-D8hxSXe6.js",
+      "equalsBuild": true
+    },
+    {
+      "path": "assets/PhotoView-eipN3wI8.js",
+      "equalsBuild": true
+    },
+    {
+      "path": "/api/v1/health",
+      "http": 200,
+      "body": {
+        "status": "ok"
+      }
+    },
+    {
+      "path": "/api/v1/ready",
+      "http": 200,
+      "body": {
+        "status": "ready"
+      }
+    },
+    {
+      "path": "/",
+      "cache": "Cache-Control: no-store, no-cache, must-revalidate"
+    },
+    {
+      "path": "/sw.js",
+      "cache": "Cache-Control: no-store, no-cache, must-revalidate"
+    },
+    {
+      "path": "/release.json",
+      "cache": "Cache-Control: no-store, no-cache, must-revalidate"
+    },
+    {
+      "path": "/assets/index-7O_dIjsA.js",
+      "cache": "Cache-Control: public, max-age=31536000, immutable"
+    }
+  ]
+}

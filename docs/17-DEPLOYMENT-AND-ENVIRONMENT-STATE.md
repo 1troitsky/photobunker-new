@@ -46,6 +46,8 @@ release.json         -> {"buildId":"dock-pwa-20261105-1"}
 
 ## 3. PWA cache/update
 
+Последняя публикация поверх native Browser: `main@d5acff3`, release `browser-layout-20261106-1`; четыре frontend source files и shell. Backup: `/var/www/photobunker/.local/backups/browser-layout-20261106-1-before/`. Старые assets сохранены, checksum dry-run — пустой, exit 0; index/SW/release опубликованы в этом порядке. [Публичная побайтная сверка и headers](evidence/browser-layout-20261106/deploy.json) — exit 0; health/ready 200. Production Playwright получил новый marker и ожидаемый guest sign-in. База, crypto, PIN и emergency gate не менялись.
+
 Текущая схема:
 
 - `index.html`, navigation routes, `sw.js`, `release.json`, manifest: `no-store, no-cache, must-revalidate`;

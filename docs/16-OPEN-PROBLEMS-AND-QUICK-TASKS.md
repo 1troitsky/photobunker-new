@@ -81,6 +81,8 @@ bundle hashes, cache headers и API health `CONFIRMED`; owner acceptance пок�
 
 ## 5. Browser — требуется архитектурная замена
 
+Повторная проверка владельца: фотографии открываются, но layout и вложенное дерево не приняты. По [повторному аудиту](BROWSER-AUDIT-2026-11-06.md#повторный-аудит-по-замечаниям-владельца) опубликован `d5acff3`, release `browser-layout-20261106-1`: controls перенесены в header/settings, путь сокращён, Tree сохраняет текущий узел, PhotoView actions больше не sticky; перелистывание сохраняет folder+assignment. `READY FOR OWNER REVIEW`. Предыдущие `OWNER FAILED` не закрыты тестами, нужна проверка владельца на телефоне.
+
 | ID | Статус | Проблема / критерий |
 | --- | --- | --- |
 | BR-01 | `READY FOR OWNER REVIEW` | PR #55/SVAR остаётся отклонённым (`OWNER FAILED`) и отменённым. После согласования [аудита](BROWSER-AUDIT-2026-11-06.md) опубликован native Browser `56d91ad`, release `browser-native-20261106-1`. Изоляция scopes, location, offline folders, разделы/actions, Tree/history/expiry/tags и desktop проверены на синтетическом сценарии. Прежние жалобы не закрыты: нужна проверка владельца с реальными фото; hardware/приватный production flow — `NOT RUN`. |
