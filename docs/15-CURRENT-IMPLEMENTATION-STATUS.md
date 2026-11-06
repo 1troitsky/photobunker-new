@@ -21,7 +21,7 @@
 | Q1 dock source commit | `595ec85` на `main` и `origin/main` | `CONFIRMED` 2026-11-06 |
 | Активный runtime | `compat/assignment-release/` | `CONFIRMED` |
 | Production URL | `https://photobunker.duckdns.org` | `CONFIRMED` 2026-11-06 |
-| Release marker | `browser-layout-20261106-1` | `CONFIRMED` production 2026-11-06 |
+| Release marker | `pin-flow-20261106-1` | `CONFIRMED` production 2026-11-06 |
 | Server HTTP/API health | root, health, ready возвращают 200 | `CONFIRMED` 2026-11-06 |
 | Owner mobile acceptance | повторно выявлены критические UX/functional defects | `OWNER FAILED` |
 
@@ -79,6 +79,8 @@
 
 ## 4. Код существует, но приёмка не пройдена
 
+Последняя задача владельца — PIN, Browser отложен с оставшимися замечаниями. `main@d753076` опубликован как `pin-flow-20261106-1`: верхняя привязка lock form, короткая recovery-ссылка, N-я точка до следующего ввода, route skeleton/переход без Welcome, единый background deadline и trusted-photo grace, четыре шага emergency draft по N. [Причины, снимки и ограничения](PIN-FLOW-2026-11-06.md). `READY FOR OWNER REVIEW` для обычного PIN/UI; активация emergency — `BLOCKED`, gate не включён. Целевые PIN/shell/access проверки 32/32 и production build — exit 0; [публичная сверка](evidence/pin-flow-20261106/deploy.json) — exit 0, health/ready 200. Новый release получен production Playwright в гостевом контексте; production private unlock и hardware keyboard/background — `NOT RUN`. Backup `/var/www/photobunker/.local/backups/pin-flow-20261106-1-before/`. Владелец: Security → App PIN → 5 минут → Lock → быстрый ввод → фото → short background/resume и повтор после 5 минут. Пользовательский незакоммиченный `ts_and_ux.md` сохранён отдельно и не включён в кодовый commit.
+
 Последнее решение владельца: фотографии стали открываться, но расположение controls, большой служебный блок, Tree внутри папки и перекрывающая панель PhotoView — `OWNER FAILED`. По его команде проведён [повторный аудит с причинами и снимками](BROWSER-AUDIT-2026-11-06.md#повторный-аудит-по-замечаниям-владельца). `d5acff3` опубликован как `browser-layout-20261106-1`: четыре header actions, View/Sort в settings, краткий путь, текущий узел Tree, обычная прокручиваемая панель фото, сохранение folder+assignment при перелистывании, защита от всплывающих стрелок и Retry вместо пустого stage. `READY FOR OWNER REVIEW`, не `ACCEPTED`. Production build — exit 0; [публичная сверка](evidence/browser-layout-20261106/deploy.json) — exit 0, health/ready 200, новый marker получен production Playwright. Приватный production Browser в гостевом контексте не проверялся; hardware/PWA upgrade и реальные bytes/edit/share этой итерации — `NOT RUN`. Проверка владельца: шапка Browser → Settings → Tree → вложенная папка → фото → прокрутить до действий и убедиться, что панель не перекрывает изображение/данные. Backup: `/var/www/photobunker/.local/backups/browser-layout-20261106-1-before/`.
 
 Владелец отклонил PR #55: `OWNER FAILED`. PR и follow-up отменены `da33e7c`, восстановлен web source до #55 (`f81c2da`) с PIN #54. Откат опубликован как `browser-rollback-20261106-1`; публичные HTML/SW/release/JS/CSS совпали с build, exit 0. [Аудит восстановленного Browser](BROWSER-AUDIT-2026-11-06.md) содержит source links, реальные screenshots синтетического сценария и измерения.
@@ -90,7 +92,7 @@ PR #54 интегрирован в main (`b701503`) и опубликован п
 | Область | Что добавлено в код | Фактический статус |
 | --- | --- | --- |
 | Shell/Dock | fixed shell CSS, dock marker, PWA updater | `IMPLEMENTED`, новый результат не подтверждён владельцем |
-| PIN | `PasscodeInput.vue`, обновлённые lock/emergency rules | `OWNER FAILED`: быстрый ввод теряет цифры, UX не принят |
+| PIN | input/deadline/shell и emergency wizard `d753076`, release `pin-flow-20261106-1` | `READY FOR OWNER REVIEW`; прежние жалобы `OWNER FAILED`, новая версия не принята; emergency activation `BLOCKED` |
 | Browser / PhotoView layout | compact controls и Tree context `d5acff3`, release `browser-layout-20261106-1` | `READY FOR OWNER REVIEW`; замечания к прежнему UI — `OWNER FAILED`, новая версия не принята |
 | Photo read/cache | encrypted `photo-cache.ts`, view/card/editor правки | `OWNER FAILED`: фото не открывались |
 | Camera/GPS | permission/location/context и camera UI правки | `OWNER FAILED`: размер/permissions/GPS/navigation остаются неверными |

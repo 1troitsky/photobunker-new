@@ -127,6 +127,8 @@ bundle hashes, cache headers и API health `CONFIRMED`; owner acceptance пок�
 
 ## 8. PIN и emergency data removal
 
+Текущий кандидат `d753076` / `pin-flow-20261106-1` опубликован: [разбор и evidence](PIN-FLOW-2026-11-06.md). Стабильный lock form, полная N-я точка, recovery link, skeleton вместо промежуточного Welcome, единый deadline и trusted local key grace, четыре emergency setup шага. `READY FOR OWNER REVIEW`; hardware screen-off/keyboard/PWA и приватная production-проверка — `NOT RUN`. PIN-10/AR-03 остаются `BLOCKED`, emergency activation выключена. Предыдущие `OWNER FAILED` не закрыты автоматически.
+
 | ID | Статус | Проблема / критерий |
 | --- | --- | --- |
 | PIN-01 | `OWNER FAILED` | PIN выглядел как обычный text input и keypad не открывался автоматически. Нужен современный passcode screen с dots и numeric keyboard сразу при открытии. |
