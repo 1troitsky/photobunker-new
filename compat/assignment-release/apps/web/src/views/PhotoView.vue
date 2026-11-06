@@ -54,6 +54,8 @@ import { photoCardPath } from '../studio/private-photo-card'
 import { inAppId } from '../identity/display'
 import { listPhotoVersions, type PhotoVersion } from '../studio/versions'
 import { recordDiagnostic } from '../app/status'
+const route = useRoute()
+const router = useRouter()
 const infoOpen = ref(false),
   shareOpen = ref(false),
   deleteOpen = ref(false),
@@ -238,8 +240,6 @@ watch(shareOpen, (open) => {
 })
 let touchX = 0
 
-const route = useRoute()
-const router = useRouter()
 const photo = ref<Photo>()
 const original = ref<Blob>()
 const url = ref('')
@@ -408,6 +408,15 @@ const expiryTimer = setInterval(() => {
     photo.value = undefined
   }
 }, 500)
+let appliedOriginalIntent = ''
+watch([() => route.fullPath, photo, original], () => {
+  if (route.query.action !== 'original' || !photo.value || !original.value ||
+      photo.value.thumbnailOnly || photo.value.workspaceAccess?.read === false || isExpired(photo.value)) return
+  if (appliedOriginalIntent !== route.fullPath) {
+    appliedOriginalIntent = route.fullPath
+    showVersion('')
+  }
+})
 async function refreshReview() {
   if (!photo.value) return
   try {

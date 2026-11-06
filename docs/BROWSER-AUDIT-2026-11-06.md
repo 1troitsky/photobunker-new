@@ -43,3 +43,36 @@ PR #55 и его исправления отменены коммитом `da33e
 Реальный iPhone/Android, установленная PWA, настоящие thumbnails/photo opening, серверные права и destructive delete не проверялись. Их нельзя считать подтверждёнными этим документом. Новая библиотека, дизайн или архитектура не выбраны.
 
 На согласование владельцу: исправлять единый Browser по требованиям TS — с явными разделами, реальной иерархией и историей, запретом смешения scopes, корректным location, доступными по правам действиями и видимым expiry на телефоне. После проверки владельцем составляется ограниченный план реализации. До его команды изменения нового Browser не начинаются.
+
+## Решение владельца и реализация
+
+Владелец подтвердил аудит командой «отлично — теперь запиши это где нибудь если еще не сделал и приступай к исправлению». Согласованный объём — перечисленные девять проблем в действующем compat runtime. PR #55 остаётся отменённым; SVAR и новые зависимости не используются. Публикация на сервер с новым release ID разрешена предыдущими прямыми командами владельца. Приёмка UI остаётся за владельцем.
+
+План выполненной реализации: единая scoped-проекция папок/фото → существующие Vue-компоненты и действия → целевая проверка сохранности organizer и интерфейса → публикация. Критерии: фото остаются в своём scope, неизвестный location не записывается, локальные папки доступны при HTTP-ошибке, разделы/дерево/история/expiry/теги видны и действуют из одной модели.
+
+Статус перед публикацией: `IMPLEMENTED`. Release ID: `browser-native-20261106-1`.
+
+| Пункт аудита | Изменение и наблюдение |
+| --- | --- |
+| 1 | Единая проверка scope при отображении и переносе. Move из A предлагает только A; перенос в Folder A убрал старую ошибочную ссылку в B, не меняя Photo/assignment/TTL. |
+| 2 | Неизвестная папка показывает ошибку, создание отключено. Старые orphan-папки доступны через восстанавливаемую проекцию без миграции данных. |
+| 3 | Organizer читается независимо от HTTP. При ошибке refresh сохранённые папки остаются видимыми, рядом доступен Retry. Ошибка самого local storage блокирует запись. |
+| 4 | Четыре раздела, стартовый раздел, сортировка, выбор видимых элементов, rename, меню существующих Photo/Photo Card/edit/original/share с проверкой capability, редактирование тегов. Archive — локальный список личных фото на этом устройстве: не удаление и не продление TTL; restore возвращает прежнее размещение. |
+| 5 | Tree раскрывает настоящих потомков, ARIA-level/expanded меняются. В проверке число строк выросло с 3 до 4. |
+| 6 | Переходы используют history push; предыдущая папка сохраняется в Back. |
+| 7 | Expiry виден при 320 и 390 px. |
+| 8 | В задании A теги только его поддерева; tag B отсутствует. |
+| 9 | Пустая desktop-колонка удалена. UI просмотрен при 1440×900, горизонтального переполнения нет. |
+
+Переиспользованы ScreenHeader, AppSheet, AppIcon, PhotoThumbnail, encrypted organizer, существующие photo/card/edit/share services. Добавлен adapter organizer и чистая scoped-модель; новая БД и миграция не создаются. Обновление organizer выполняется под существующим account lock. Синтетический roundtrip показал ciphertext, non-extractable key и отсутствие названий/архива в plaintext record. Удаление папки сохраняет фото и вложенные папки; удаление фото остаётся существующим отдельным подтверждаемым действием. PIN #54 и выключенный emergency deletion не менялись.
+
+Дополнительно устранён фактический TDZ в PhotoView: immediate watcher обращался к route до его инициализации. Переход к синтетическому фото больше не вызывает setup exception. Это не доказательство чтения image bytes. Share intent передаётся через router history state и открывает существующую форму только при canShare; публичный query не активирует его.
+
+### Проверки и артефакты
+
+- `docker compose -f compat/assignment-release/compose.yaml exec -T -e PHOTOBUNKER_RELEASE_ID=browser-native-20261106-1 web npm run build` — exit 0, TypeScript + production Vite build; существующие chunk warnings остаются.
+- `docker compose -f compat/assignment-release/compose.yaml exec -T web npm test -- tests/browser-explorer.test.ts tests/photo-browser.test.ts` — exit 0, 12 сценариев. Изоляция scopes, неизвестный parent, создание/rename/cycle, tree, archive/restore, expiry/denied/redaction, сохранность дочерних объектов при удалении папки; существующие Browser collection проверки.
+- Playwright MCP, действующее приложение `127.0.0.1:8081`, прежняя синтетическая identity аудита: [наблюдения](evidence/browser-native-20261106/observations.json), [390 px RU](evidence/browser-native-20261106/browser-native-ru-390.png), [320 px tree](evidence/browser-native-20261106/browser-native-tree-320.png), [desktop](evidence/browser-native-20261106/browser-native-desktop.png). Создание в папке, Cancel без записи и rename проверены через формы. Сетевой notice на снимках относится к локальному API 500; у fixture нет image bytes.
+- Реальные image bytes, original/edit/share с приватным фото, серверные права, destructive delete, hardware iOS/Android и установленная PWA — `NOT RUN`. Синтетический archive roundtrip не заменяет их. Lighthouse/performance и большой CI не запускались; эстетическая приёмка владельцем — `NOT VERIFIED`.
+
+Для приёмки: открыть Browser на сервере, проверить своё задание → папку → Back, раскрытие Tree, видимый срок хранения, меню фото и локальный Archive → Restore для личного фото. Итоговый статус и SHA публикации — в `15-CURRENT-IMPLEMENTATION-STATUS.md`.

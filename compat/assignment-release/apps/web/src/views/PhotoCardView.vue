@@ -124,6 +124,14 @@ const expiry = setInterval(() => {
     error.value = 'unavailable'
   }
 }, 1000)
+let appliedShareIntent = ''
+watch([visible, canShare, () => route.fullPath], () => {
+  if (window.history.state?.openCardShare === true && visible.value && canShare.value && appliedShareIntent !== route.fullPath) {
+    appliedShareIntent = route.fullPath
+    window.history.replaceState({ ...window.history.state, openCardShare: false }, '')
+    shareOpen.value = true
+  }
+}, { immediate: true })
 onBeforeUnmount(() => { invalidate(); clearInterval(expiry) })
 </script>
 

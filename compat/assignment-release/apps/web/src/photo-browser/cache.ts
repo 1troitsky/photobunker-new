@@ -12,7 +12,7 @@ export type BrowserFolder = {
   /** Empty/undefined means Browser root. Assignment nodes use assignment:<id>. */
   parentId?: string
 }
-export type BrowserOrganizer = { version: 1; folders: BrowserFolder[] }
+export type BrowserOrganizer = { version: 1; folders: BrowserFolder[]; archivedPhotoIds?: string[] }
 const name = (owner: string, device: string, id: string) =>
   'browser:' + owner + ':' + device + ':' + id
 const organizerName = (owner: string, device: string) =>
@@ -110,21 +110,23 @@ export async function readOrganizer(owner: string, device: string): Promise<Brow
   const clear = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: row.iv as Uint8Array<ArrayBuffer>,
     additionalData: encoder.encode(scope) }, row.key, row.data)
   const value = JSON.parse(decoder.decode(clear)) as BrowserOrganizer
-  if (value.version !== 1 || !Array.isArray(value.folders) || value.folders.some(folder =>
+  if (value.version !== 1 || !Array.isArray(value.folders) ||
+      (value.archivedPhotoIds !== undefined && (!Array.isArray(value.archivedPhotoIds) ||
+        !value.archivedPhotoIds.every(id => typeof id === 'string'))) || value.folders.some(folder =>
     !folder || typeof folder.id !== 'string' || typeof folder.name !== 'string' ||
     !Array.isArray(folder.photoIds) || !folder.photoIds.every(id => typeof id === 'string') ||
     (folder.parentId !== undefined && typeof folder.parentId !== 'string') ||
     !Number.isSafeInteger(folder.createdAt))) throw new Error('browser.storage_invalid')
   return value
 }
-export async function saveOrganizer(owner: string, device: string, value: BrowserOrganizer): Promise<void> {
+async function writeOrganizer(owner: string, device: string, value: BrowserOrganizer): Promise<void> {
   if (value.version !== 1 || value.folders.length > 200) throw new Error('browser.storage_invalid')
-  return ownerLock(owner, async () => {
     const scope = organizerName(owner, device)
     const old = await transact<Cipher | undefined>('readonly', s => s.get(scope))
     const key = old?.key ?? await crypto.subtle.generateKey(
       { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'],
     )
+    if (key.extractable) throw new Error('browser.storage_invalid')
     const iv = crypto.getRandomValues(new Uint8Array(12))
     const clear = encoder.encode(JSON.stringify(value))
     try {
@@ -132,6 +134,17 @@ export async function saveOrganizer(owner: string, device: string, value: Browse
         additionalData: encoder.encode(scope) }, key, clear)
       await transact('readwrite', s => s.put({ key, iv, data } satisfies Cipher, scope))
     } finally { clear.fill(0) }
+}
+export async function saveOrganizer(owner: string, device: string, value: BrowserOrganizer): Promise<void> {
+  return ownerLock(owner, () => writeOrganizer(owner, device, value))
+}
+/** Read-modify-write stays under the existing cross-tab account lock. */
+export async function changeOrganizer(owner: string, device: string,
+  mutate: (value: BrowserOrganizer) => BrowserOrganizer): Promise<BrowserOrganizer> {
+  return ownerLock(owner, async () => {
+    const next = mutate(await readOrganizer(owner, device))
+    await writeOrganizer(owner, device, next)
+    return next
   })
 }
 export async function eraseBrowsersForAccount(owner: string, device?: string) {

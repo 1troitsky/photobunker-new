@@ -1,503 +1,502 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ScreenHeader from '../components/ScreenHeader.vue'
 import AppIcon from '../components/AppIcon.vue'
 import AppSheet from '../components/AppSheet.vue'
 import PhotoThumbnail from '../components/PhotoThumbnail.vue'
-import { account, deviceId, hasConfirmedIdentity } from '../identity/store'
-import { appLockReady, appLocked } from '../app/lock'
-import { protectionReady, protectionEnabled, photoReadAllowed } from '../crypto/store'
-import { photos, libraryError, libraryLoading, refreshLibrary, libraryChanged } from '../local/library'
+import { account, deviceId } from '../identity/store'
+import { photos, libraryError, libraryLoading, serverError, refreshLibrary } from '../local/library'
 import { localTasks, loadStudio } from '../studio/store'
-import { readOrganizer, saveBrowser, saveOrganizer, type BrowserFolder } from '../photo-browser/cache'
-import { deletePhoto as deleteStoredPhoto } from '../server/photos'
+import { readOrganizer, saveBrowser, type BrowserOrganizer } from '../photo-browser/cache'
+import { buildExplorer, ancestors, descendants, explorerRows, writable, canMove, folderKey,
+  isSection, type BrowserSection, type BrowserSort, type ExplorerEntry, type OrganizerAction } from '../photo-browser/explorer'
+import { browserReadable, browserTasks, organize, editBrowserPhoto, deleteBrowserPhotos } from '../photo-browser/organizer'
+import { photoCardPath } from '../studio/private-photo-card'
+import { PhotoDetailsError } from '../studio/details'
+import { metadataEditable } from '../collaboration/access'
 import { bt } from '../photo-browser/text'
 import { formatDate, formatNumber } from '../i18n'
-import { s } from '../studio/text'
+import '../styles/photo-explorer.css'
 
+const route = useRoute(), router = useRouter()
 type Display = 'grid' | 'list' | 'tree'
-type FolderRow = {
-  id: string
-  name: string
-  count: number
-  assignment?: string
-  photos: typeof photos.value
-}
-
-const router = useRouter()
-const route = useRoute()
-const query = ref('')
-const searchOpen = ref(false)
-const settingsOpen = ref(false)
-const shareOpen = ref(false)
-const display = ref<Display>('list')
-const tag = ref('')
-const shareSelected = ref<string[]>([])
-const photoSelected = ref<string[]>([])
-const folderSelected = ref<string[]>([])
-const selectMode = ref(false)
-const folders = ref<BrowserFolder[]>([])
-const organizerOpen = ref(false)
-const moveOpen = ref(false)
-const folderName = ref('')
-const working = ref(false)
-const operationError = ref('')
-
+const display = ref<Display>('list'), sort = ref<BrowserSort>('newest'), start = ref<BrowserSection>('all')
 try {
   const saved = localStorage.getItem('photobunker.browser.view')
   if (saved === 'grid' || saved === 'list' || saved === 'tree') display.value = saved
-} catch { /* Device preferences are optional. */ }
-
-const assignmentNode = (id: string) => `assignment:${id}`
-const assignmentFromNode = (id: string) => id.startsWith('assignment:') ? id.slice(11) : ''
-const legacyAssignmentId = computed(() => typeof route.query.assignment === 'string'
-  ? route.query.assignment : '')
-const currentNodeId = computed(() => typeof route.query.folder === 'string'
-  ? route.query.folder : legacyAssignmentId.value ? assignmentNode(legacyAssignmentId.value) : '')
-const currentAssignmentId = computed(() => assignmentFromNode(currentNodeId.value))
-const currentFolder = computed(() => folders.value.find(folder => folder.id === currentNodeId.value))
-const photoAssignment = (photo: typeof photos.value[number]) =>
-  photo.workspaceAssignmentId || photo.uiAssignmentId || photo.assignmentId || ''
-const assignments = computed(() => localTasks.value.filter(task =>
-  task.accountId === account.value?.id || !task.accountId,
-))
-const assignmentMap = computed(() => new Map(assignments.value.map(task => [task.id, task])))
-const currentAssignment = computed(() => assignmentMap.value.get(currentAssignmentId.value))
-const tags = computed(() => [...new Set(photos.value.flatMap(photo => photo.tags ?? []))]
+  const order = localStorage.getItem('photobunker.browser.sort')
+  if (order === 'name' || order === 'newest' || order === 'oldest') sort.value = order
+  const initial = localStorage.getItem('photobunker.browser.start') ?? ''
+  if (isSection(initial)) start.value = initial
+} catch { /* Preferences do not block the local Browser. */ }
+watch([display, sort, start], () => {
+  try {
+    localStorage.setItem('photobunker.browser.view', display.value)
+    localStorage.setItem('photobunker.browser.sort', sort.value)
+    localStorage.setItem('photobunker.browser.start', start.value)
+  } catch { /* Device preferences are optional. */ }
+})
+const ready = computed(browserReadable)
+const organizer = ref<BrowserOrganizer>({ version: 1, folders: [] })
+const organizerLoading = ref(false), organizerLoaded = ref(false), organizerFailed = ref(false)
+const working = ref(false), error = ref('')
+const query = ref(''), tag = ref(''), searchOpen = ref(false), settingsOpen = ref(false)
+const selectionMode = ref(false), selected = ref(new Set<string>()), expanded = ref(new Set<string>())
+const pageSize = ref(50), menuKey = ref(''), moveOpen = ref(false), deleteOpen = ref(false)
+const editOpen = ref(false), editKind = ref<'create' | 'rename' | 'tags'>('create')
+const editKey = ref(''), editValue = ref('')
+const createLocationOpen = ref(false)
+const shareOpen = ref(false), shareSelected = ref<string[]>([])
+const tree = ref<HTMLElement>(), pathBar = ref<HTMLElement>()
+const now = ref(Date.now())
+const timer = setInterval(() => { now.value = Date.now() }, 1000)
+onBeforeUnmount(() => clearInterval(timer))
+const labels = computed(() => ({ all: bt('all'), personal: bt('mine'), assignments: bt('assignments'),
+  archive: bt('archive'), assignment: bt('assignmentFolders'), photo: bt('photo') }))
+const model = computed(() => {
+  void now.value // Re-evaluate visibility when an existing TTL elapses; never extend it.
+  return buildExplorer(account.value?.id ?? '', browserTasks(), organizer.value,
+    ready.value ? photos.value : [], labels.value)
+})
+const location = computed(() => {
+  const folder = typeof route.query.folder === 'string' ? route.query.folder : ''
+  if (folder) return isSection(folder) ? folder : folder.startsWith('assignment:') ? folder : folderKey(folder)
+  if (typeof route.query.assignment === 'string') return 'assignment:' + route.query.assignment
+  const section = typeof route.query.section === 'string' ? route.query.section : 'all'
+  return isSection(section) ? section : 'invalid'
+})
+const current = computed(() => {
+  const entry = model.value.entries.get(location.value)
+  return entry?.kind === 'photo' ? undefined : entry
+})
+const section = computed<BrowserSection | undefined>(() => {
+  if (!current.value) return undefined
+  if (current.value?.key === 'archive') return 'archive'
+  if (current.value?.scope?.startsWith('assignment:') || location.value === 'assignments') return 'assignments'
+  if (current.value?.scope === 'personal') return 'personal'
+  return 'all'
+})
+const sections: BrowserSection[] = ['all', 'personal', 'assignments', 'archive']
+const crumbs = computed(() => current.value ? ancestors(model.value, current.value.key) : [])
+const canOrganize = computed(() => ready.value && organizerLoaded.value && !organizerFailed.value)
+const mayCreate = computed(() => canOrganize.value && writable(current.value))
+const createTargets = computed(() => [...model.value.entries.values()].filter(entry =>
+  entry.key === 'personal' || entry.kind === 'assignment'))
+const scopedPhotos = computed(() => current.value ? descendants(model.value, current.value.key)
+  .filter(entry => entry.kind === 'photo' && entry.readable) : [])
+const tags = computed(() => [...new Set(scopedPhotos.value.flatMap(entry => entry.photo?.tags ?? []))]
   .sort((a, b) => a.localeCompare(b)))
-const normalizedParent = (folder: BrowserFolder) => folder.parentId || ''
-const foldersForPhoto = (id: string) => folders.value.filter(folder => folder.photoIds.includes(id))
-function isDescendant(folder: BrowserFolder, parentId: string) {
-  const seen = new Set<string>()
-  let node: BrowserFolder | undefined = folder
-  while (node && !seen.has(node.id)) {
-    seen.add(node.id)
-    if (normalizedParent(node) === parentId) return true
-    const parent = normalizedParent(node)
-    node = folders.value.find(candidate => candidate.id === parent)
-  }
-  return false
-}
-const directChildren = computed(() => folders.value.filter(folder =>
-  normalizedParent(folder) === currentNodeId.value,
-))
-const folderRows = computed<FolderRow[]>(() => {
-  const needle = query.value.trim().toLocaleLowerCase()
-  const custom = directChildren.value.map(folder => ({
-    id: folder.id,
-    name: folder.name,
-    count: folder.photoIds.length,
-    photos: photos.value.filter(photo => folder.photoIds.includes(photo.id)).slice(0, 4),
-  }))
-  const taskRows = currentNodeId.value ? [] : assignments.value.map(task => {
-    const items = photos.value.filter(photo => photoAssignment(photo) === task.id)
-    return {
-      id: assignmentNode(task.id),
-      name: task.name,
-      count: items.length,
-      assignment: task.id,
-      photos: items.slice(0, 4),
-    }
-  })
-  return [...custom, ...taskRows]
-    .filter(row => !needle || row.name.toLocaleLowerCase().includes(needle))
-    .sort((a, b) => a.name.localeCompare(b.name))
-})
-const visible = computed(() => {
-  const needle = query.value.trim().toLocaleLowerCase()
-  return photos.value.filter(photo => {
-    const assignment = photoAssignment(photo)
-    if (currentAssignmentId.value) {
-      if (assignment !== currentAssignmentId.value) return false
-      if (foldersForPhoto(photo.id).some(folder => isDescendant(folder, currentNodeId.value))) return false
-    } else if (currentFolder.value) {
-      if (!currentFolder.value.photoIds.includes(photo.id)) return false
-    } else if (assignment || foldersForPhoto(photo.id).length) return false
-    if (tag.value && !(photo.tags ?? []).includes(tag.value)) return false
-    if (!needle) return true
-    return `${photo.title} ${photo.note} ${photo.shortId ?? ''} ${(photo.tags ?? []).join(' ')}`
-      .toLocaleLowerCase().includes(needle)
-  }).sort((a, b) => b.createdAt - a.createdAt)
-})
-const breadcrumbs = computed(() => {
-  const result: { id: string; name: string }[] = [{ id: '', name: bt('root') }]
-  if (!currentNodeId.value) return result
-  if (currentAssignment.value) {
-    result.push({ id: currentNodeId.value, name: currentAssignment.value.name })
-    return result
-  }
-  const chain: BrowserFolder[] = []
-  const seen = new Set<string>()
-  let folder = currentFolder.value
-  while (folder && !seen.has(folder.id)) {
-    seen.add(folder.id)
-    chain.unshift(folder)
-    const parent = normalizedParent(folder)
-    if (assignmentFromNode(parent)) {
-      const task = assignmentMap.value.get(assignmentFromNode(parent))
-      if (task) result.push({ id: parent, name: task.name })
-      break
-    }
-    folder = folders.value.find(candidate => candidate.id === parent)
-  }
-  result.push(...chain.map(item => ({ id: item.id, name: item.name })))
-  return result
-})
-const loading = computed(() => libraryLoading.value ||
-  !photos.value.length && !protectionReady.value)
-const collectionReady = computed(() =>
-  appLockReady.value && !appLocked.value && hasConfirmedIdentity() &&
-  protectionReady.value && (!protectionEnabled.value || photoReadAllowed()) &&
-  !!deviceId.value,
-)
-const availableForShare = computed(() => assignments.value.filter(task =>
-  task.canManage || task.role === 'owner' || task.role === 'curator',
-))
-const moveTargets = computed(() => folders.value.map(folder => ({
-  id: folder.id,
-  name: folderPath(folder.id),
-})).sort((a, b) => a.name.localeCompare(b.name)))
+const rows = computed(() => current.value ? explorerRows(model.value, current.value.key, {
+  tree: display.value === 'tree', expanded: expanded.value, sort: sort.value,
+  query: query.value, tag: tag.value,
+}) : [])
+const shownRows = computed(() => rows.value.slice(0, pageSize.value))
+const selectedEntries = computed(() => [...selected.value].map(key => model.value.entries.get(key))
+  .filter((entry): entry is ExplorerEntry => !!entry && ['folder', 'photo'].includes(entry.kind)))
+const selectedPhotos = computed(() => selectedEntries.value.filter(entry => entry.kind === 'photo'))
+const selectedFolders = computed(() => selectedEntries.value.filter(entry => entry.kind === 'folder'))
+const menuEntry = computed(() => model.value.entries.get(menuKey.value))
+const editEntry = computed(() => model.value.entries.get(editKey.value))
+const canDelete = computed(() => selectedEntries.value.length > 0 && selectedPhotos.value.every(entry => entry.deletable))
+const canArchive = computed(() => selectedEntries.value.length > 0 &&
+  selectedEntries.value.every(entry => entry.kind === 'photo' && entry.scope === 'personal'))
+const restoreSelection = computed(() => selectedPhotos.value.length > 0 && selectedPhotos.value.every(entry => entry.archived))
+const targets = computed(() => [...model.value.entries.values()]
+  .filter(entry => canMove(model.value, selectedEntries.value.map(item => item.key), entry.key))
+  .sort((a, b) => entryPath(a).localeCompare(entryPath(b))))
+const availableForShare = computed(() => localTasks.value.filter(task =>
+  (!task.accountId || task.accountId === account.value?.id) &&
+  (task.canManage || task.role === 'owner' || task.role === 'curator')))
+const editTitle = computed(() => bt(editKind.value === 'create' ? 'newFolder' : editKind.value === 'tags' ? 'editTags' : 'rename'))
+const recovered = computed(() => !!current.value && ancestors(model.value, current.value.key).some(entry => entry.recovered))
 
-function folderPath(id: string) {
-  const parts: string[] = []
-  const seen = new Set<string>()
-  let folder = folders.value.find(item => item.id === id)
-  while (folder && !seen.has(folder.id)) {
-    seen.add(folder.id)
-    parts.unshift(folder.name)
-    const parent = normalizedParent(folder)
-    const assignment = assignmentMap.value.get(assignmentFromNode(parent))
-    if (assignment) { parts.unshift(assignment.name); break }
-    folder = folders.value.find(item => item.id === parent)
+function errorText(reason: unknown) {
+  if (reason instanceof PhotoDetailsError) return reason.message
+  const code = reason instanceof Error ? reason.message : ''
+  const key = {
+    'browser.location': 'locationUnavailable', 'browser.scope': 'scopeConflict',
+    'browser.duplicate': 'duplicateName', 'browser.name': 'invalidName',
+    'browser.limit': 'folderLimit', 'browser.locked': 'locked',
+    'browser.account_changed': 'locked', 'browser.denied': 'denied',
+  }[code] as Parameters<typeof bt>[0] | undefined
+  return bt(key ?? 'folderFailed')
+}
+function entryPath(entry: ExplorerEntry) { return ancestors(model.value, entry.key).map(item => item.name).join(' / ') }
+function selectable(entry: ExplorerEntry) { return entry.kind === 'folder' || entry.kind === 'photo' }
+function navigate(key: string) {
+  const entry = model.value.entries.get(key)
+  if (!entry || entry.kind === 'photo') return
+  const query = entry.kind === 'folder' ? { folder: entry.id }
+    : entry.kind === 'assignment' ? { assignment: entry.id } : { section: entry.key }
+  return router.push({ path: '/browser', query })
+}
+function photoQuery(entry: ExplorerEntry) {
+  return {
+    ...(entry.scope?.startsWith('assignment:') ? { assignment: entry.scope.slice(11) } : { personal: '1' }),
+    ...(entry.parent?.startsWith('folder:') ? { folder: model.value.entries.get(entry.parent)?.id } : {}),
   }
-  return parts.join(' / ')
 }
-function navigate(id = '') {
-  selectMode.value = false
-  photoSelected.value = []
-  folderSelected.value = []
-  operationError.value = ''
-  void router.replace({ path: '/browser', query: id ? { folder: id } : {} })
+function openEntry(entry: ExplorerEntry, force = false) {
+  if (!force && selectionMode.value && selectable(entry)) { toggleSelection(entry.key); return }
+  if (entry.kind !== 'photo') navigate(entry.key)
+  else if (entry.readable) void router.push({ path: '/gallery/' + encodeURIComponent(entry.id), query: photoQuery(entry) })
 }
-function setDisplay(value: Display) {
-  display.value = value
-  try { localStorage.setItem('photobunker.browser.view', value) } catch { /* optional */ }
+function toggleSelection(key: string) {
+  const entry = model.value.entries.get(key)
+  if (!entry || !selectable(entry)) return
+  const next = new Set(selected.value)
+  if (next.has(key)) next.delete(key); else next.add(key)
+  selected.value = next
 }
-function openShare() {
-  shareSelected.value = currentAssignmentId.value && availableForShare.value.some(task => task.id === currentAssignmentId.value)
-    ? [currentAssignmentId.value] : []
-  operationError.value = ''
-  settingsOpen.value = false
-  shareOpen.value = true
+function selectAll() {
+  selectionMode.value = true
+  selected.value = new Set(shownRows.value.filter(row => selectable(row.entry)).map(row => row.entry.key))
 }
-function toggleShare(id: string) {
-  shareSelected.value = shareSelected.value.includes(id)
-    ? shareSelected.value.filter(value => value !== id) : [...shareSelected.value, id]
+function toggleTree(key: string) {
+  const next = new Set(expanded.value)
+  if (next.has(key)) next.delete(key); else next.add(key)
+  expanded.value = next
+}
+function treeKey(event: KeyboardEvent, entry: ExplorerEntry) {
+  if (display.value !== 'tree') return
+  if (event.key === 'ArrowRight') { event.preventDefault(); expanded.value = new Set([...expanded.value, entry.key]) }
+  else if (event.key === 'ArrowLeft') {
+    event.preventDefault()
+    if (expanded.value.has(entry.key)) toggleTree(entry.key)
+    else [...tree.value?.querySelectorAll<HTMLElement>('[data-entry-key]') ?? []]
+      .find(row => row.dataset.entryKey === entry.parent)?.querySelector<HTMLButtonElement>('.explorer-open')?.focus()
+  } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+    event.preventDefault()
+    const controls = [...tree.value!.querySelectorAll<HTMLButtonElement>('.explorer-open')]
+    const index = controls.indexOf(event.currentTarget as HTMLButtonElement)
+    const target = event.key === 'Home' ? 0 : event.key === 'End' ? controls.length - 1
+      : index + (event.key === 'ArrowDown' ? 1 : -1)
+    controls[target]?.focus()
+  }
+}
+function cover(entry: ExplorerEntry) {
+  return descendants(model.value, entry.key).filter(item => item.kind === 'photo').slice(0, 4)
+}
+function clearSelection() { selected.value = new Set(); selectionMode.value = false }
+function startEdit(kind: 'create' | 'rename' | 'tags', entry?: ExplorerEntry) {
+  if (!canOrganize.value) return
+  if (kind === 'create' && !mayCreate.value) { createLocationOpen.value = true; return }
+  editKind.value = kind
+  editKey.value = entry?.key ?? ''
+  editValue.value = kind === 'create' ? '' : kind === 'tags' ? (entry?.photo?.tags ?? []).join(', ') : entry?.name ?? ''
+  menuKey.value = ''; error.value = ''; editOpen.value = true
+}
+async function chooseCreateLocation(key: string) {
+  createLocationOpen.value = false
+  await navigate(key)
+  await nextTick()
+  startEdit('create')
+}
+function closeEdit() { editOpen.value = false; editValue.value = ''; editKey.value = ''; error.value = '' }
+async function mutate(action: OrganizerAction) {
+  if (!canOrganize.value || working.value) return false
+  working.value = true; error.value = ''
+  try { organizer.value = await organize(action, labels.value); return true }
+  catch (reason) { error.value = errorText(reason); return false }
+  finally { working.value = false }
+}
+async function saveEdit() {
+  if (working.value || !canOrganize.value) return
+  if (editKind.value === 'create') {
+    if (await mutate({ type: 'create', parent: location.value, name: editValue.value, id: crypto.randomUUID() })) closeEdit()
+  } else if (editEntry.value?.kind === 'folder') {
+    if (await mutate({ type: 'rename', key: editEntry.value.key, name: editValue.value })) closeEdit()
+  } else if (editEntry.value?.kind === 'photo') {
+    working.value = true; error.value = ''
+    try {
+      await editBrowserPhoto(editEntry.value.id, editKind.value === 'tags'
+        ? { tags: editValue.value } : { title: editValue.value })
+      closeEdit()
+    } catch (reason) { error.value = errorText(reason) }
+    finally { working.value = false }
+  } else error.value = bt('locationUnavailable')
+}
+function selectForAction(entry: ExplorerEntry) {
+  selected.value = new Set([entry.key]); selectionMode.value = true; menuKey.value = ''
+}
+function startMove(entry?: ExplorerEntry) {
+  if (entry) selectForAction(entry)
+  error.value = ''; moveOpen.value = true
+}
+async function moveTo(key: string) {
+  if (await mutate({ type: 'move', keys: selectedEntries.value.map(entry => entry.key), target: key })) {
+    moveOpen.value = false; clearSelection()
+  }
+}
+async function archive(restore: boolean, entry?: ExplorerEntry) {
+  const keys = entry ? [entry.key] : selectedEntries.value.map(item => item.key)
+  if (await mutate({ type: 'archive', keys, archived: !restore })) { menuKey.value = ''; clearSelection() }
+}
+function startDelete(entry?: ExplorerEntry) {
+  if (entry) selectForAction(entry)
+  error.value = ''; deleteOpen.value = true
+}
+async function removeSelection() {
+  if (!canDelete.value || !canOrganize.value || working.value) return
+  working.value = true; error.value = ''
+  const folderKeys = selectedFolders.value.map(entry => entry.key)
+  try {
+    await deleteBrowserPhotos(selectedPhotos.value.map(entry => entry.id), labels.value)
+    if (folderKeys.length) organizer.value = await organize({ type: 'removeFolders', keys: folderKeys }, labels.value)
+    else organizer.value = await readOrganizer(account.value!.id, deviceId.value)
+    deleteOpen.value = false; clearSelection()
+  } catch (reason) { error.value = errorText(reason) }
+  finally { working.value = false }
+}
+function photoAction(entry: ExplorerEntry, action: 'card' | 'share' | 'original' | 'edit') {
+  menuKey.value = ''
+  if (entry.kind !== 'photo') return
+  if (action === 'card' || action === 'share') {
+    if (action === 'share' && !entry.shareable) return
+    void router.push({ path: photoCardPath(entry.id), state: action === 'share' ? { openCardShare: true } : {} })
+  } else if (action === 'edit' && entry.editable)
+    void router.push({ path: '/gallery/' + encodeURIComponent(entry.id) + '/edit', query: photoQuery(entry) })
+  else if (action === 'original' && entry.readable)
+    void router.push({ path: '/gallery/' + encodeURIComponent(entry.id), query: { ...photoQuery(entry), action: 'original' } })
 }
 async function createCollection() {
-  if (!collectionReady.value || working.value || !shareSelected.value.length || shareSelected.value.length > 20) return
-  const owner = account.value!.id
-  const device = deviceId.value
+  if (!ready.value || working.value || !shareSelected.value.length) return
   const tasks = availableForShare.value.filter(task => shareSelected.value.includes(task.id))
-  if (tasks.length !== shareSelected.value.length) return
-  working.value = true
-  operationError.value = ''
-  const id = crypto.randomUUID()
+  if (tasks.length !== shareSelected.value.length || tasks.length > 20) return
+  const owner = account.value!.id, device = deviceId.value, id = crypto.randomUUID()
+  working.value = true; error.value = ''
   try {
-    await saveBrowser(owner, device, {
-      collection: {
-        id,
-        assignments: tasks.map(task => ({ id: task.id, name: task.name })),
-        expiresAt: Date.now() + 7 * 86400000,
-        canRevoke: true,
-      },
-      photos: [],
-      pending: { assignmentIds: tasks.map(task => task.id) },
-    })
-    if (account.value?.id !== owner || deviceId.value !== device) return
-    shareOpen.value = false
-    await router.push('/browser/' + id)
-  } catch { operationError.value = bt('loadFailed') }
+    await saveBrowser(owner, device, { collection: { id, assignments: tasks.map(task => ({ id: task.id, name: task.name })),
+      expiresAt: Date.now() + 7 * 86400000, canRevoke: true }, photos: [], pending: { assignmentIds: tasks.map(task => task.id) } })
+    if (owner === account.value?.id && device === deviceId.value) { shareOpen.value = false; await router.push('/browser/' + id) }
+  } catch { error.value = bt('loadFailed') }
   finally { working.value = false }
 }
-function togglePhoto(id: string) {
-  photoSelected.value = photoSelected.value.includes(id)
-    ? photoSelected.value.filter(value => value !== id) : [...photoSelected.value, id]
-}
-function toggleFolder(id: string) {
-  folderSelected.value = folderSelected.value.includes(id)
-    ? folderSelected.value.filter(value => value !== id) : [...folderSelected.value, id]
-}
-function toggleSelection() {
-  selectMode.value = !selectMode.value
-  if (!selectMode.value) { photoSelected.value = []; folderSelected.value = [] }
-}
-function folderClicked(folder: FolderRow) {
-  if (selectMode.value && !folder.assignment) { toggleFolder(folder.id); return }
-  navigate(folder.id)
-}
-function openPhoto(id: string) {
-  if (selectMode.value) { togglePhoto(id); return }
-  const query = currentAssignmentId.value ? { assignment: currentAssignmentId.value }
-    : currentFolder.value ? { folder: currentFolder.value.id } : { personal: '1' }
-  void router.push({ path: `/gallery/${id}`, query })
-}
-async function persistFolders(next = folders.value) {
-  if (!account.value || !deviceId.value) return
-  await saveOrganizer(account.value.id, deviceId.value, { version: 1, folders: next })
-}
-async function createFolder() {
-  const name = folderName.value.trim()
-  if (!name || name.length > 80 || working.value) return
-  working.value = true
-  operationError.value = ''
-  const next = [...folders.value, {
-    id: crypto.randomUUID(),
-    name,
-    photoIds: [],
-    createdAt: Date.now(),
-    ...(currentNodeId.value ? { parentId: currentNodeId.value } : {}),
-  }]
-  try {
-    await persistFolders(next)
-    folders.value = next
-    folderName.value = ''
-    organizerOpen.value = false
-  } catch { operationError.value = bt('folderFailed') }
-  finally { working.value = false }
-}
-async function moveSelected(target: string) {
-  if (!(photoSelected.value.length || folderSelected.value.length) || working.value || !canMoveTo(target)) return
-  working.value = true
-  operationError.value = ''
-  const selectedSet = new Set(photoSelected.value)
-  const next = folders.value.map(folder => ({ ...folder,
-    photoIds: folder.photoIds.filter(id => !selectedSet.has(id)) }))
-  const destination = next.find(folder => folder.id === target)
-  if (destination) destination.photoIds = [...new Set([...destination.photoIds, ...photoSelected.value])]
-  for (const folder of next)
-    if (folderSelected.value.includes(folder.id))
-      folder.parentId = target || undefined
-  try {
-    await persistFolders(next)
-    folders.value = next
-    moveOpen.value = false
-    selectMode.value = false
-    photoSelected.value = []
-    folderSelected.value = []
-  } catch { operationError.value = bt('folderFailed') }
-  finally { working.value = false }
-}
-function canMoveTo(target: string) {
-  if (!target) return true
-  if (folderSelected.value.includes(target)) return false
-  const targetFolder = folders.value.find(folder => folder.id === target)
-  return !targetFolder || !folderSelected.value.some(id => isDescendant(targetFolder, id))
-}
-async function deleteSelected() {
-  if (!(photoSelected.value.length || folderSelected.value.length) || working.value ||
-      !confirm(folderSelected.value.length ? bt('deleteItemsConfirm') : bt('deleteConfirm'))) return
-  working.value = true
-  operationError.value = ''
-  const ids = [...photoSelected.value]
-  try {
-    for (const id of ids) await deleteStoredPhoto(id)
-    const removed = new Set(ids)
-    const removedFolders = new Set(folderSelected.value)
-    const liftedPhotos = folders.value.filter(folder => removedFolders.has(folder.id))
-      .flatMap(folder => folder.photoIds).filter(id => !removed.has(id))
-    const next = folders.value.filter(folder => !removedFolders.has(folder.id)).map(folder => ({
-      ...folder,
-      parentId: removedFolders.has(folder.parentId || '')
-        ? currentNodeId.value || undefined : folder.parentId,
-      photoIds: folder.photoIds.filter(id => !removed.has(id)),
-    }))
-    if (currentFolder.value && !removedFolders.has(currentFolder.value.id)) {
-      const destination = next.find(folder => folder.id === currentFolder.value!.id)
-      if (destination) destination.photoIds = [...new Set([...destination.photoIds, ...liftedPhotos])]
-    }
-    await persistFolders(next)
-    folders.value = next
-    libraryChanged()
-    selectMode.value = false
-    photoSelected.value = []
-    folderSelected.value = []
-  } catch { operationError.value = bt('deleteFailed') }
-  finally { working.value = false }
-}
-
-watch(() => account.value?.id, () => {
-  query.value = ''
-  shareSelected.value = []
-  photoSelected.value = []
-  folderSelected.value = []
-  shareOpen.value = false
-  operationError.value = ''
-  folders.value = []
-})
 let organizerEpoch = 0
 async function loadOrganizer() {
-  const owner = account.value?.id, device = deviceId.value, epoch = ++organizerEpoch
-  if (!owner || !device) { folders.value = []; return }
+  const epoch = ++organizerEpoch, owner = account.value?.id, device = deviceId.value
+  if (!ready.value || !owner || !device) return
+  organizerLoading.value = true; organizerFailed.value = false
   try {
-    const value = await readOrganizer(owner, device)
-    if (epoch === organizerEpoch && owner === account.value?.id && device === deviceId.value)
-      folders.value = value.folders
-  } catch { if (epoch === organizerEpoch) operationError.value = bt('folderFailed') }
+    const saved = await readOrganizer(owner, device)
+    if (epoch === organizerEpoch && owner === account.value?.id && device === deviceId.value && ready.value) {
+      organizer.value = saved; organizerLoaded.value = true
+    }
+  } catch { if (epoch === organizerEpoch) organizerFailed.value = true }
+  finally { if (epoch === organizerEpoch) organizerLoading.value = false }
 }
-watch([() => account.value?.id, deviceId], () => { void loadOrganizer() })
-onMounted(async () => {
-  await Promise.allSettled([loadStudio(), refreshLibrary()])
-  await loadOrganizer()
-  if (legacyAssignmentId.value)
-    await router.replace({ path: '/browser', query: { folder: assignmentNode(legacyAssignmentId.value) } })
+watch([() => account.value?.id, deviceId, ready], () => {
+  organizerEpoch++
+  organizer.value = { version: 1, folders: [] }; organizerLoaded.value = false; organizerFailed.value = false
+  organizerLoading.value = false; selected.value = new Set(); menuKey.value = ''
+  editOpen.value = false; editValue.value = ''; editKey.value = ''; moveOpen.value = false
+  deleteOpen.value = false; shareOpen.value = false; shareSelected.value = []; query.value = ''; tag.value = ''
+  createLocationOpen.value = false
+  if (ready.value) void loadOrganizer()
+}, { immediate: true, flush: 'sync' })
+watch(location, async () => {
+  clearSelection(); menuKey.value = ''; query.value = ''; tag.value = ''; error.value = ''; pageSize.value = 50
+  moveOpen.value = false; closeEdit()
+  await nextTick()
+  if (pathBar.value) pathBar.value.scrollLeft = pathBar.value.scrollWidth
+  document.getElementById('main')?.scrollTo({ top: 0 })
 })
+watch([query, tag, display, sort], () => { pageSize.value = 50 })
+onMounted(() => {
+  window.addEventListener('focus', loadOrganizer)
+  // Local organizer loading is independent of HTTP/photo reconciliation.
+  void Promise.allSettled([loadStudio(), refreshLibrary()])
+  if (!route.query.folder && !route.query.assignment && !route.query.section)
+    void router.replace({ path: '/browser', query: { section: start.value } })
+})
+onBeforeUnmount(() => window.removeEventListener('focus', loadOrganizer))
 </script>
 
 <template>
-  <section class="native-screen browser-home">
-    <ScreenHeader :title="bt('browser')" :subtitle="breadcrumbs.at(-1)?.name">
-      <button class="app-icon-button" :aria-label="bt('newFolder')" @click="folderName = ''; operationError = ''; organizerOpen = true">
-        <AppIcon name="plus" />
-      </button>
-      <button class="app-icon-button" :aria-label="bt('selectionMode')" :aria-pressed="selectMode"
-        @click="toggleSelection"><AppIcon name="check" /></button>
+  <section class="native-screen photo-explorer">
+    <ScreenHeader :title="bt('browser')">
       <button class="app-icon-button" :aria-label="bt('searchShort')" :aria-pressed="searchOpen"
         @click="searchOpen = !searchOpen; query = ''"><AppIcon name="search" /></button>
-      <button class="app-icon-button" :aria-label="bt('settings')" @click="settingsOpen = true">
-        <AppIcon name="settings" />
-      </button>
+      <button class="app-icon-button" :aria-label="bt('settings')" @click="settingsOpen = true"><AppIcon name="settings" /></button>
     </ScreenHeader>
-
-    <div class="screen-body browser-home-body">
-      <div class="browser-commandbar">
-        <nav class="browser-breadcrumbs" aria-label="Path">
-          <template v-for="(crumb, index) in breadcrumbs" :key="crumb.id || 'root'">
-            <AppIcon v-if="index" name="chevron" />
-            <button type="button" :aria-current="index === breadcrumbs.length - 1 ? 'page' : undefined"
-              @click="navigate(crumb.id)">{{ crumb.name }}</button>
-          </template>
-        </nav>
-        <div class="browser-view-switch" role="group" :aria-label="bt('view')">
-          <button v-for="value in ['grid', 'list', 'tree'] as const" :key="value"
-            type="button" :aria-label="bt(value)" :aria-pressed="display === value" @click="setDisplay(value)">
-            <AppIcon :name="value === 'grid' ? 'grid' : value === 'list' ? 'gallery' : 'folder'" />
-          </button>
+    <nav class="explorer-sections" :aria-label="bt('showFirst')">
+      <button v-for="item in sections" :key="item" type="button" :aria-current="section === item ? 'page' : undefined"
+        @click="navigate(item)">{{ labels[item] }}</button>
+    </nav>
+    <div class="screen-body explorer-body">
+      <template v-if="ready">
+        <div class="explorer-location">
+          <button class="app-icon-button" :aria-label="bt('up')" :disabled="!current?.parent"
+            @click="current?.parent && navigate(current.parent)"><AppIcon name="back" /></button>
+          <nav ref="pathBar" class="explorer-path" :aria-label="bt('currentPath')">
+            <template v-for="(crumb, index) in crumbs" :key="crumb.key">
+              <AppIcon v-if="index" name="chevron" />
+              <button type="button" :aria-current="index === crumbs.length - 1 ? 'page' : undefined"
+                @click="navigate(crumb.key)">{{ crumb.name }}</button>
+            </template>
+          </nav>
         </div>
-      </div>
-      <div v-if="selectMode" class="browser-selection-bar" role="toolbar" :aria-label="bt('selectionMode')">
-        <strong>{{ bt('selected') }}: {{ photoSelected.length + folderSelected.length }}</strong>
-        <button type="button" :disabled="!(photoSelected.length || folderSelected.length)" @click="operationError = ''; moveOpen = true"><AppIcon name="folder" />{{ bt('move') }}</button>
-        <button type="button" class="subtle-danger" :disabled="!(photoSelected.length || folderSelected.length) || working" @click="deleteSelected"><AppIcon name="trash" />{{ bt('delete') }}</button>
-        <button type="button" @click="toggleSelection">{{ bt('cancelSelection') }}</button>
-      </div>
-      <div v-if="searchOpen" class="browser-search-row">
-        <AppIcon name="search" />
-        <input v-model="query" autofocus type="search" :aria-label="bt('searchShort')"
-          :placeholder="bt('searchPlaceholder')" />
-        <button v-if="query" class="app-icon-button" :aria-label="bt('clear')" @click="query = ''">
-          <AppIcon name="close" />
-        </button>
-      </div>
-      <div v-if="tags.length" class="browser-tags" :aria-label="bt('tags')">
-        <button :aria-pressed="!tag" @click="tag = ''">{{ bt('allTags') }}</button>
-        <button v-for="value in tags" :key="value" :aria-pressed="tag === value" @click="tag = value">#{{ value }}</button>
-      </div>
-      <p v-if="operationError" class="form-error browser-operation-error" role="alert">{{ operationError }}</p>
-
-      <div v-if="loading" class="browser-skeleton" aria-label="Loading" aria-busy="true">
-        <span v-for="index in 8" :key="index" />
-      </div>
-      <div v-else-if="libraryError" class="native-empty">
-        <AppIcon name="offline" /><h2>{{ bt('libraryUnavailable') }}</h2>
-        <button class="secondary-button" @click="refreshLibrary">{{ bt('retry') }}</button>
-      </div>
-      <template v-else>
-        <div v-if="folderRows.length || visible.length"
-          :class="['browser-unified', `browser-unified-${display}`]">
-          <button v-for="folder in folderRows" :key="`folder:${folder.id}`" type="button"
-            :class="['browser-entry','browser-entry-folder',{ selected: folderSelected.includes(folder.id), selectable: selectMode && !folder.assignment }]" @click="folderClicked(folder)">
-            <span v-if="selectMode && !folder.assignment" class="browser-photo-check"><AppIcon v-if="folderSelected.includes(folder.id)" name="check" /></span>
-            <span class="browser-entry-preview browser-folder-cover">
-              <PhotoThumbnail v-for="photo in folder.photos" :key="photo.id" :id="photo.id"
-                :access-key="photo.accountId ? `${photo.remoteRevision}:${photo.thumbnailOnly}` : undefined"
-                :expires-at="photo.expiresAt" alt="" />
-              <span v-for="index in Math.max(0, 4 - folder.photos.length)" :key="`empty-${index}`" class="browser-folder-empty" />
-              <AppIcon v-if="!folder.photos.length" name="folder" />
-            </span>
-            <span class="browser-entry-copy"><strong>{{ folder.name }}</strong>
-              <small>{{ formatNumber(folder.count) }} {{ bt('photoCount') }}</small></span>
-            <AppIcon class="browser-entry-chevron" name="chevron" />
-          </button>
-          <button v-for="photo in visible" :key="`photo:${photo.id}`" type="button"
-            :class="['browser-entry', 'browser-entry-photo', { selected: photoSelected.includes(photo.id), selectable: selectMode }]"
-            @click="openPhoto(photo.id)">
-            <span v-if="selectMode" class="browser-photo-check"><AppIcon v-if="photoSelected.includes(photo.id)" name="check" /></span>
-            <PhotoThumbnail class="browser-entry-preview" :id="photo.id"
-              :access-key="photo.accountId ? `${photo.remoteRevision}:${photo.thumbnailOnly}` : undefined"
-              :expires-at="photo.expiresAt" :alt="photo.title || photo.shortId || bt('photo')" />
-            <span class="browser-entry-copy"><strong>{{ photo.title || photo.shortId || bt('photo') }}</strong>
-              <small>{{ formatDate(photo.createdAt) }}</small>
-              <small>{{ photo.expiresAt ? formatDate(photo.expiresAt) : '—' }}</small>
-              <span class="browser-photo-tags">{{ photo.tags?.length ? photo.tags.map(value => `#${value}`).join(' ') : '' }}</span>
-            </span>
-          </button>
-        </div>
-        <div v-else class="native-empty browser-empty">
-          <AppIcon name="folder" /><h2>{{ bt('emptyFolder') }}</h2>
-          <p>{{ bt('emptyFolderHint') }}</p>
-          <button class="secondary-button" @click="folderName = ''; organizerOpen = true"><AppIcon name="plus" />{{ bt('newFolder') }}</button>
-          <RouterLink to="/camera" class="primary-button"><AppIcon name="camera" />{{ s('capture') }}</RouterLink>
-        </div>
-      </template>
-    </div>
-
-    <AppSheet :open="settingsOpen" :title="bt('settings')" @close="settingsOpen = false">
-      <div class="native-form">
-        <div><p class="section-caption">{{ bt('view') }}</p>
-          <div class="browser-setting-options">
-            <button v-for="value in ['grid', 'list', 'tree'] as const" :key="value"
-              :aria-pressed="display === value" @click="setDisplay(value)"><AppIcon :name="value === 'grid' ? 'grid' : value === 'list' ? 'gallery' : 'folder'" />{{ bt(value) }}</button>
+        <div class="explorer-toolbar">
+          <button class="secondary-button" type="button" :disabled="!canOrganize || !current || working" :title="mayCreate ? bt('newFolder') : bt('chooseLocation')"
+            @click="startEdit('create')"><AppIcon name="plus" />{{ bt('newFolder') }}</button>
+          <button class="app-icon-button" type="button" :aria-label="bt('selectionMode')" :aria-pressed="selectionMode"
+            @click="selectionMode = !selectionMode; selected = new Set()"><AppIcon name="check" /></button>
+          <label class="explorer-sort"><span class="sr-only">{{ bt('sort') }}</span>
+            <select v-model="sort" :aria-label="bt('sort')">
+              <option value="newest">{{ bt('sortNewest') }}</option><option value="oldest">{{ bt('sortOldest') }}</option><option value="name">{{ bt('sortName') }}</option>
+            </select>
+          </label>
+          <div class="explorer-views" role="group" :aria-label="bt('view')">
+            <button v-for="item in ['grid', 'list', 'tree'] as const" :key="item" class="app-icon-button" type="button"
+              :aria-label="bt(item)" :aria-pressed="display === item" @click="display = item">
+              <AppIcon :name="item === 'grid' ? 'grid' : item === 'list' ? 'gallery' : 'folder'" />
+            </button>
           </div>
         </div>
-        <button class="secondary-button full-button" :disabled="!availableForShare.length" @click="openShare">
-          <AppIcon name="share" />{{ bt('newCollection') }}
-        </button>
+        <div v-if="selectionMode" class="explorer-selection" role="toolbar" :aria-label="bt('selectionMode')">
+          <strong>{{ bt('selected') }}: {{ formatNumber(selectedEntries.length) }}</strong>
+          <button type="button" @click="selectAll">{{ bt('selectAll') }}</button>
+          <button type="button" :disabled="!targets.length || working" @click="startMove()">{{ bt('move') }}</button>
+          <button v-if="canArchive" type="button" :disabled="working" @click="archive(restoreSelection)">{{ bt(restoreSelection ? 'restore' : 'archiveAction') }}</button>
+          <button class="subtle-danger" type="button" :disabled="!canDelete || working" @click="startDelete()">{{ bt('delete') }}</button>
+          <button type="button" @click="clearSelection">{{ bt('cancelSelection') }}</button>
+        </div>
+        <label v-if="searchOpen" class="explorer-search">
+          <AppIcon name="search" /><input v-model="query" type="search" :aria-label="bt('searchShort')" :placeholder="bt('searchPlaceholder')" />
+        </label>
+        <div v-if="tags.length" class="explorer-tags" :aria-label="bt('chooseTag')">
+          <button type="button" :aria-pressed="!tag" @click="tag = ''">{{ bt('allTags') }}</button>
+          <button v-for="item in tags" :key="item" type="button" :aria-pressed="tag === item" @click="tag = item">#{{ item }}</button>
+        </div>
+        <p v-if="current?.key === 'archive'" class="field-hint">{{ bt('archiveHint') }}</p>
+        <p v-if="recovered" class="field-hint" role="status">{{ bt('recovered') }}</p>
+        <p v-if="error" class="form-error" role="alert">{{ error }}</p>
+        <div v-if="organizerFailed" class="explorer-notice" role="alert">
+          <span>{{ bt('storageUnavailable') }}</span><button type="button" @click="loadOrganizer">{{ bt('retryFolders') }}</button>
+        </div>
+        <div v-if="libraryError || serverError" class="explorer-notice" role="status">
+          <span>{{ bt('libraryRefreshFailed') }}</span><button type="button" :disabled="libraryLoading" @click="refreshLibrary">{{ bt('retry') }}</button>
+        </div>
+        <div v-if="organizerLoading && !organizerLoaded" class="browser-skeleton" aria-busy="true" aria-label="Loading">
+          <span v-for="index in 4" :key="index" />
+        </div>
+        <div v-else-if="!current" class="native-empty">
+          <AppIcon name="folder" /><p role="alert">{{ bt('locationUnavailable') }}</p>
+          <button class="secondary-button" type="button" @click="navigate('all')">{{ bt('all') }}</button>
+        </div>
+        <template v-else>
+          <div ref="tree" :class="['explorer-entries', 'explorer-' + display]" :role="display === 'tree' ? 'tree' : 'list'" :aria-label="current.name">
+            <div v-for="row in shownRows" :key="row.entry.key" :data-entry-key="row.entry.key"
+              :class="['explorer-entry', { 'is-photo': row.entry.kind === 'photo', 'is-selected': selected.has(row.entry.key) }]"
+              @contextmenu.prevent="menuKey = selectable(row.entry) ? row.entry.key : ''"
+              :role="display === 'tree' ? 'treeitem' : 'listitem'"
+              :aria-level="display === 'tree' ? row.depth + 1 : undefined"
+              :aria-expanded="display === 'tree' && row.expandable ? row.expanded : undefined"
+              :aria-selected="display === 'tree' ? selected.has(row.entry.key) : undefined"
+              :style="display === 'tree' ? { '--entry-depth': row.depth } : undefined">
+              <button v-if="display === 'tree'" class="explorer-expand app-icon-button" type="button" :disabled="!row.expandable"
+                :aria-label="bt(row.expanded ? 'collapse' : 'expand') + ' ' + row.entry.name" @click="toggleTree(row.entry.key)">
+                <AppIcon v-if="row.expandable" :class="{ rotated: row.expanded }" name="chevron" />
+              </button>
+              <input v-if="selectionMode && selectable(row.entry)" class="explorer-check" type="checkbox"
+                :aria-label="bt('select') + ' ' + row.entry.name" :checked="selected.has(row.entry.key)" @change="toggleSelection(row.entry.key)" />
+              <button class="explorer-open" type="button" :aria-label="row.entry.name" :disabled="row.entry.kind === 'photo' && !row.entry.readable && !selectionMode" @click="openEntry(row.entry)" @keydown="treeKey($event, row.entry)">
+                <PhotoThumbnail v-if="row.entry.kind === 'photo'" class="explorer-thumbnail" :id="row.entry.id"
+                  :access-key="String(row.entry.photo?.remoteRevision) + ':' + String(row.entry.photo?.thumbnailOnly)"
+                  :expires-at="row.entry.photo?.expiresAt" :alt="row.entry.name" />
+                <span v-else class="explorer-folder">
+                  <template v-if="display === 'grid' && row.entry.count">
+                    <PhotoThumbnail v-for="item in cover(row.entry)" :key="item.key" :id="item.id"
+                      :access-key="String(item.photo?.remoteRevision) + ':' + String(item.photo?.thumbnailOnly)"
+                      :expires-at="item.photo?.expiresAt" alt="" />
+                  </template>
+                  <AppIcon v-else :name="row.entry.key === 'archive' ? 'archive' : 'folder'" />
+                </span>
+                <span class="explorer-copy">
+                  <strong>{{ row.entry.name }}</strong>
+                  <template v-if="row.entry.kind === 'photo'">
+                    <small v-if="row.entry.createdAt">{{ formatDate(row.entry.createdAt) }}</small>
+                    <small class="explorer-expiry">{{ row.entry.photo?.expiresAt ? bt('until') + ' ' + formatDate(row.entry.photo.expiresAt) : bt('noExpiry') }}</small>
+                    <span v-if="row.entry.readable && row.entry.photo?.tags?.length" class="explorer-row-tags">{{ row.entry.photo.tags.map(item => '#' + item).join(' ') }}</span>
+                  </template>
+                  <small v-else>{{ formatNumber(row.entry.count) }} {{ bt('photoCount') }}<span v-if="row.entry.kind === 'folder'"> · {{ formatDate(row.entry.createdAt) }}</span></small>
+                  <small v-if="query || tag" class="explorer-result-path">{{ ancestors(model, row.entry.key).slice(0, -1).map(item => item.name).join(' / ') }}</small>
+                </span>
+              </button>
+              <button v-if="selectable(row.entry)" class="app-icon-button explorer-more" type="button"
+                :aria-label="bt('actions') + ': ' + row.entry.name" @click="menuKey = row.entry.key"><AppIcon name="more" /></button>
+            </div>
+          </div>
+          <div v-if="!shownRows.length && !libraryLoading" class="native-empty explorer-empty">
+            <AppIcon name="folder" /><h2>{{ bt('emptyFolder') }}</h2><p>{{ query || tag ? bt('searchPlaceholder') : bt('emptyFolderHint') }}</p>
+            <button v-if="mayCreate" class="secondary-button" type="button" @click="startEdit('create')"><AppIcon name="plus" />{{ bt('newFolder') }}</button>
+          </div>
+          <div v-if="libraryLoading && !photos.length" class="browser-skeleton explorer-photo-loading" aria-busy="true" aria-label="Loading photos"><span /><span /></div>
+          <button v-if="rows.length > shownRows.length" class="secondary-button full-button" type="button" @click="pageSize += 50">{{ bt('loadMore') }} ({{ formatNumber(shownRows.length) }} / {{ formatNumber(rows.length) }})</button>
+        </template>
+      </template>
+      <div v-else class="native-empty"><AppIcon name="lock" /><p>{{ bt('locked') }}</p><RouterLink class="secondary-button" to="/profile/photos-security">{{ bt('retry') }}</RouterLink></div>
+    </div>
+
+    <AppSheet :open="!!menuEntry" :title="menuEntry?.name || bt('actions')" @close="menuKey = ''">
+      <div v-if="menuEntry" class="action-list explorer-menu">
+        <button type="button" :disabled="menuEntry.kind === 'photo' && !menuEntry.readable" @click="openEntry(menuEntry, true); menuKey = ''"><AppIcon :name="menuEntry.kind === 'photo' ? 'gallery' : 'folder'" />{{ bt(menuEntry.kind === 'photo' ? 'openPhoto' : 'currentPath') }}</button>
+        <template v-if="menuEntry.kind === 'photo'">
+          <button type="button" @click="photoAction(menuEntry, 'card')"><AppIcon name="profiles" />{{ bt('card') }}</button>
+          <button v-if="menuEntry.readable" type="button" @click="photoAction(menuEntry, 'original')"><AppIcon name="gallery" />{{ bt('original') }}</button>
+          <button v-if="menuEntry.editable" type="button" @click="photoAction(menuEntry, 'edit')"><AppIcon name="edit" />{{ bt('editPhoto') }}</button>
+          <button v-if="menuEntry.editable" type="button" @click="startEdit('tags', menuEntry)"><AppIcon name="edit" />{{ bt('editTags') }}</button>
+          <button v-if="menuEntry.shareable" type="button" @click="photoAction(menuEntry, 'share')"><AppIcon name="share" />{{ bt('shareCard') }}</button>
+          <button v-if="menuEntry.scope === 'personal'" type="button" :disabled="working" @click="archive(!!menuEntry.archived, menuEntry)"><AppIcon name="archive" />{{ bt(menuEntry.archived ? 'restore' : 'archiveAction') }}</button>
+        </template>
+        <button v-if="menuEntry.kind === 'folder' || (menuEntry.editable && menuEntry.photo && (metadataEditable(menuEntry.photo) || !menuEntry.photo.title))" type="button" @click="startEdit('rename', menuEntry)"><AppIcon name="edit" />{{ bt('rename') }}</button>
+        <button v-if="!menuEntry.archived" type="button" @click="startMove(menuEntry)"><AppIcon name="folder" />{{ bt('move') }}</button>
+        <button v-if="menuEntry.kind === 'folder' || menuEntry.deletable" type="button" class="subtle-danger" @click="startDelete(menuEntry)"><AppIcon name="trash" />{{ bt('delete') }}</button>
       </div>
     </AppSheet>
-
-    <AppSheet :open="organizerOpen" :title="bt('newFolder')" :busy="working" @close="organizerOpen = false; folderName = ''; operationError = ''">
-      <form class="native-form" @submit.prevent="createFolder">
-        <p class="field-hint">{{ bt('currentPath') }}: {{ breadcrumbs.map(item => item.name).join(' / ') }}</p>
-        <label>{{ bt('folderName') }}<input v-model="folderName" maxlength="80" autofocus /></label>
-        <p v-if="operationError" class="form-error" role="alert">{{ operationError }}</p>
-        <button class="primary-button full-button" :disabled="working || !folderName.trim()">{{ bt('createFolder') }}</button>
+    <AppSheet :open="editOpen" :title="editTitle" :busy="working" @close="closeEdit">
+      <form class="native-form" @submit.prevent="saveEdit">
+        <p v-if="editKind === 'create'" class="field-hint">{{ bt('currentPath') }}: {{ crumbs.map(item => item.name).join(' / ') }}</p>
+        <label>{{ bt(editKind === 'tags' ? 'tags' : editEntry?.kind === 'photo' ? 'name' : 'folderName') }}<input v-model="editValue" :maxlength="editKind === 'tags' ? 820 : editEntry?.kind === 'photo' ? 120 : 80" autofocus :required="editKind !== 'tags'" /></label>
+        <p v-if="editKind === 'tags'" class="field-hint">{{ bt('tagsHint') }}</p>
+        <p v-if="error" class="form-error" role="alert">{{ error }}</p>
+        <button class="primary-button full-button" :disabled="working || (editKind !== 'tags' && !editValue.trim())">{{ bt(editKind === 'create' ? 'createFolder' : 'save') }}</button>
       </form>
     </AppSheet>
-
-    <AppSheet :open="moveOpen" :title="bt('moveTo')" :busy="working" @close="moveOpen = false; operationError = ''">
-      <div class="action-list">
-        <button type="button" @click="moveSelected('')"><AppIcon name="gallery" />{{ bt('root') }}</button>
-        <button v-for="folder in moveTargets" :key="folder.id" type="button"
-          :disabled="folder.id === currentFolder?.id || !canMoveTo(folder.id)" @click="moveSelected(folder.id)">
-          <AppIcon name="folder" />{{ folder.name }}
-        </button>
+    <AppSheet :open="createLocationOpen" :title="bt('chooseLocation')" @close="createLocationOpen = false">
+      <div class="action-list explorer-destinations">
+        <button v-for="target in createTargets" :key="target.key" type="button" @click="chooseCreateLocation(target.key)"><AppIcon name="folder" />{{ entryPath(target) }}</button>
       </div>
-      <p v-if="operationError" class="form-error" role="alert">{{ operationError }}</p>
     </AppSheet>
-
-    <AppSheet :open="shareOpen" :title="bt('newCollection')" :busy="working" @close="shareOpen = false; operationError = ''">
+    <AppSheet :open="moveOpen" :title="bt('moveTo')" :busy="working" @close="moveOpen = false; error = ''">
+      <div class="action-list explorer-destinations">
+        <button v-for="target in targets" :key="target.key" type="button" :disabled="working || selectedEntries.every(entry => entry.parent === target.key)" @click="moveTo(target.key)"><AppIcon name="folder" />{{ entryPath(target) }}</button>
+      </div>
+      <p v-if="!targets.length" class="field-hint">{{ bt('scopeConflict') }}</p>
+      <p v-if="error" class="form-error" role="alert">{{ error }}</p>
+    </AppSheet>
+    <AppSheet :open="deleteOpen" :title="bt('delete')" :busy="working" @close="deleteOpen = false; error = ''">
+      <ul class="explorer-delete-names"><li v-for="entry in selectedEntries" :key="entry.key">{{ entry.name }}</li></ul>
+      <p v-if="selectedPhotos.length" class="field-hint">{{ bt('deleteConfirm') }}</p>
+      <p v-if="selectedFolders.length" class="field-hint">{{ bt('folderDeleteHint') }}</p>
+      <p v-if="error" class="form-error" role="alert">{{ error }}</p>
+      <button class="danger-button full-button" :disabled="working || !canDelete" type="button" @click="removeSelection">{{ bt('delete') }}</button>
+    </AppSheet>
+    <AppSheet :open="settingsOpen" :title="bt('settings')" @close="settingsOpen = false">
+      <div class="native-form">
+        <label>{{ bt('showFirst') }}<select v-model="start"><option v-for="item in sections" :key="item" :value="item">{{ labels[item] }}</option></select></label>
+        <label>{{ bt('sort') }}<select v-model="sort"><option value="newest">{{ bt('sortNewest') }}</option><option value="oldest">{{ bt('sortOldest') }}</option><option value="name">{{ bt('sortName') }}</option></select></label>
+        <p class="field-hint">{{ bt('tagsManageHint') }}</p>
+        <button class="secondary-button" type="button" :disabled="!availableForShare.length" @click="settingsOpen = false; shareSelected = []; shareOpen = true"><AppIcon name="share" />{{ bt('newCollection') }}</button>
+      </div>
+    </AppSheet>
+    <AppSheet :open="shareOpen" :title="bt('newCollection')" :busy="working" @close="shareOpen = false; error = ''">
       <form class="native-form" @submit.prevent="createCollection">
         <p class="field-hint">{{ bt('sharedWith') }}</p>
-        <label v-for="task in availableForShare" :key="task.id" class="browser-share-choice">
-          <input type="checkbox" :checked="shareSelected.includes(task.id)" :disabled="working" @change="toggleShare(task.id)" />
-          <span>{{ task.name }}</span>
-        </label>
-        <p v-if="operationError" class="form-error" role="alert">{{ operationError }}</p>
-        <button class="primary-button full-button" :disabled="working || !shareSelected.length || !collectionReady">
-          {{ bt('openCollection') }}
-        </button>
+        <label v-for="task in availableForShare" :key="task.id" class="browser-share-choice"><input v-model="shareSelected" type="checkbox" :value="task.id" />{{ task.name }}</label>
+        <p v-if="error" class="form-error" role="alert">{{ error }}</p>
+        <button class="primary-button full-button" :disabled="working || !shareSelected.length">{{ bt('openCollection') }}</button>
       </form>
     </AppSheet>
   </section>

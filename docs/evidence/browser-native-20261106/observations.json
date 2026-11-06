@@ -1,0 +1,116 @@
+{
+  "move": {
+    "targets": [
+      {
+        "text": "All / Assignments / AUDIT Assignment A",
+        "disabled": true
+      },
+      {
+        "text": "All / Assignments / AUDIT Assignment A / Folder A",
+        "disabled": false
+      }
+    ],
+    "onlyAssignmentA": true,
+    "beforeStaleB": [
+      "audit-photo-A"
+    ],
+    "afterA": [
+      "audit-photo-A"
+    ],
+    "afterB": [],
+    "visible": [
+      "AUDIT Photo A (belongs to A)"
+    ]
+  },
+  "history": {
+    "before": {
+      "length": 3,
+      "current": "/browser?assignment=audit-A"
+    },
+    "after": {
+      "length": 4,
+      "back": "/browser?assignment=audit-A",
+      "current": "/browser?folder=audit-A-folder"
+    }
+  },
+  "tags": [
+    "All",
+    "#audit-tag-A"
+  ],
+  "archive": {
+    "hiddenFromPersonal": true,
+    "visibleInArchive": true,
+    "persisted": true,
+    "restored": true,
+    "sameId": true,
+    "sameExpiry": true,
+    "cipher": {
+      "fields": [
+        "key",
+        "iv",
+        "data"
+      ],
+      "extractable": false,
+      "plaintextNames": false,
+      "plaintextArchive": false
+    }
+  },
+  "tree": {
+    "beforeCount": 3,
+    "afterCount": 4,
+    "nestedVisible": true,
+    "nestedLevel": "2",
+    "parentExpanded": "true"
+  },
+  "invalid": {
+    "error": "This folder is unavailable or no longer exists. Choose a section or return to the root.\n\nAll",
+    "createDisabled": true,
+    "noFalseRoot": true
+  },
+  "forms": {
+    "cancelUnchanged": true,
+    "createdInParent": true,
+    "renamed": true
+  },
+  "settings": {
+    "text": "Browser settings\nOpen first\nAll\nMy photos\nAssignments\nArchive\nSort\nNewest first\nOldest first\nBy name\n\nTo add or change tags, open Actions on a photo and choose Edit tags.\n\nNew collection",
+    "sections": 4
+  },
+  "mobile320": {
+    "overflow": false,
+    "expiry": [
+      {
+        "text": "until Nov 8, 2026",
+        "display": "block"
+      }
+    ],
+    "sectionLabels": [
+      {
+        "text": "All",
+        "clipped": false
+      },
+      {
+        "text": "My photos",
+        "clipped": false
+      },
+      {
+        "text": "Assignments",
+        "clipped": false
+      },
+      {
+        "text": "Archive",
+        "clipped": false
+      }
+    ]
+  },
+  "desktop": {
+    "overflow": false,
+    "headerLeft": 130
+  },
+  "errors": [],
+  "photoRoute": {
+    "url": "/gallery/audit-personal",
+    "body": "Перейти к содержимому\nЗадания\nБраузер\nКамера\nКонтакты\nПрофиль\nAUDIT Personal photo\nНужна проверка\nПресет съёмки: Пресет не сохранён\nОригинал\nКарточка\nИзменить\nПоделиться\nИнформация\nУдалить",
+    "errors": []
+  }
+}
