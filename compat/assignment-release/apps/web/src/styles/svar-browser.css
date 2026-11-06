@@ -37,6 +37,12 @@
   border-radius: 12px;
 }
 .svar-browser-skin > * { min-width: 0; min-height: 0; }
+.svar-browser-skin > .wx-willow-theme,
+.svar-browser-skin > .wx-willow-dark-theme {
+  height: 100%;
+  --wx-font-family: inherit;
+  --wx-color-primary: var(--accent);
+}
 .svar-browser-selected {
   display: flex;
   flex-wrap: wrap;
@@ -63,4 +69,7 @@
   .svar-browser-actions button { flex: 1; }
   .svar-browser-skin { min-height: 290px; height: 52dvh; max-height: 60dvh; }
   .svar-browser-selected { gap: 8px; }
+  .svar-browser-skin [role="columnheader"]:nth-child(2),
+  .svar-browser-skin [role="gridcell"]:nth-child(2) { display: none; }
+  .svar-browser-skin button { min-width: 44px; min-height: 44px; }
 }

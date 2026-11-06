@@ -10,7 +10,8 @@ export type BrowserScope = 'personal' | `assignment:${string}`
 export const assignmentScope = (id: string): BrowserScope => `assignment:${id}`
 export type BrowserEntry =
   | { kind: 'personal' | 'assignments'; id: string; scope: BrowserScope | '' }
-  | { kind: 'assignment' | 'folder'; id: string; scope: BrowserScope }
+  | { kind: 'assignment'; id: string; scope: BrowserScope }
+  | { kind: 'folder'; id: string; scope: BrowserScope }
   | { kind: 'photo'; id: string; scope: BrowserScope; readable: boolean }
 
 export type SvarFile = {

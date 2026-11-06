@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Filemanager, Willow, WillowDark } from '@svar-ui/vue-filemanager'
+import { Filemanager, Willow, WillowDark, type IApi, type TMode } from '@svar-ui/vue-filemanager'
 import '@svar-ui/vue-filemanager/all.css'
+import { Locale } from '@svar-ui/vue-core'
+import '../styles/svar-icons.css'
 import ScreenHeader from '../components/ScreenHeader.vue'
 import AppIcon from '../components/AppIcon.vue'
 import AppSheet from '../components/AppSheet.vue'
@@ -17,13 +19,11 @@ import { readOrganizer, saveOrganizer, saveBrowser, type BrowserFolder } from '.
 import { buildSvarProjection, type BrowserEntry, type BrowserScope } from '../photo-browser/svar-projection'
 import { deletePhoto as deleteStoredPhoto, readThumbnail } from '../server/photos'
 import { bt } from '../photo-browser/text'
+import { locale } from '../i18n'
+import { svarRussianWords } from '../photo-browser/svar-locale'
+import { photoCardPath } from '../studio/private-photo-card'
 import '../styles/svar-browser.css'
 
-type FileApi = {
-  on: (name: string, handler: (event: { id?: string }) => void) => unknown
-  intercept: (name: string, handler: () => false) => unknown
-  exec: (name: string, data: { id: string }) => unknown
-}
 const route = useRoute(), router = useRouter()
 const folders = ref<BrowserFolder[]>([])
 const organizerLoading = ref(true)
@@ -33,7 +33,7 @@ const editOpen = ref(false), editMode = ref<'create' | 'rename'>('create')
 const folderName = ref('')
 const moveOpen = ref(false)
 const shareOpen = ref(false), shareSelected = ref<string[]>([])
-let api: FileApi | undefined
+let api: IApi | undefined
 let organizerEpoch = 0
 
 const tasks = computed(() => localTasks.value.filter(task =>
@@ -73,7 +73,7 @@ const mayCreate = computed(() => canRead.value && current.value !== undefined &&
   current.value.kind !== 'assignments')
 const canShare = computed(() => canRead.value && tasks.value.some(task =>
   task.canManage || task.role === 'owner' || task.role === 'curator'))
-const mode = ref<'cards'|'table'>('table')
+const mode = ref<TMode>('table')
 const thumbnails = ref(new Map<string, string>())
 let previewEpoch = 0
 function clearThumbnails() {
@@ -128,9 +128,9 @@ function openPhoto(entry: BrowserEntry | undefined) {
     { assignment: entry.scope.slice('assignment:'.length) }
   void router.push({ path: '/gallery/' + encodeURIComponent(entry.id), query })
 }
-function initManager(instance: unknown) {
-  const manager = instance as FileApi
+function initManager(manager: IApi) {
   api = manager
+  manager.on('set-mode', event => { mode.value = event.mode })
   manager.on('set-path', ({ id }) => {
     selectedPath.value = ''
     if (id) routeForPath(id)
@@ -269,6 +269,10 @@ async function moveSelection(targetPath: string) {
   let next: BrowserFolder[]
   if (entry.kind === 'folder') {
     if (target.kind === 'folder' && containsFolder(entry.id, target.id)) return
+    const folder = folders.value.find(row => row.id === entry.id)
+    if (!folder || nameTaken(folder.name, parentId, folder.id)) {
+      error.value = bt('folderFailed'); return
+    }
     next = folders.value.map(row => row.id === entry.id
       ? { ...row, parentId } : row)
   } else {
@@ -287,6 +291,7 @@ async function moveSelection(targetPath: string) {
 }
 async function deleteSelection() {
   const entry = selected.value
+  const owner = account.value?.id, device = deviceId.value
   if (!entry || !canRead.value || working.value) return
   if (entry.kind === 'folder') {
     const folder = folders.value.find(row => row.id === entry.id)
@@ -301,8 +306,7 @@ async function deleteSelection() {
     error.value = ''
     try {
       await deleteStoredPhoto(entry.id)
-      const owner = account.value?.id, device = deviceId.value
-      if (owner && device) {
+      if (owner && device && account.value?.id === owner && deviceId.value === device) {
         const next = folders.value.map(folder =>
           ({ ...folder, photoIds: folder.photoIds.filter(id => id !== entry.id) }))
         await saveOrganizer(owner, device, { version: 1, folders: next })
@@ -350,6 +354,10 @@ async function loadOrganizer() {
 watch([() => account.value?.id, deviceId, accountReady], () => {
   selectedPath.value = ''
   shareSelected.value = []
+  editOpen.value = false
+  moveOpen.value = false
+  shareOpen.value = false
+  folderName.value = ''
   void loadOrganizer()
 })
 onMounted(() => {
@@ -366,7 +374,7 @@ onMounted(() => {
     <div class="screen-body svar-browser-body">
       <div class="svar-browser-bar">
         <strong>{{ current?.kind === 'folder'
-          ? folders.find(item => item.id === current.id)?.name
+          ? folders.find(item => item.id === current?.id)?.name
           : current?.kind === 'assignment' ? taskById.get(current.id)?.name
           : current?.kind === 'personal' ? bt('mine')
           : current?.kind === 'assignments' ? bt('assignments') : bt('root') }}</strong>
@@ -378,21 +386,26 @@ onMounted(() => {
         </div>
       </div>
       <p v-if="error" class="form-error" role="alert">{{ error }}</p>
+      <p v-if="canRead && libraryError" role="alert" class="field-hint">
+        {{ bt('libraryUnavailable') }}
+        <button class="secondary-button" type="button" @click="refreshLibrary">{{ bt('retry') }}</button>
+      </p>
       <p v-if="!canRead" class="native-empty" role="status">{{ bt('locked') }}</p>
       <div v-else-if="organizerLoading || (libraryLoading && !photos.length)"
         class="browser-skeleton" aria-busy="true">
         <span v-for="index in 6" :key="index" />
       </div>
-      <p v-else-if="libraryError" role="alert" class="native-empty">
-        {{ bt('libraryUnavailable') }}
-        <button class="secondary-button" type="button" @click="refreshLibrary">{{ bt('retry') }}</button>
-      </p>
       <template v-else>
-        <component :is="isDark ? WillowDark : Willow" class="svar-browser-skin">
+        <div class="svar-browser-skin">
+        <Locale :key="locale" :words="locale === 'ru' ? svarRussianWords : undefined">
+        <component :is="isDark ? WillowDark : Willow" :fonts="false">
           <Filemanager :key="account?.id + ':' + deviceId" :data="projection.data"
             :readonly="true" :menuOptions="() => []" :previews="previewFor" :init="initManager"
+            :icons="() => ''"
             :panels="[{ path: activePath, selected: [] }]" :mode="mode" />
         </component>
+        </Locale>
+        </div>
         <div v-if="selected" class="svar-browser-selected" role="group" :aria-label="bt('selected')">
           <template v-if="selected.kind === 'photo'">
             <PhotoThumbnail v-if="canOpenPhoto" :id="selected.id"
@@ -400,10 +413,12 @@ onMounted(() => {
               :expires-at="selectedPhoto?.expiresAt" :alt="selectedPhoto?.title || bt('photo')" />
             <strong>{{ selected.readable ? (selectedPhoto?.title || selectedPhoto?.shortId || bt('photo')) : (selectedPhoto?.shortId || bt('photo')) }}</strong>
             <button type="button" class="primary-button" :disabled="!canOpenPhoto"
-              @click="openPhoto(selected)">{{ bt('card') }}</button>
+              @click="openPhoto(selected)">{{ bt('openPhoto') }}</button>
+            <button type="button" class="secondary-button" :disabled="!canOpenPhoto"
+              @click="router.push(photoCardPath(selected.id))">{{ bt('card') }}</button>
           </template>
           <strong v-else>{{ selected.kind === 'folder'
-            ? folders.find(item => item.id === selected.id)?.name
+            ? folders.find(item => item.id === selected?.id)?.name
             : selected.kind === 'assignment' ? taskById.get(selected.id)?.name : bt('currentPath') }}</strong>
           <button v-if="selected.kind === 'folder'" type="button" class="secondary-button"
             @click="startRename">{{ bt('renameFolder') }}</button>

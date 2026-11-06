@@ -55,6 +55,7 @@ const copy = {
   date: ['Дата', 'Date'],
   cards: ['Фотографии', 'Photos'],
   card: ['Карточка', 'Photo Card'],
+  openPhoto: ['Открыть фото', 'Open photo'],
   copy: ['Копировать ссылку', 'Copy link'],
   copied: ['Ссылка скопирована', 'Link copied'],
   copyFailed: ['Не удалось скопировать ссылку', 'Could not copy link'],
