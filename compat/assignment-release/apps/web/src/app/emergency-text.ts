@@ -1,6 +1,7 @@
 import { locale } from '../i18n'
 const lines={
 title:['Экстренное удаление','Emergency deletion'],
+blocked:['Аварийное удаление временно отключено: сохранение облачного бэкапа ещё не подтверждено. Обычный PIN работает.','Emergency deletion is temporarily disabled: cloud backup preservation has not been verified. Your normal PIN remains available.'],
 hint:['Это PIN уничтожения данных, а не запасной PIN входа. Вводится двумя частями подряд. Он работает даже во время 20-минутной блокировки обычного PIN.','This is a DATA DESTRUCTION PIN, not a backup login PIN. Enter two consecutive halves. It works even during the normal PIN’s 20-minute lockout.'],
 app:['Текущий PIN приложения, если он включён','Current app PIN, if enabled'],
 old:['Текущий экстренный PIN (при замене или отключении)','Current emergency PIN (for replacement or disable)'],
@@ -29,6 +30,7 @@ export type EmergencyLabel=keyof typeof lines
 export const et=(k:EmergencyLabel)=>lines[k][locale.value==='ru'?0:1]
 export function emergencyError(value:unknown){
   const s=value instanceof Error?value.message:''
+  if(s==='emergency.releaseBlocked')return et('blocked')
   if(s==='emergency.samePin'||s==='localDelete.samePin')return et('same')
   if(s==='emergency.appPinRequired')return et('requiresAppPin')
   if(s==='emergency.pin')return et('wrongLength')

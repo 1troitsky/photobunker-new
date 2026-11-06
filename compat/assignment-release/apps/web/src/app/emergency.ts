@@ -5,6 +5,8 @@ import { appLocked,appLockReady,appPinEnabled,appPinLength,conflictsWithAppPinPr
 import { generateEmergencyKey,openEmergencyKey,matchesEmergencyPin as matchesSealed,matchesEmergencyFirstHalf as matchesFirst,signEmergencyIntent,type SealedEmergencyKey,type EmergencyIntent } from './emergency-crypto'
 import { readEmergency,changeEmergency,type EmergencyRow,type EmergencyPending } from './emergency-store'
 
+// Keep destructive entry points closed until cloud-backup preservation is proved.
+export const emergencyDeletionAvailable = false
 export const emergencyReady=ref(false)
 export const emergencyActive=ref(false)
 export const emergencyPinLength=ref(0)
@@ -162,6 +164,7 @@ async function exclusive<T>(s:ReturnType<typeof scope>,run:()=>Promise<T>):Promi
   return navigator.locks.request('photobunker-emergency:'+s.owner+':'+s.device,run)
 }
 export async function configureEmergencyPin(next:string,repeat:string,oldPin='') {
+  if (!emergencyDeletionAvailable) throw new Error('emergency.releaseBlocked')
   const s=scope(),generation=epoch
   if(!appPinEnabled.value||appPinLength.value<4||appPinLength.value>6)
     throw new Error('emergency.appPinRequired')

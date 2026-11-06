@@ -2,7 +2,7 @@
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { appPinEnabled, appPinLegacy, appPinLength, setAppPin, removeAppPin, lockApp } from '../app/lock'
 import { pt, pinError } from '../app/pin-text'
-import { emergencyReady,emergencyActive,emergencyFailure,emergencyBusy,loadEmergencyRegistration,clearEmergencyView,configureEmergencyPin,disableEmergencyPin } from '../app/emergency'
+import { emergencyDeletionAvailable,emergencyReady,emergencyActive,emergencyFailure,emergencyBusy,loadEmergencyRegistration,clearEmergencyView,configureEmergencyPin,disableEmergencyPin } from '../app/emergency'
 import { et,emergencyError } from '../app/emergency-text'
 import { appLocked, appLockReady } from '../app/lock'
 import { lockDelayMs, setLockDelay, type LockDelay } from '../app/preferences'
@@ -226,6 +226,7 @@ async function revoke(id: string) {
               <small>{{ et('hint') }}</small></span>
           </div>
           <p class="field-hint" role="alert">{{ et('warning') }}</p>
+          <p v-if="!emergencyDeletionAvailable" class="field-hint" role="status">{{ et('blocked') }}</p>
            <p v-if="!appPinEnabled || appPinLength > 6" class="field-hint" role="status">{{ et('requiresAppPin') }}</p>
           <p v-if="emergencyFailure" role="alert">{{ et('offline') }}</p>
           <button v-if="emergencyFailure" type="button" class="secondary-button"
@@ -238,7 +239,7 @@ async function revoke(id: string) {
             <div class="passcode-setting-field"><strong>{{ et('repeat') }}</strong>
               <PasscodeInput v-model="emergencyRepeat" :length="12" :label="et('repeat')" :disabled="emergencyBusy" /></div>
             <label class="field-hint"><input type="checkbox" v-model="emergencyAcknowledged" /> {{ et('acknowledge') }}</label>
-             <button class="primary-button" type="button" :disabled="emergencyBusy || !emergencyAcknowledged || !appPinEnabled || appPinLength > 6 || emergencyNew.length !== appPinLength * 2 || emergencyNew !== emergencyRepeat || (emergencyActive && emergencyOld.length < 6)"
+             <button class="primary-button" type="button" :disabled="!emergencyDeletionAvailable || emergencyBusy || !emergencyAcknowledged || !appPinEnabled || appPinLength > 6 || emergencyNew.length !== appPinLength * 2 || emergencyNew !== emergencyRepeat || (emergencyActive && emergencyOld.length < 6)"
               @click="saveEmergency">{{ et(emergencyActive ? 'change' : 'enable') }}</button>
             <button v-if="emergencyActive" class="quiet-button" type="button"
               :disabled="emergencyBusy || !emergencyOld"

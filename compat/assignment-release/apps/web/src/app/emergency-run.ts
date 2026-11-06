@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import { account,deviceId,invalidateLocalDeleteSession } from '../identity/store'
 import { lockApp } from './lock'
 import { hardLock } from '../crypto/store'
-import { signFromLockedScreen } from './emergency'
+import { emergencyDeletionAvailable, signFromLockedScreen } from './emergency'
 import { readEmergencyCommand,commitEmergencyCommand,advanceEmergencyCommand,
   type EmergencyCommand } from './emergency-command'
 import { purgeEmergencyDevice } from './emergency-wipe'
@@ -53,6 +53,7 @@ function schedule() {
  * must not be used after credentials are wiped.
  */
 export async function sendEmergencyCommand(row:EmergencyCommand):Promise<'accepted'|'processing'|'completed'> {
+  if (!emergencyDeletionAvailable) throw new Error('emergency.releaseBlocked')
   if(!navigator.onLine)throw new Error('emergency.offline')
   const controller=new AbortController()
   const timeout=setTimeout(()=>controller.abort(),15000)
@@ -117,6 +118,7 @@ export function resumeEmergency():Promise<boolean> {
         return true
       }
       stopPrivateAccess()
+      if (!emergencyDeletionAvailable) return false
       if(!navigator.locks?.request)throw new Error('emergency.no_locks')
       await navigator.locks.request('photobunker-emergency-replay-v1',async()=>{
         // Re-read after obtaining cross-tab exclusivity.
@@ -137,6 +139,7 @@ export function resumeEmergency():Promise<boolean> {
  * wrong app PIN must NEVER call this method (no destructive side effects).
  */
 export async function tryEmergencyOnLockedScreen(pin:string):Promise<boolean> {
+  if (!emergencyDeletionAvailable) return false
   if(!/^\d{6,12}$/.test(pin) || !navigator.locks?.request)return false
   if(await readEmergencyCommand()){stopPrivateAccess();return true}
   const scope={owner:account.value?.id??'',device:deviceId.value}
