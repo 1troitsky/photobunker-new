@@ -44,6 +44,7 @@ const working = ref(false), error = ref('')
 const query = ref(''), tag = ref(''), searchOpen = ref(false), settingsOpen = ref(false)
 const selectionMode = ref(false), selected = ref(new Set<string>()), expanded = ref(new Set<string>())
 const pageSize = ref(50), menuKey = ref(''), moveOpen = ref(false), deleteOpen = ref(false)
+const selectionActionsOpen = ref(false), pathOpen = ref(false)
 const editOpen = ref(false), editKind = ref<'create' | 'rename' | 'tags'>('create')
 const editKey = ref(''), editValue = ref('')
 const createLocationOpen = ref(false)
@@ -79,6 +80,8 @@ const section = computed<BrowserSection | undefined>(() => {
 })
 const sections: BrowserSection[] = ['all', 'personal', 'assignments', 'archive']
 const crumbs = computed(() => current.value ? ancestors(model.value, current.value.key) : [])
+const showPath = computed(() => !!current.value && ['folder', 'assignment'].includes(current.value.kind))
+const shortCrumbs = computed(() => crumbs.value.slice(-2))
 const canOrganize = computed(() => ready.value && organizerLoaded.value && !organizerFailed.value)
 const mayCreate = computed(() => canOrganize.value && writable(current.value))
 const createTargets = computed(() => [...model.value.entries.values()].filter(entry =>
@@ -87,10 +90,19 @@ const scopedPhotos = computed(() => current.value ? descendants(model.value, cur
   .filter(entry => entry.kind === 'photo' && entry.readable) : [])
 const tags = computed(() => [...new Set(scopedPhotos.value.flatMap(entry => entry.photo?.tags ?? []))]
   .sort((a, b) => a.localeCompare(b)))
-const rows = computed(() => current.value ? explorerRows(model.value, current.value.key, {
-  tree: display.value === 'tree', expanded: expanded.value, sort: sort.value,
-  query: query.value, tag: tag.value,
-}) : [])
+const rows = computed(() => {
+  if (!current.value) return []
+  const children = explorerRows(model.value, current.value.key, {
+    tree: display.value === 'tree', expanded: expanded.value, sort: sort.value,
+    query: query.value, tag: tag.value,
+  })
+  // Inside a folder the tree keeps the current node as its visible root.
+  if (display.value !== 'tree' || !showPath.value) return children
+  const open = expanded.value.has(current.value.key) || !!query.value || !!tag.value
+  return [{ entry: current.value, depth: 0, expanded: open,
+    expandable: (model.value.children.get(current.value.key)?.length ?? 0) > 0 },
+    ...(open ? children.map(row => ({ ...row, depth: row.depth + 1 })) : [])]
+})
 const shownRows = computed(() => rows.value.slice(0, pageSize.value))
 const selectedEntries = computed(() => [...selected.value].map(key => model.value.entries.get(key))
   .filter((entry): entry is ExplorerEntry => !!entry && ['folder', 'photo'].includes(entry.kind)))
@@ -123,7 +135,9 @@ function errorText(reason: unknown) {
   return bt(key ?? 'folderFailed')
 }
 function entryPath(entry: ExplorerEntry) { return ancestors(model.value, entry.key).map(item => item.name).join(' / ') }
-function selectable(entry: ExplorerEntry) { return entry.kind === 'folder' || entry.kind === 'photo' }
+function selectable(entry: ExplorerEntry) {
+  return entry.key !== location.value && (entry.kind === 'folder' || entry.kind === 'photo')
+}
 function navigate(key: string) {
   const entry = model.value.entries.get(key)
   if (!entry || entry.kind === 'photo') return
@@ -138,6 +152,7 @@ function photoQuery(entry: ExplorerEntry) {
   }
 }
 function openEntry(entry: ExplorerEntry, force = false) {
+  if (display.value === 'tree' && entry.key === location.value) { toggleTree(entry.key); return }
   if (!force && selectionMode.value && selectable(entry)) { toggleSelection(entry.key); return }
   if (entry.kind !== 'photo') navigate(entry.key)
   else if (entry.readable) void router.push({ path: '/gallery/' + encodeURIComponent(entry.id), query: photoQuery(entry) })
@@ -160,7 +175,15 @@ function toggleTree(key: string) {
 }
 function treeKey(event: KeyboardEvent, entry: ExplorerEntry) {
   if (display.value !== 'tree') return
-  if (event.key === 'ArrowRight') { event.preventDefault(); expanded.value = new Set([...expanded.value, entry.key]) }
+  if (event.key === 'ArrowRight') {
+    event.preventDefault()
+    if (!expanded.value.has(entry.key)) expanded.value = new Set([...expanded.value, entry.key])
+    else {
+      const child = shownRows.value.find(row => row.entry.parent === entry.key)
+      if (child) [...tree.value?.querySelectorAll<HTMLElement>('[data-entry-key]') ?? []]
+        .find(row => row.dataset.entryKey === child.entry.key)?.querySelector<HTMLButtonElement>('.explorer-open')?.focus()
+    }
+  }
   else if (event.key === 'ArrowLeft') {
     event.preventDefault()
     if (expanded.value.has(entry.key)) toggleTree(entry.key)
@@ -293,15 +316,20 @@ watch([() => account.value?.id, deviceId, ready], () => {
   editOpen.value = false; editValue.value = ''; editKey.value = ''; moveOpen.value = false
   deleteOpen.value = false; shareOpen.value = false; shareSelected.value = []; query.value = ''; tag.value = ''
   createLocationOpen.value = false
+  selectionActionsOpen.value = false; pathOpen.value = false
   if (ready.value) void loadOrganizer()
 }, { immediate: true, flush: 'sync' })
 watch(location, async () => {
   clearSelection(); menuKey.value = ''; query.value = ''; tag.value = ''; error.value = ''; pageSize.value = 50
   moveOpen.value = false; closeEdit()
+  selectionActionsOpen.value = false; pathOpen.value = false
   await nextTick()
   if (pathBar.value) pathBar.value.scrollLeft = pathBar.value.scrollWidth
   document.getElementById('main')?.scrollTo({ top: 0 })
 })
+watch([location, display], () => {
+  if (display.value === 'tree') expanded.value = new Set([...expanded.value, location.value])
+}, { immediate: true })
 watch([query, tag, display, sort], () => { pageSize.value = 50 })
 onMounted(() => {
   window.addEventListener('focus', loadOrganizer)
@@ -316,6 +344,11 @@ onBeforeUnmount(() => window.removeEventListener('focus', loadOrganizer))
 <template>
   <section class="native-screen photo-explorer">
     <ScreenHeader :title="bt('browser')">
+      <button class="app-icon-button" type="button" :aria-label="bt('newFolder')" :title="bt('newFolder')"
+        :disabled="!canOrganize || !current || working" @click="startEdit('create')"><AppIcon name="plus" /></button>
+      <button class="app-icon-button" type="button" :aria-label="bt(selectionMode ? 'cancelSelection' : 'selectionMode')"
+        :title="bt('selectionMode')" :aria-pressed="selectionMode" :disabled="!ready || !current"
+        @click="selectionMode = !selectionMode; selected = new Set()"><AppIcon name="check" /></button>
       <button class="app-icon-button" :aria-label="bt('searchShort')" :aria-pressed="searchOpen"
         @click="searchOpen = !searchOpen; query = ''"><AppIcon name="search" /></button>
       <button class="app-icon-button" :aria-label="bt('settings')" @click="settingsOpen = true"><AppIcon name="settings" /></button>
@@ -326,49 +359,33 @@ onBeforeUnmount(() => window.removeEventListener('focus', loadOrganizer))
     </nav>
     <div class="screen-body explorer-body">
       <template v-if="ready">
-        <div class="explorer-location">
+        <div v-if="showPath" class="explorer-location">
           <button class="app-icon-button" :aria-label="bt('up')" :disabled="!current?.parent"
             @click="current?.parent && navigate(current.parent)"><AppIcon name="back" /></button>
           <nav ref="pathBar" class="explorer-path" :aria-label="bt('currentPath')">
-            <template v-for="(crumb, index) in crumbs" :key="crumb.key">
+            <button v-if="crumbs.length > shortCrumbs.length" class="explorer-ancestors" type="button"
+              :aria-label="bt('currentPath')" @click="pathOpen = true"><AppIcon name="more" /></button>
+            <template v-for="(crumb, index) in shortCrumbs" :key="crumb.key">
               <AppIcon v-if="index" name="chevron" />
-              <button type="button" :aria-current="index === crumbs.length - 1 ? 'page' : undefined"
+              <button type="button" :aria-current="index === shortCrumbs.length - 1 ? 'page' : undefined" :title="crumb.name"
                 @click="navigate(crumb.key)">{{ crumb.name }}</button>
             </template>
           </nav>
         </div>
-        <div class="explorer-toolbar">
-          <button class="secondary-button" type="button" :disabled="!canOrganize || !current || working" :title="mayCreate ? bt('newFolder') : bt('chooseLocation')"
-            @click="startEdit('create')"><AppIcon name="plus" />{{ bt('newFolder') }}</button>
-          <button class="app-icon-button" type="button" :aria-label="bt('selectionMode')" :aria-pressed="selectionMode"
-            @click="selectionMode = !selectionMode; selected = new Set()"><AppIcon name="check" /></button>
-          <label class="explorer-sort"><span class="sr-only">{{ bt('sort') }}</span>
-            <select v-model="sort" :aria-label="bt('sort')">
-              <option value="newest">{{ bt('sortNewest') }}</option><option value="oldest">{{ bt('sortOldest') }}</option><option value="name">{{ bt('sortName') }}</option>
-            </select>
-          </label>
-          <div class="explorer-views" role="group" :aria-label="bt('view')">
-            <button v-for="item in ['grid', 'list', 'tree'] as const" :key="item" class="app-icon-button" type="button"
-              :aria-label="bt(item)" :aria-pressed="display === item" @click="display = item">
-              <AppIcon :name="item === 'grid' ? 'grid' : item === 'list' ? 'gallery' : 'folder'" />
-            </button>
-          </div>
-        </div>
         <div v-if="selectionMode" class="explorer-selection" role="toolbar" :aria-label="bt('selectionMode')">
           <strong>{{ bt('selected') }}: {{ formatNumber(selectedEntries.length) }}</strong>
           <button type="button" @click="selectAll">{{ bt('selectAll') }}</button>
-          <button type="button" :disabled="!targets.length || working" @click="startMove()">{{ bt('move') }}</button>
-          <button v-if="canArchive" type="button" :disabled="working" @click="archive(restoreSelection)">{{ bt(restoreSelection ? 'restore' : 'archiveAction') }}</button>
-          <button class="subtle-danger" type="button" :disabled="!canDelete || working" @click="startDelete()">{{ bt('delete') }}</button>
-          <button type="button" @click="clearSelection">{{ bt('cancelSelection') }}</button>
+          <button class="app-icon-button" type="button" :aria-label="bt('actions')" :disabled="!selectedEntries.length"
+            @click="selectionActionsOpen = true"><AppIcon name="more" /></button>
         </div>
         <label v-if="searchOpen" class="explorer-search">
           <AppIcon name="search" /><input v-model="query" type="search" :aria-label="bt('searchShort')" :placeholder="bt('searchPlaceholder')" />
         </label>
-        <div v-if="tags.length" class="explorer-tags" :aria-label="bt('chooseTag')">
+        <div v-if="searchOpen && tags.length" class="explorer-tags" :aria-label="bt('chooseTag')">
           <button type="button" :aria-pressed="!tag" @click="tag = ''">{{ bt('allTags') }}</button>
           <button v-for="item in tags" :key="item" type="button" :aria-pressed="tag === item" @click="tag = item">#{{ item }}</button>
         </div>
+        <button v-if="tag && !searchOpen" class="quiet-button" type="button" :aria-label="bt('clear') + ': ' + tag" @click="tag = ''">#{{ tag }} ×</button>
         <p v-if="current?.key === 'archive'" class="field-hint">{{ bt('archiveHint') }}</p>
         <p v-if="recovered" class="field-hint" role="status">{{ bt('recovered') }}</p>
         <p v-if="error" class="form-error" role="alert">{{ error }}</p>
@@ -388,7 +405,7 @@ onBeforeUnmount(() => window.removeEventListener('focus', loadOrganizer))
         <template v-else>
           <div ref="tree" :class="['explorer-entries', 'explorer-' + display]" :role="display === 'tree' ? 'tree' : 'list'" :aria-label="current.name">
             <div v-for="row in shownRows" :key="row.entry.key" :data-entry-key="row.entry.key"
-              :class="['explorer-entry', { 'is-photo': row.entry.kind === 'photo', 'is-selected': selected.has(row.entry.key) }]"
+              :class="['explorer-entry', { 'is-photo': row.entry.kind === 'photo', 'is-selected': selected.has(row.entry.key), 'is-current': row.entry.key === location }]"
               @contextmenu.prevent="menuKey = selectable(row.entry) ? row.entry.key : ''"
               :role="display === 'tree' ? 'treeitem' : 'listitem'"
               :aria-level="display === 'tree' ? row.depth + 1 : undefined"
@@ -439,6 +456,20 @@ onBeforeUnmount(() => window.removeEventListener('focus', loadOrganizer))
       <div v-else class="native-empty"><AppIcon name="lock" /><p>{{ bt('locked') }}</p><RouterLink class="secondary-button" to="/profile/photos-security">{{ bt('retry') }}</RouterLink></div>
     </div>
 
+    <AppSheet :open="pathOpen" :title="bt('currentPath')" @close="pathOpen = false">
+      <div class="action-list explorer-destinations">
+        <button v-for="crumb in crumbs" :key="crumb.key" type="button" :aria-current="crumb.key === location ? 'location' : undefined"
+          @click="pathOpen = false; navigate(crumb.key)"><AppIcon name="folder" />{{ crumb.name }}</button>
+      </div>
+    </AppSheet>
+    <AppSheet :open="selectionActionsOpen" :title="bt('actions')" @close="selectionActionsOpen = false">
+      <div class="action-list">
+        <button type="button" :disabled="!canOrganize || !targets.length || working" @click="selectionActionsOpen = false; startMove()"><AppIcon name="folder" />{{ bt('move') }}</button>
+        <button v-if="canArchive" type="button" :disabled="!canOrganize || working" @click="selectionActionsOpen = false; archive(restoreSelection)"><AppIcon name="archive" />{{ bt(restoreSelection ? 'restore' : 'archiveAction') }}</button>
+        <button class="subtle-danger" type="button" :disabled="!canOrganize || !canDelete || working" @click="selectionActionsOpen = false; startDelete()"><AppIcon name="trash" />{{ bt('delete') }}</button>
+        <button type="button" @click="selectionActionsOpen = false; clearSelection()"><AppIcon name="check" />{{ bt('cancelSelection') }}</button>
+      </div>
+    </AppSheet>
     <AppSheet :open="!!menuEntry" :title="menuEntry?.name || bt('actions')" @close="menuKey = ''">
       <div v-if="menuEntry" class="action-list explorer-menu">
         <button type="button" :disabled="menuEntry.kind === 'photo' && !menuEntry.readable" @click="openEntry(menuEntry, true); menuKey = ''"><AppIcon :name="menuEntry.kind === 'photo' ? 'gallery' : 'folder'" />{{ bt(menuEntry.kind === 'photo' ? 'openPhoto' : 'currentPath') }}</button>
@@ -486,7 +517,9 @@ onBeforeUnmount(() => window.removeEventListener('focus', loadOrganizer))
     <AppSheet :open="settingsOpen" :title="bt('settings')" @close="settingsOpen = false">
       <div class="native-form">
         <label>{{ bt('showFirst') }}<select v-model="start"><option v-for="item in sections" :key="item" :value="item">{{ labels[item] }}</option></select></label>
+        <label>{{ bt('view') }}<select v-model="display"><option v-for="item in ['grid', 'list', 'tree'] as const" :key="item" :value="item">{{ bt(item) }}</option></select></label>
         <label>{{ bt('sort') }}<select v-model="sort"><option value="newest">{{ bt('sortNewest') }}</option><option value="oldest">{{ bt('sortOldest') }}</option><option value="name">{{ bt('sortName') }}</option></select></label>
+        <label v-if="tags.length">{{ bt('chooseTag') }}<select v-model="tag"><option value="">{{ bt('allTags') }}</option><option v-for="item in tags" :key="item" :value="item">#{{ item }}</option></select></label>
         <p class="field-hint">{{ bt('tagsManageHint') }}</p>
         <button class="secondary-button" type="button" :disabled="!availableForShare.length" @click="settingsOpen = false; shareSelected = []; shareOpen = true"><AppIcon name="share" />{{ bt('newCollection') }}</button>
       </div>

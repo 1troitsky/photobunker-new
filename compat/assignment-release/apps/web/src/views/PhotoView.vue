@@ -151,9 +151,11 @@ function sibling(offset: number) {
   const item = siblings.value[position.value + offset]
   if (item) void router.push({
     path: `/gallery/${item.id}`,
-    query: assignmentScope.value ? { assignment: assignmentScope.value }
-      : folderScope.value ? { folder: folderScope.value }
-        : personalScope.value ? { personal: '1' } : {},
+    query: {
+      ...(assignmentScope.value ? { assignment: assignmentScope.value } : {}),
+      ...(folderScope.value ? { folder: folderScope.value } : {}),
+      ...(personalScope.value ? { personal: '1' } : {}),
+    },
   })
 }
 async function syncVersions() {
@@ -552,8 +554,8 @@ onBeforeUnmount(() => {
   <section
     class="native-screen native-photo-view"
     tabindex="0"
-    @keydown.left="sibling(-1)"
-    @keydown.right="sibling(1)"
+    @keydown.left.self="sibling(-1)"
+    @keydown.right.self="sibling(1)"
   >
     <ScreenHeader
       :title="photo?.title || photo?.shortId || (photo?.needsName ? nameText('pending') : s('photo'))"
@@ -607,6 +609,11 @@ onBeforeUnmount(() => {
           decoding="async"
           @dblclick="zoom = !zoom"
         />
+        <div v-else-if="!loading && loadFailure" class="native-empty" role="alert">
+          <AppIcon name="gallery" />
+          <p>{{ t('photoUnavailableHint') }}</p>
+          <button class="secondary-button" type="button" @click="loadAttempt++">{{ t('retry') }}</button>
+        </div>
       </div>
       <p v-if="versionError" class="form-error" role="alert">
         {{ versionError }}

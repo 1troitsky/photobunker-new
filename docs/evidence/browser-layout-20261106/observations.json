@@ -1,0 +1,233 @@
+{
+  "before": {
+    "root": {
+      "height": 844,
+      "header": 62,
+      "breadcrumb": 44,
+      "toolbar": 96,
+      "firstRowTop": 359
+    },
+    "nested": {
+      "rows": [
+        {
+          "key": "folder:cf20c93d-3dff-4cb9-a744-fc0b75d7efd2",
+          "level": "1",
+          "expand": null
+        },
+        {
+          "key": "folder:audit-nested",
+          "level": "1",
+          "expand": null
+        }
+      ],
+      "path": "Все\nМои фото\nPersonal folder"
+    },
+    "photo": {
+      "bar": {
+        "top": 623,
+        "bottom": 704,
+        "height": 81,
+        "width": 390
+      },
+      "stage": {
+        "top": 62,
+        "bottom": 575.3125,
+        "height": 513.3125,
+        "width": 390
+      },
+      "position": "sticky",
+      "bottom": "70px",
+      "overflow": false,
+      "scrollHeight": 844
+    }
+  },
+  "after": {
+    "root": {
+      "firstRowTop": 191,
+      "toolbar": false,
+      "breadcrumbs": false,
+      "headerActions": [
+        "Новая папка",
+        "Выбрать элементы",
+        "Поиск",
+        "Настройки Browser"
+      ]
+    },
+    "settings": {
+      "labels": [
+        "Открывать сначала",
+        "Вид",
+        "Сортировка"
+      ],
+      "views": "Сетка\nСписок\nДерево",
+      "gridApplies": true,
+      "listApplies": true,
+      "treePersisted": true
+    },
+    "nested": {
+      "rootVisible": true,
+      "expanded": "true",
+      "rows": [
+        {
+          "key": "folder:audit-personal-folder",
+          "level": "1"
+        },
+        {
+          "key": "folder:cf20c93d-3dff-4cb9-a744-fc0b75d7efd2",
+          "level": "2"
+        },
+        {
+          "key": "folder:audit-nested",
+          "level": "2"
+        }
+      ],
+      "breadcrumbHeight": 44,
+      "collapsedCount": 1
+    },
+    "selection": {
+      "currentExcluded": true,
+      "checked": 2,
+      "visibleChildren": 2
+    },
+    "headerCreate": {
+      "formOpened": true,
+      "parentShown": true,
+      "cancelUnchanged": true
+    },
+    "mobile320": {
+      "overflow": false,
+      "headerHeight": 64,
+      "headerActions": [
+        {
+          "name": "Новая папка",
+          "width": 44,
+          "right": 176
+        },
+        {
+          "name": "Выбрать элементы",
+          "width": 44,
+          "right": 220
+        },
+        {
+          "name": "Поиск",
+          "width": 44,
+          "right": 264
+        },
+        {
+          "name": "Настройки Browser",
+          "width": 44,
+          "right": 308
+        }
+      ],
+      "crumbHeight": 44
+    },
+    "photo": {
+      "arrowOnButtonDoesNotNavigate": true,
+      "position": "static",
+      "overflow": false,
+      "unavailableMessage": true,
+      "buttons": [
+        {
+          "text": "Карточка",
+          "width": 102.65625,
+          "height": 58
+        },
+        {
+          "text": "Изменить",
+          "width": 102.671875,
+          "height": 58
+        },
+        {
+          "text": "Поделиться",
+          "width": 102.65625,
+          "height": 58
+        },
+        {
+          "text": "Информация",
+          "width": 102.65625,
+          "height": 58
+        },
+        {
+          "text": "Удалить",
+          "width": 102.671875,
+          "height": 58
+        }
+      ],
+      "sibling": {
+        "url": "/gallery/audit-photo-A2",
+        "assignment": "audit-A",
+        "folder": "audit-A-folder"
+      },
+      "mobile320": {
+        "width": 320,
+        "columns": "102.656px 102.672px 102.656px",
+        "gap": "0px",
+        "padding": "10px 6px 12px",
+        "position": "static",
+        "buttons": [
+          {
+            "label": "Карточка",
+            "width": 102.65625,
+            "top": 608.6875,
+            "right": 108.65625,
+            "scroll": 103
+          },
+          {
+            "label": "Изменить",
+            "width": 102.671875,
+            "top": 608.6875,
+            "right": 211.328125,
+            "scroll": 103
+          },
+          {
+            "label": "Поделиться",
+            "width": 102.65625,
+            "top": 608.6875,
+            "right": 313.984375,
+            "scroll": 103
+          },
+          {
+            "label": "Информация",
+            "width": 102.65625,
+            "top": 666.6875,
+            "right": 108.65625,
+            "scroll": 103
+          },
+          {
+            "label": "Удалить",
+            "width": 102.671875,
+            "top": 666.6875,
+            "right": 211.328125,
+            "scroll": 103
+          }
+        ]
+      },
+      "scrollEnd": {
+        "mainHeight": 630,
+        "scroll": 127,
+        "scrollHeight": 757,
+        "barTop": 470.6875,
+        "barBottom": 609.6875,
+        "dockTop": 630,
+        "allActionsReachable": true
+      }
+    },
+    "treeKeyboard": {
+      "rootExpanded": "true",
+      "focused": "AUDIT Photo A (belongs to A)",
+      "childFocused": true
+    },
+    "pathSheet": {
+      "text": "Текущая папка\nВсе\nЗадания\nAUDIT Assignment A\nFolder A",
+      "fullHierarchy": true
+    },
+    "light390": {
+      "overflow": false,
+      "expiryVisible": true
+    },
+    "landscape": {
+      "overflow": false,
+      "headerActions": true
+    }
+  }
+}
