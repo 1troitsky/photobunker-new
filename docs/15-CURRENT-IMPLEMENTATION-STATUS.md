@@ -21,7 +21,7 @@
 | Q1 dock source commit | `595ec85` на `main` и `origin/main` | `CONFIRMED` 2026-11-06 |
 | Активный runtime | `compat/assignment-release/` | `CONFIRMED` |
 | Production URL | `https://photobunker.duckdns.org` | `CONFIRMED` 2026-11-06 |
-| Release marker | `public-photo-card-20261106-1` | `CONFIRMED` production 2026-11-06 |
+| Release marker | `public-card-access-20261107-1` | `CONFIRMED` production 2026-11-07 |
 | Server HTTP/API health | root, health, ready возвращают 200 | `CONFIRMED` 2026-11-06 |
 | Owner mobile acceptance | повторно выявлены критические UX/functional defects | `OWNER FAILED` |
 
@@ -30,6 +30,8 @@
 Public card `main@3233f4b`, release `public-card-20261106-1`, `IMPLEMENTED`: отдельное окно без dock, явное создание защищённой ссылки, параметры полей у фото и задания, capture snapshot только для новых фото. [Состав, снимки и ограничения](PUBLIC-CARD-2026-11-06.md), [deploy proof](evidence/public-card-20261106/deploy.json). 16 targeted tests и production build — exit 0; PHP lint двух validators локально/на сервере — exit 0. Owner mobile/private publish/backend integration — `NOT RUN`, не `ACCEPTED`.
 
 ## 3. Подтверждённые ограниченные результаты
+
+Public card access `628cc35` / `public-card-access-20261107-1` — `IMPLEMENTED`. Владелец сообщил, что предыдущая кнопка недоступна на всех фото (`OWNER FAILED`). Воспроизведена блокировка на cached photo без grant/revision, publisher не вызывался; убрана ранняя UI-проверка, добавлено чтение подтверждённого server photo с прежними read/shareExternal checks. Исправлено потерянное слияние publicCard/editedAt в encrypted metadata; capture ceiling сохранён. [Команды и Browser component→publisher→AES→IDB→POST/ACK→URL](evidence/public-card-access-20261107/observations.json), [public deployment](evidence/public-card-access-20261107/deploy.json). Build/checks exit 0; private owner account/hardware — `NOT RUN`.
 
 Public Photo-card `main@3b33912`, release `public-photo-card-20261106-1`, `IMPLEMENTED`: самостоятельная guest page `/c/:id#capability`, существующая Photo-card без приватного App/PIN/панели; прямые внешние ссылки из viewer/Browser. Согласованные основные поля доступны по умолчанию, дополнительные пересекаются с capture snapshot задания и per-photo policy. Реальный guest production-build check, 20 targeted frontend checks, 2 backend tests (SQLite memory/fake storage; guest API без cookies, revoke) и build — exit 0. [Evidence/снимки/границы](PUBLIC-CARD-2026-11-06.md), [public deploy proof](evidence/public-photo-card-20261106/deploy.json). Production invalid-link entry подтверждает отсутствие App/PIN/private API. Реальный owner publish и hardware/PWA/native browser — `NOT RUN`, не `ACCEPTED`. Оба прежних варианта открытия отклонены владельцем (`OWNER FAILED`).
 

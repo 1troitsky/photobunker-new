@@ -9,7 +9,7 @@ PhotoBunker — mobile-first PWA для защищённой съёмки, за�
 - **Развёрнутое приложение и последние исправления находятся в `compat/assignment-release/`.**
 - Корневые `apps/web` и `apps/api` — незавершённое PB2-архитектурное дерево. Оно не является текущим runtime сервера.
 - Production URL: `https://photobunker.duckdns.org`.
-- Последний подтверждённый в `docs/15-*` release marker: `public-photo-card-20261106-1`.
+- Последний подтверждённый в `docs/15-*` release marker: `public-card-access-20261107-1`.
 - Приложение **не принято владельцем и не является production-ready**. Автоматические тесты не отменяют зафиксированные на реальном телефоне дефекты.
 
 ## Начать отсюда

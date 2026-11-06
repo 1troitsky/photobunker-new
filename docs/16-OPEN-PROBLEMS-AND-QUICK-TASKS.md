@@ -68,6 +68,8 @@ Status / entry loader: прежний overlay при каждом переход
 
 ## 4. Photo view, Photo Card и Editor
 
+Недоступная обычная кнопка Public card — `OWNER FAILED` владельцем 2026-11-07. Кандидат `628cc35`, `public-card-access-20261107-1`: cached grant/revision больше не отключают кнопку до server check; актуальные settings не теряются; разрешение/ошибка объясняются существующим status toast. [Evidence/ограничения](PUBLIC-CARD-2026-11-06.md). Проверяемый путь: существующее фото → Public card → опубликованная внешняя ссылка. `IMPLEMENTED`; аккаунт владельца и телефон — `NOT RUN`.
+
 Последнее решение владельца подтверждено: Photo-card — публичная страница вне приложения. `3b33912` / `public-photo-card-20261106-1` — `IMPLEMENTED`; частный preview и самодельная browser sheet удалены. Основные поля: фото, title/ID, description, photo expiry, GPS/map при разрешении. Остальные поля — assignment capture snapshot ∩ photo policy. Проверка владельца: открыть фото → Public card → публичная страница в браузере; скопировать URL → открыть без входа; обновить страницу; проверить запрет GPS/дополнительных полей. [Снимки/проверки/NOT RUN](PUBLIC-CARD-2026-11-06.md). Предыдущие два UX-варианта остаются `OWNER FAILED`.
 
 Opening correction `769e3a5` / `public-card-sheet-20261106-1`: in-app bottom browser sheet, close and explicit device-browser control. Previous `public-card-20261106-1` opening is `OWNER FAILED` (white screen/restart). Current candidate `IMPLEMENTED`; owner check: Browser → Public card → bottom sheet → close → same screen without restart. [Evidence/limits](PUBLIC-CARD-2026-11-06.md). External link prepares inside app, then opens by explicit anchor tap. Hardware/PWA/private publish: `NOT RUN`.

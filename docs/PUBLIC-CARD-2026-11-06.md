@@ -2,6 +2,8 @@
 
 ## Доступность кнопки — 2026-11-07
 
+Опубликован `628cc35`, release `public-card-access-20261107-1`; [public files/headers/health](evidence/public-card-access-20261107/deploy.json) совпали со сборкой, exit 0. Backup `/var/www/photobunker/.local/backups/public-card-access-20261107-1-before/`.
+
 Владелец отклонил `public-photo-card-20261106-1`: обычная Public card недоступна на всех фото при включённых настройках (`OWNER FAILED`). Точно воспроизведён один путь блокировки: неполная cached photo без workspaceAccess/remoteRevision не вызывала publisher вообще. В `public-card-access-20261107-1` убрана эта проверка из UI; publisher читает подтверждённое серверное фото, не использует pending/cached metadata как разрешение. Фактический read/shareExternal grant и server ACL обязательны. Установленный policy deny не публикует данные. Кнопка больше не молчит: повтор/причина доступны через существующий status toast, без нового экрана или изменений viewer layout.
 
 В encrypted metadata reader исправлена отдельная ошибка: сохранённые publicCard/editedAt терялись при слиянии capture/latest. Теперь читаются последние per-photo settings, а capture assignment ceiling остаётся неизменным. Никакие PIN/ключи/криптоалгоритмы/серверные права не ослаблены.
