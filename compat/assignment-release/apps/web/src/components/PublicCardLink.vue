@@ -16,17 +16,62 @@ usePageLoad(pending)
 // A cached list entry is not an authoritative server grant or upload receipt.
 // The publisher re-reads and checks the current protected photo before exporting.
 const allowed = computed(() => effectivePublicCardPolicy(props.photo).enabled)
-usePageIssue(failed, {detail:() => message.value,retry:() => prepare(true)})
+usePageIssue(failed, {detail:() => message.value,retry:openCard})
 const scope = computed(() => JSON.stringify([account.value?.id,deviceId.value,appLocked.value,
   strongUnlocked.value,warmLocked.value,props.photo.id,props.photo.remoteRevision,props.photo.expiresAt,
   props.photo.title,props.photo.note,props.photo.tags,props.photo.metadata,props.versionKey,allowed.value]))
 let epoch = 0
+let opening: Window | null = null
+let retryAfterSecurity = false
+function securityChanged() {
+  if (url.value || appLocked.value || !strongUnlocked.value || warmLocked.value) return
+  // Local keys can open a cached photo before the server read proof finishes.
+  // A refreshed proof does not change strongUnlocked, so the scope watcher
+  // alone never retried a card rejected during that initial window.
+  if (pending.value) retryAfterSecurity = true
+  else void prepare(!!opening)
+}
+window.addEventListener('photobunker-photo-security', securityChanged)
+function closePreparingWindow() {
+  opening?.close()
+  opening = null
+}
+async function openCard() {
+  if (opening && !opening.closed) { opening.focus(); return }
+  if (appLocked.value || !allowed.value || !strongUnlocked.value || warmLocked.value) {
+    await prepare(true)
+    return
+  }
+  // Reserve the external browser window inside the tap, before any awaits.
+  // Opening it only after publication loses user activation on mobile browsers.
+  const browser = window.open('about:blank', '_blank')
+  if (!browser) {
+    message.value = q('Браузер заблокировал новое окно. Разрешите открытие окон для PhotoBunker и повторите.')
+    failed.value = true
+    await nextTick(); openStatusDetails()
+    return
+  }
+  opening = browser
+  browser.opener = null
+  browser.document.title = 'Public card'
+  const referrer = browser.document.createElement('meta')
+  referrer.name = 'referrer'; referrer.content = 'no-referrer'
+  browser.document.head.append(referrer)
+  browser.document.documentElement.style.colorScheme = 'light dark'
+  Object.assign(browser.document.body.style, {margin:'0',minHeight:'100dvh',display:'grid',placeItems:'center',fontFamily:'system-ui,sans-serif'})
+  const status = browser.document.createElement('p')
+  status.setAttribute('role', 'status')
+  status.textContent = q('Подготовка Public card…')
+  browser.document.body.append(status)
+  await prepare(true)
+}
 async function prepare(showDetails = false) {
   const token = ++epoch
   url.value = ''; failed.value = false; message.value = ''
   pending.value = false
   if (appLocked.value) return
   if (!allowed.value || !strongUnlocked.value || warmLocked.value) {
+    closePreparingWindow()
     message.value = q(!allowed.value ? 'Публичная карточка выключена разрешениями фотографии или задания.' : 'Откройте доступ к защищённым фотографиям, чтобы опубликовать карточку.')
     failed.value = showDetails
     if (showDetails) { await nextTick(); openStatusDetails() }
@@ -35,9 +80,16 @@ async function prepare(showDetails = false) {
   pending.value = true
   try {
     const result = await createPublicCardLink(props.photo.id, scope.value)
-    if (token === epoch) url.value = result
+    if (token === epoch) {
+      url.value = result
+      const browser = opening
+      opening = null
+      if (browser && !browser.closed) browser.location.replace(result)
+    }
   } catch (error) {
     if (token === epoch) {
+      if (retryAfterSecurity) return
+      closePreparingWindow()
       const code = error instanceof Error ? error.message : ''
       const status = (error as {status?:number})?.status
       message.value = q(code === 'public_card.disabled' ? 'Публичная карточка выключена разрешениями фотографии или задания.'
@@ -48,10 +100,22 @@ async function prepare(showDetails = false) {
       failed.value=true
       if (showDetails) { await nextTick(); openStatusDetails() }
     }
-  } finally { if (token === epoch) pending.value=false }
+  } finally {
+    if (token === epoch) {
+      pending.value=false
+      if (retryAfterSecurity) {
+        retryAfterSecurity=false
+        if (!url.value) void prepare(showDetails || !!opening)
+      }
+    }
+  }
 }
-watch(scope, () => {void prepare()}, {immediate:true,flush:'sync'})
-onBeforeUnmount(() => {epoch++;url.value='';pending.value=false})
+watch([() => account.value?.id,deviceId,appLocked,strongUnlocked,warmLocked,() => props.photo.id], closePreparingWindow, {flush:'sync'})
+watch(scope, () => {
+  if (appLocked.value) closePreparingWindow()
+  void prepare(!!opening)
+}, {immediate:true,flush:'sync'})
+onBeforeUnmount(() => {epoch++;closePreparingWindow();url.value='';pending.value=false;window.removeEventListener('photobunker-photo-security',securityChanged)})
 async function share() {
   if (!url.value) return
   try {
@@ -63,7 +127,7 @@ async function share() {
 <template>
   <a v-if="url" :href="url" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer"
     :class="['public-card-link',{'public-card-menu-link':menu}]" :aria-label="q('Открыть Public card в браузере')"><AppIcon name="profiles" /><span>Public card</span></a>
-  <button v-else type="button" :class="['public-card-link',{'public-card-menu-link':menu}]" :disabled="pending || appLocked" :title="message" @click="prepare(true)"><AppIcon name="profiles" /><span>{{ q(pending ? 'Public card…' : failed ? 'Повторить Public card' : 'Public card') }}</span></button>
+  <button v-else type="button" :class="['public-card-link',{'public-card-menu-link':menu}]" :disabled="appLocked" :aria-busy="pending" :title="message" @click="openCard"><AppIcon name="profiles" /><span>{{ q(pending ? 'Public card…' : failed ? 'Повторить Public card' : 'Public card') }}</span></button>
   <button v-if="menu && url" class="public-card-link public-card-menu-link" type="button" @click="share"><AppIcon name="share" /><span>{{ q('Поделиться карточкой') }}</span></button>
   <p v-if="menu && message" class="field-hint" role="status">{{ message }}</p>
 </template>
