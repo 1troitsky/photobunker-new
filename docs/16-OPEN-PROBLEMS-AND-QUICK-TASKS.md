@@ -66,6 +66,8 @@ bundle hashes, cache headers и API health `CONFIRMED`; owner acceptance пок�
 
 ## 4. Photo view, Photo Card и Editor
 
+Кандидат wrapper/viewer `365095d`, release `workspace-viewer-20261106-1`: общий loader минимум 1.5 s/fade и регистрация initial page work, стабильный image stage/footer, natural image-only mode с vertical swipe. [Evidence и ограничения](WORKSPACE-VIEWER-2026-11-06.md). `READY FOR OWNER REVIEW`, hardware acceptance не выполнена. Public card/policy остаются отдельным следующим этапом; task policy должна сниматься при capture только новых фото, без ретроактивного изменения existing photos.
+
 | ID | Статус | Проблема / критерий |
 | --- | --- | --- |
 | PH-01 | `OWNER FAILED` | Фото нельзя было открыть ни в viewer, ни в Card, ни в Editor. Сначала восстановить один локальный owner path end-to-end, затем assignment/recipient scopes. |

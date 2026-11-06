@@ -46,6 +46,8 @@ release.json         -> {"buildId":"dock-pwa-20261105-1"}
 
 ## 3. PWA cache/update
 
+Последняя публикация wrapper/viewer: `main@365095d`, `workspace-viewer-20261106-1`, 16 frontend source files и shell. Backup `/var/www/photobunker/.local/backups/workspace-viewer-20261106-1-before/`. Старые assets сохранены; checksum dry-run пустой, exit 0; index → SW → release marker. [Публичная сверка](evidence/workspace-viewer-20261106/deploy.json) — exit 0, health/ready 200, no-store/immutable; marker получен production Playwright. Данные/backend не менялись, installed-PWA/private hardware acceptance — `NOT RUN`.
+
 Последняя публикация PIN: `main@d753076`, release `pin-flow-20261106-1`; девять frontend source files и shell, без изменений backend/данных. Backup `/var/www/photobunker/.local/backups/pin-flow-20261106-1-before/`. Assets сохранены, checksum dry-run пустой, exit 0; index → SW → release marker. [Публичные файлы, health/ready и cache headers](evidence/pin-flow-20261106/deploy.json) совпали со сборкой, exit 0; production Playwright подтвердил ID. Installed-PWA upgrade и private hardware acceptance — `NOT RUN`. Emergency destructive gate остаётся false.
 
 Последняя публикация поверх native Browser: `main@d5acff3`, release `browser-layout-20261106-1`; четыре frontend source files и shell. Backup: `/var/www/photobunker/.local/backups/browser-layout-20261106-1-before/`. Старые assets сохранены, checksum dry-run — пустой, exit 0; index/SW/release опубликованы в этом порядке. [Публичная побайтная сверка и headers](evidence/browser-layout-20261106/deploy.json) — exit 0; health/ready 200. Production Playwright получил новый marker и ожидаемый guest sign-in. База, crypto, PIN и emergency gate не менялись.

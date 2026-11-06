@@ -21,7 +21,7 @@
 | Q1 dock source commit | `595ec85` на `main` и `origin/main` | `CONFIRMED` 2026-11-06 |
 | Активный runtime | `compat/assignment-release/` | `CONFIRMED` |
 | Production URL | `https://photobunker.duckdns.org` | `CONFIRMED` 2026-11-06 |
-| Release marker | `pin-flow-20261106-1` | `CONFIRMED` production 2026-11-06 |
+| Release marker | `workspace-viewer-20261106-1` | `CONFIRMED` production 2026-11-06 |
 | Server HTTP/API health | root, health, ready возвращают 200 | `CONFIRMED` 2026-11-06 |
 | Owner mobile acceptance | повторно выявлены критические UX/functional defects | `OWNER FAILED` |
 
@@ -78,6 +78,8 @@
 - `NOT RUN` owner acceptance: на реальном телефоне закрыть и снова открыть установленную PWA, убедиться, что release обновился без удаления локальных данных; открыть Assignments → Contacts → Camera и проверить dock у нижней safe-area, читаемые подписи, ровно один активный пункт и отсутствие скачка. До ответа владельца Q1 не считать `ACCEPTED`.
 
 ## 4. Код существует, но приёмка не пройдена
+
+Текущий UI-кандидат: `365095d` / `workspace-viewer-20261106-1`, `READY FOR OWNER REVIEW`. PIN опущен на 52 px, AppLoader минимум 1500 ms + fade до готовности страницы, image stage одинаковый для portrait/landscape, действия остаются в grid footer; нажатие → натуральный размер без UI, vertical swipe → назад. [Наблюдения и снимки](WORKSPACE-VIEWER-2026-11-06.md), [public deploy proof](evidence/workspace-viewer-20261106/deploy.json). Production build и public сравнение — exit 0; health/ready 200; marker подтверждён production Playwright в гостевом контексте. Hardware/PWA/реальные приватные фото — `NOT RUN`. Backend и правила crypto/PIN/TTL не менялись. Public card и её policy — следующий отдельный этап; решение владельца о применении правил задания только к новым снимкам записано, existing photos не меняются. Проверка владельца: PIN → loader → портрет/landscape фото → tap → swipe; controls должны остаться на месте. Backup `/var/www/photobunker/.local/backups/workspace-viewer-20261106-1-before/`.
 
 Последняя задача владельца — PIN, Browser отложен с оставшимися замечаниями. `main@d753076` опубликован как `pin-flow-20261106-1`: верхняя привязка lock form, короткая recovery-ссылка, N-я точка до следующего ввода, route skeleton/переход без Welcome, единый background deadline и trusted-photo grace, четыре шага emergency draft по N. [Причины, снимки и ограничения](PIN-FLOW-2026-11-06.md). `READY FOR OWNER REVIEW` для обычного PIN/UI; активация emergency — `BLOCKED`, gate не включён. Целевые PIN/shell/access проверки 32/32 и production build — exit 0; [публичная сверка](evidence/pin-flow-20261106/deploy.json) — exit 0, health/ready 200. Новый release получен production Playwright в гостевом контексте; production private unlock и hardware keyboard/background — `NOT RUN`. Backup `/var/www/photobunker/.local/backups/pin-flow-20261106-1-before/`. Владелец: Security → App PIN → 5 минут → Lock → быстрый ввод → фото → short background/resume и повтор после 5 минут. Пользовательский незакоммиченный `ts_and_ux.md` сохранён отдельно и не включён в кодовый commit.
 
