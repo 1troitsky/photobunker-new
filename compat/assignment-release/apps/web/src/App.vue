@@ -194,9 +194,10 @@ watch(
   },
   { immediate: true },
 )
-watch([() => account.value?.id, deviceId, appLocked], ([owner, device, locked]) => {
-  if (owner && device && locked) void loadLockedEmergencyPinLength()
-}, { immediate: true })
+watch([() => account.value?.id, deviceId, appLocked, appLockReady, appPinLength],
+  ([owner, device, locked, ready]) => {
+    if (owner && device && locked && ready) void loadLockedEmergencyPinLength()
+  }, { immediate: true })
 watch([appLockReady, appLocked], ([ready, locked]) => {
   if (!ready || locked) {
     // Synchronous cleanup before any protected Vue view can paint.
