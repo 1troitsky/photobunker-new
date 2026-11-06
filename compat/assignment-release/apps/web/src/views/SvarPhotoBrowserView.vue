@@ -91,20 +91,21 @@ function openPhoto(entry: BrowserEntry | undefined) {
     { assignment: entry.scope.slice('assignment:'.length) }
   void router.push({ path: '/gallery/' + encodeURIComponent(entry.id), query })
 }
-function initManager(instance: FileApi) {
-  api = instance
-  instance.on('set-path', ({ id }) => {
+function initManager(instance: unknown) {
+  const manager = instance as FileApi
+  api = manager
+  manager.on('set-path', ({ id }) => {
     selectedPath.value = ''
     if (id) routeForPath(id)
   })
-  instance.on('select-file', ({ id }) => { selectedPath.value = id ?? '' })
-  instance.on('open-file', ({ id }) => { openPhoto(projection.value.byPath.get(id ?? '')) })
+  manager.on('select-file', ({ id }) => { selectedPath.value = id ?? '' })
+  manager.on('open-file', ({ id }) => { openPhoto(projection.value.byPath.get(id ?? '')) })
   // SVAR's built-in operations act on its mutable paths, not on PhotoBunker's
   // immutable ids, ACL and encrypted outbox. Disable them entirely. The buttons
   // outside SVAR use the scoped, durable application adapter below.
   for (const action of ['create-file','rename-file','delete-files','move-files',
     'copy-files','download-file','upload-file'])
-    instance.intercept(action, () => false)
+    manager.intercept(action, () => false)
 }
 watch(activePath, async path => {
   selectedPath.value = ''
