@@ -1,5 +1,6 @@
 import { locale } from '../i18n'
 const text = {
+  openCard: ['Открыть Public card ↗', 'Open Public card ↗'],
   share: ['Поделиться карточкой', 'Share card'],
   create: ['Создать ссылку', 'Create link'],
   only: ['Только карточка', 'Card only'],
@@ -36,7 +37,7 @@ const text = {
   none: ['Создавать ссылки можно только с подтверждённым правом публикации.', 'Only verified sharing rights allow link creation.'],
   refresh: ['Повторить отправку', 'Retry upload'],
   hint: ['Ссылка содержит секрет после #. Отправляйте её только тем, кому доверяете.', 'The link contains a secret after #. Share it only with trusted recipients.'],
-  title: ['Защищённая карточка', 'Protected photo card'],
+  title: ['Public card', 'Public card'],
   invalid: ['Ссылка недействительна или повреждена', 'Invalid or damaged link'],
   expired: ['Ссылка истекла или отозвана', 'Link expired or revoked'],
   unavailable: ['Ссылка временно недоступна', 'Link temporarily unavailable'],

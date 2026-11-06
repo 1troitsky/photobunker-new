@@ -5,6 +5,7 @@ import { categoryLimited, type PhotoDetailsDraft } from '../studio/details'
 import { metadataEditable } from '../collaboration/access'
 import { personalCategories } from '../studio/store'
 import { s } from '../studio/text'
+import PublicCardSettings from './PublicCardSettings.vue'
 const props = defineProps<{ photo: Photo; modelValue: PhotoDetailsDraft; busy?: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [value: PhotoDetailsDraft] }>()
 const listId = useId(), limited = computed(() => categoryLimited(props.photo))
@@ -26,5 +27,6 @@ function locked(field: 'title' | 'note' | 'category') { return !metadataEditable
     <button v-if="photo.uiOnly && (modelValue.latitude || modelValue.longitude)" class="quiet-button" type="button" @click="emit('update:modelValue', {...modelValue, latitude:'', longitude:''})">{{ s('clearLocation') }}</button>
     <p class="field-hint">{{ s(photo.uiOnly ? 'coordinatesHint' : 'legacyCoordinates') }}</p>
     <label>{{ s('tags') }}<input :value="modelValue.tags" maxlength="820" :placeholder="s('tagsHint')" @input="patch('tags', $event)"></label>
+    <PublicCardSettings :model-value="modelValue.publicCard" :busy="busy || readonly || !metadataEditable(photo)" @update:model-value="emit('update:modelValue', {...modelValue, publicCard:$event})" />
   </fieldset>
 </template>

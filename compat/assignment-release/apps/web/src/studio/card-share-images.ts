@@ -1,15 +1,39 @@
 import type { Photo } from '../local/photos'
 import { readPrivateCardPhoto } from './photo-card-reader'
-import { listPhotoVersions } from './versions'
+import { listPhotoVersions, savePhotoVersion, emptyEdits } from './versions'
 import { externalPhotoFile } from './export'
 import { readPhoto } from '../server/photos'
 import { account } from '../identity/store'
 import { photoReadAllowed } from '../crypto/store'
 import { isExpired } from '../delivery/clock'
 
+/** Explicit Publish prepares a sanitized derivative; it never shares raw original bytes. */
+export async function prepareCardPhotoVersion(photoId: string) {
+  const owner = account.value?.id
+  if (!owner || !photoReadAllowed()) throw new Error('card_share.locked')
+  const current = await readPrivateCardPhoto(photoId)
+  const versions = await listPhotoVersions(current)
+  if (versions.length) {
+    // A pending/redacted edit must never fall back to pixels of the original.
+    const latest = versions.slice().sort((a,b) => b.createdAt-a.createdAt)[0]!
+    if (latest.sync !== 'synced' || latest.conflict || (latest.expiresAt !== undefined && latest.expiresAt <= Date.now()))
+      throw new Error('version.unavailable')
+    return latest
+  }
+  const { photo, blob } = await readPhoto(photoId)
+  if (photo.accountId !== owner || !photo.workspaceAccess?.read ||
+      !photo.workspaceAccess.shareExternal || !photo.workspaceAccess.edit || !photo.encrypted)
+    throw new Error('card_share.denied')
+  const safe = await externalPhotoFile(photo, blob)
+  if (account.value?.id !== owner || !photoReadAllowed()) throw new Error('card_share.account_changed')
+  const version = await savePhotoVersion(photo, safe, photo.width, photo.height, emptyEdits())
+  if (version.sync !== 'synced' || version.conflict) throw new Error('version.unavailable')
+  return version
+}
+
 /**
- * A safe photo is *only* the flattened JPEG committed by PhotoEditView via
- * renderEdits -> toBlob -> stripEncodedMetadata -> savePhotoVersion.
+ * A safe photo is a committed flattened JPEG version: either an explicit edit
+ * or the sanitized derivative prepared on Publish for a never-edited capture.
  * Do not select original, thumbnail, or a draft edit as fallback.
  */
 export async function shareCardImages(photoId:string, versionId:string|null,

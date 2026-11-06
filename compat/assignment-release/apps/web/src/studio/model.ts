@@ -54,6 +54,7 @@ export type ContributorRules = {
   thumbnailsOnly: boolean
   sharingAllowed: boolean
   participantsOnly: boolean
+  publicCard?: import('./public-card-policy').PublicCardPolicy
   useAssignmentPhotoId: boolean
 }
 export type Task = {

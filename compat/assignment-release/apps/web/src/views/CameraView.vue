@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { publicCardPolicy } from '../studio/public-card-policy'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
@@ -631,7 +632,7 @@ async function capture() {
     Math.abs(candidate.measuredAt - createdAt) <= settings.locationWindow * 1000
       ? candidate
       : undefined
-  const metadata: PhotoMetadata = {}
+  const metadata: PhotoMetadata = { publicCard: publicCardPolicy(studioSession.value?.rules.publicCard) }
   if (settings.keepDate) metadata.capturedAt = createdAt
   pendingPreset = clone(effectiveSession.value.preset!)
   if (pendingPreset) {

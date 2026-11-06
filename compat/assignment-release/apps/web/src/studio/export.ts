@@ -8,6 +8,18 @@ export function downloadFile(file: File) {
   link.href = url; link.download = file.name; link.click()
   setTimeout(() => URL.revokeObjectURL(url), 10000)
 }
+export async function copyPhotoImage(file: Blob) {
+  const png = (async () => {
+    const url = URL.createObjectURL(file), image = new Image(), canvas = document.createElement('canvas')
+    try {
+      image.src = url; await image.decode()
+      canvas.width = image.naturalWidth; canvas.height = image.naturalHeight
+      canvas.getContext('2d')!.drawImage(image, 0, 0)
+      return await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('export.encode')), 'image/png'))
+    } finally { URL.revokeObjectURL(url); canvas.width = canvas.height = 0 }
+  })()
+  await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })])
+}
 export async function shareFile(file: File): Promise<'shared' | 'download' | 'cancelled'> {
   if (!navigator.canShare?.({ files: [file] }) || !navigator.share) return 'download'
   try { await navigator.share({ files: [file] }); return 'shared' }

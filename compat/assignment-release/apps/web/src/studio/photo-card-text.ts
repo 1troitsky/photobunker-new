@@ -1,7 +1,7 @@
 import { locale } from '../i18n'
 const copy = {
-  card: ['Карточка', 'Card'],
-  photoCard: ['Карточка фотографии', 'Photo card'],
+  card: ['Public card', 'Public card'],
+  photoCard: ['Public card', 'Public card'],
   private: ['Предпросмотр карточки', 'Card preview'],
   nameId: ['NAME-ID', 'NAME-ID'],
   pendingId: ['ID будет присвоен после подключения', 'ID will be assigned after reconnect'],

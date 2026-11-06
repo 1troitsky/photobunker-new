@@ -343,7 +343,7 @@ onBeforeUnmount(() => {
           <div v-for="item in ordered" :key="item.id" class="browser-photo">
             <label v-if="choosing" class="browser-check"><input type="checkbox" :checked="selectedSet.has(item.id)"
               @change="toggle(item.id)" /></label>
-            <RouterLink :to="photoCardPath(item.id)" class="native-photo-tile">
+            <RouterLink :to="photoCardPath(item.id)" target="_blank" rel="noopener noreferrer" class="native-photo-tile">
               <PhotoThumbnail v-if="status === 'ready'" :id="item.id" :alt="item.label || bt('photo')" />
               <span v-else class="thumbnail-placeholder" />
               <span class="tile-caption">{{ item.label || bt('photo') }}</span>
@@ -354,7 +354,7 @@ onBeforeUnmount(() => {
           <li v-for="item in ordered" :key="item.id">
             <input v-if="choosing" type="checkbox" :aria-label="item.label || bt('photo')"
               :checked="selectedSet.has(item.id)" @change="toggle(item.id)" />
-            <RouterLink :to="photoCardPath(item.id)">
+            <RouterLink :to="photoCardPath(item.id)" target="_blank" rel="noopener noreferrer">
               <AppIcon name="gallery" />{{ item.label || bt('photo') }}</RouterLink>
           </li>
         </ul>
@@ -365,7 +365,7 @@ onBeforeUnmount(() => {
               <ul><li v-for="item in ordered.filter(photo => photo.assignmentId === task.id)" :key="item.id">
                 <input v-if="choosing" type="checkbox" :checked="selectedSet.has(item.id)"
                   :aria-label="item.label || bt('photo')" @change="toggle(item.id)" />
-                <RouterLink :to="photoCardPath(item.id)">{{ item.label || bt('photo') }}</RouterLink>
+                <RouterLink :to="photoCardPath(item.id)" target="_blank" rel="noopener noreferrer">{{ item.label || bt('photo') }}</RouterLink>
               </li></ul>
             </details>
           </li>

@@ -1,0 +1,120 @@
+{
+  "release": "public-card-20261106-1",
+  "environment": "Actual local Vue app via Playwright MCP; synthetic identity/task and HTTP fixture; real AES-GCM encrypted public card/image; no private data",
+  "guest": {
+    "title": "Public card",
+    "image": true,
+    "noDock": true,
+    "fragmentRemoved": true,
+    "noHiddenGps": true,
+    "noHiddenCamera": true,
+    "tagsVisible": true,
+    "originalRequests": 0,
+    "noHorizontalOverflow": true
+  },
+  "newWindow": {
+    "calls": [
+      {
+        "path": "/photo-cards/synthetic-photo-id",
+        "target": "_blank",
+        "features": "noopener,noreferrer"
+      },
+      {
+        "path": "/photo-cards/synthetic-photo-id?share=1",
+        "target": "_blank",
+        "features": "noopener,noreferrer"
+      }
+    ]
+  },
+  "settings": {
+    "visible": true,
+    "defaults": [
+      {
+        "label": "Разрешить Public card",
+        "checked": true
+      },
+      {
+        "label": "Автор и команда",
+        "checked": false
+      },
+      {
+        "label": "Дата съёмки",
+        "checked": false
+      },
+      {
+        "label": "Дата изменения",
+        "checked": false
+      },
+      {
+        "label": "Координаты GPS",
+        "checked": true
+      },
+      {
+        "label": "Описание",
+        "checked": true
+      },
+      {
+        "label": "Теги",
+        "checked": false
+      },
+      {
+        "label": "Технические данные",
+        "checked": false
+      }
+    ],
+    "savedToApi": {
+      "enabled": true,
+      "contributor": false,
+      "capturedAt": false,
+      "editedAt": false,
+      "location": false,
+      "description": true,
+      "tags": false,
+      "metadata": false
+    },
+    "nonRetroactiveHint": true
+  },
+  "narrow": {
+    "width": 320,
+    "noHorizontalOverflow": true,
+    "headerButtons": [
+      {
+        "label": "Копировать ссылку",
+        "width": 42,
+        "height": 42
+      },
+      {
+        "label": "Скачать изображение",
+        "width": 42,
+        "height": 42
+      },
+      {
+        "label": "Поделиться карточкой",
+        "width": 42,
+        "height": 42
+      }
+    ]
+  },
+  "checks": [
+    {
+      "command": "docker compose -f compat/assignment-release/compose.yaml exec -T web npm test -- tests/public-card-policy.test.ts tests/public-card-image-source.test.ts tests/card-share-crypto.test.ts",
+      "exitCode": 0,
+      "result": "3 files, 16 tests passed"
+    },
+    {
+      "command": "docker compose -f compat/assignment-release/compose.yaml exec -T api php -l app/Workspace/Workspace.php; php -l app/Http/Controllers/WorkspacePhotoController.php",
+      "exitCode": 0,
+      "result": "No syntax errors"
+    }
+  ],
+  "notRun": [
+    "Production private publish and actual server roundtrip",
+    "Real iOS/Android/PWA new window and clipboard",
+    "Backend integration tests",
+    "Performance/Lighthouse; no baseline measured"
+  ],
+  "notImplemented": [
+    "Public guest link cannot expose private assignment/team records; no new recipient ACL path enabled",
+    "Original photo technical UUID is not exposed publicly"
+  ]
+}

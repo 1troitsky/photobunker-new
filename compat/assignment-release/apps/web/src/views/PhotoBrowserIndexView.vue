@@ -13,7 +13,7 @@ import { readOrganizer, saveBrowser, type BrowserOrganizer } from '../photo-brow
 import { buildExplorer, ancestors, descendants, explorerRows, writable, canMove, folderKey,
   isSection, type BrowserSection, type BrowserSort, type ExplorerEntry, type OrganizerAction } from '../photo-browser/explorer'
 import { browserReadable, browserTasks, organize, editBrowserPhoto, deleteBrowserPhotos } from '../photo-browser/organizer'
-import { photoCardPath } from '../studio/private-photo-card'
+import { openPublicCard } from '../studio/public-card-policy'
 import { PhotoDetailsError } from '../studio/details'
 import { metadataEditable } from '../collaboration/access'
 import { bt } from '../photo-browser/text'
@@ -280,7 +280,7 @@ function photoAction(entry: ExplorerEntry, action: 'card' | 'share' | 'original'
   if (entry.kind !== 'photo') return
   if (action === 'card' || action === 'share') {
     if (action === 'share' && !entry.shareable) return
-    void router.push({ path: photoCardPath(entry.id), state: action === 'share' ? { openCardShare: true } : {} })
+    openPublicCard(entry.id, action === 'share')
   } else if (action === 'edit' && entry.editable)
     void router.push({ path: '/gallery/' + encodeURIComponent(entry.id) + '/edit', query: photoQuery(entry) })
   else if (action === 'original' && entry.readable)

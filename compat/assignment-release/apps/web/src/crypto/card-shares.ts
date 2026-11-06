@@ -35,6 +35,10 @@ export type PublicCard = {
   namePending?: true
   description?: string
   expiresAt: number
+  nameId?: string
+  tags?: string[]
+  editedAt?: number
+  teamName?: string
   capturedAt?: number
   location?: { latitude: number; longitude: number }
   metadata?: PrivatePhotoCard['metadata']
@@ -108,6 +112,10 @@ export function publicCardPayload(card: PrivatePhotoCard, scopes: CardScopes, ex
     ...(card.description ? { description: card.description.slice(0, 2000) } : {}),
     expiresAt,
     ...(scopes.metadata ? {
+      ...(card.nameId ? { nameId: card.nameId.slice(0, 120) } : {}),
+      ...(card.tags?.length ? { tags: card.tags.slice(0, 20).map(tag => tag.slice(0, 40)) } : {}),
+      ...(card.editedAt ? { editedAt: card.editedAt } : {}),
+      ...(card.teamName ? { teamName: card.teamName.slice(0, 80) } : {}),
       ...(card.capturedAt ? { capturedAt: card.capturedAt } : {}),
       ...(card.location ? { location: { ...card.location } } : {}),
       ...(card.metadata ? { metadata: { ...card.metadata } } : {}),
@@ -119,7 +127,7 @@ function payloadValid(x: unknown, scopes: CardScopes, expiry: number): x is Publ
   if (!x || typeof x !== 'object' || Array.isArray(x)) return false
   const v = x as Partial<PublicCard>
   const allowed = ['type', 'version', 'title', 'namePending', 'description', 'expiresAt',
-    ...(scopes.metadata ? ['capturedAt', 'location', 'metadata', 'author'] : [])]
+    ...(scopes.metadata ? ['nameId', 'tags', 'editedAt', 'teamName', 'capturedAt', 'location', 'metadata', 'author'] : [])]
   if (Object.keys(v).some(k => !allowed.includes(k)) ||
       v.type !== 'photo-card-payload' || v.version !== 1 ||
       typeof v.title !== 'string' || v.title.length > 120 ||
@@ -127,6 +135,10 @@ function payloadValid(x: unknown, scopes: CardScopes, expiry: number): x is Publ
       (!v.title && v.namePending !== true) ||
       (v.description !== undefined && (typeof v.description !== 'string' || v.description.length > 2000)) ||
       v.expiresAt !== expiry) return false
+  if (v.nameId !== undefined && (typeof v.nameId !== 'string' || v.nameId.length > 120)) return false
+  if (v.teamName !== undefined && (typeof v.teamName !== 'string' || v.teamName.length > 80)) return false
+  if (v.tags !== undefined && (!Array.isArray(v.tags) || v.tags.length > 20 || v.tags.some(tag => typeof tag !== 'string' || tag.length > 40))) return false
+  if (v.editedAt !== undefined && (!Number.isSafeInteger(v.editedAt) || v.editedAt <= 0)) return false
   if (v.capturedAt !== undefined && (!Number.isSafeInteger(v.capturedAt) || v.capturedAt <= 0)) return false
   if (v.location && (typeof v.location !== 'object' ||
     Object.keys(v.location).sort().join(',') !== 'latitude,longitude' ||

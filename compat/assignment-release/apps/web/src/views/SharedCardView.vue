@@ -2,6 +2,8 @@
 import { ref, onBeforeUnmount, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import PrivateLocationMap from '../components/PrivateLocationMap.vue'
+import AppIcon from '../components/AppIcon.vue'
+import { q } from '../crypto/text'
 import { decryptCard, decryptCardObject, type CardManifest, type PublicCard } from '../crypto/card-shares'
 import { downloadFile } from '../studio/export'
 import { cardShareText as t } from '../studio/card-share-text'
@@ -20,7 +22,15 @@ const loading = ref(true), details = ref(false), now = ref(Date.now())
 const manifestRef = ref<CardManifest>(), imageUrl = ref(''), originalUrl = ref(''),
   imageError = ref(false), originalBusy = ref(false)
 let safeFile: Blob | undefined, originalFile: Blob | undefined
-const copyState = ref<'idle'|'copied'|'failed'>('idle')
+const copyState = ref<'idle'|'copied'|'failed'>('idle'), linkState = ref<'idle'|'copied'|'failed'>('idle')
+async function shareLink(copy: boolean) {
+  if (!card.value || !secret) return
+  const url = location.origin + '/c/' + encodeURIComponent(id) + '#' + secret
+  try {
+    if (!copy && navigator.share) await navigator.share({title:card.value.title,url})
+    else { await navigator.clipboard.writeText(url); linkState.value = 'copied' }
+  } catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) linkState.value = 'failed' }
+}
 let disposed = false, timer: ReturnType<typeof setInterval> | undefined
 let controller = new AbortController()
 function clear(clearSecret = true) {
@@ -161,7 +171,12 @@ onBeforeUnmount(() => {
 <template>
   <section class="native-screen photo-card-screen shared-card-screen">
     <header class="screen-header"><span class="screen-monogram" aria-hidden="true">pb</span>
-      <div class="screen-title"><h1>{{ t('title') }}</h1></div></header>
+      <div class="screen-title"><h1>{{ t('title') }}</h1></div>
+      <div class="screen-actions">
+        <button type="button" class="app-icon-button" :disabled="!card" :aria-label="q('Копировать ссылку')" @click="shareLink(true)"><AppIcon name="copy" /></button>
+        <button type="button" class="app-icon-button" :disabled="!imageUrl || !manifestRef?.scopes.download" :aria-label="q('Скачать изображение')" @click="save('photo')"><AppIcon name="download" /></button>
+        <button type="button" class="app-icon-button" :disabled="!card" :aria-label="q('Поделиться карточкой')" @click="shareLink(false)"><AppIcon name="share" /></button>
+      </div></header>
     <div class="screen-body photo-card-body">
       <div v-if="loading" class="native-empty" role="status"><p>{{ t('pending') }}</p></div>
       <div v-else-if="error || !card" class="native-empty">
@@ -172,31 +187,31 @@ onBeforeUnmount(() => {
       </div>
       <template v-else>
         <div class="photo-card-intro">
-          <span class="photo-card-kicker">{{ t('title') }}</span>
           <h2>{{ card.title || t(card.namePending ? 'pendingId' : 'noTitle') }}</h2>
         </div>
+        <p v-if="linkState !== 'idle'" class="field-hint" role="status">{{ q(linkState === 'copied' ? 'Ссылка скопирована' : 'Не удалось скопировать ссылку') }}</p>
         <div class="photo-card-content">
-          <section v-if="imageUrl" class="photo-card-section">
+          <section v-if="imageUrl" class="public-card-media">
             <img :src="imageUrl" :alt="card.title" class="photo-card-safe-image" />
-            <div v-if="card.description" class="photo-card-caption">
-              <p class="photo-card-description">{{ card.description }}</p>
-            </div>
-            <p class="field-hint">{{ t('pixelsHint') }}</p>
-            <button v-if="manifestRef?.scopes.download" type="button" class="secondary-button"
-              @click="save('photo')">{{ t('savePhoto') }}</button>
+
+
           </section>
+          <div v-if="card.description" class="photo-card-caption"><p class="photo-card-description">{{ card.description }}</p></div>
+          <div v-if="card.tags?.length" class="photo-card-tags"><span v-for="tag in card.tags" :key="tag">#{{ tag }}</span></div>
           <section v-if="manifestRef?.scopes.original" class="photo-card-section">
             <button type="button" class="secondary-button" :disabled="originalBusy"
               @click="openOriginal">{{ t('showOriginal') }}</button>
             <template v-if="originalUrl">
               <img :src="originalUrl" :alt="card.title" class="photo-card-safe-image" />
-              <p class="field-hint">{{ t('pixelsHint') }}</p>
-              <button v-if="manifestRef?.scopes.download" type="button" class="secondary-button"
+                <button v-if="manifestRef?.scopes.download" type="button" class="secondary-button"
                 @click="save('original')">{{ t('saveOriginal') }}</button>
             </template>
           </section>
           <p v-if="imageError" role="alert">{{ t('imageError') }}</p>
           <section class="photo-card-section"><dl class="native-facts">
+            <div v-if="card.nameId"><dt>{{ q('ID фотографии') }}</dt><dd>{{ card.nameId }}</dd></div>
+            <div v-if="card.editedAt"><dt>{{ q('Дата изменения') }}</dt><dd>{{ date(card.editedAt) }}</dd></div>
+            <div v-if="card.teamName"><dt>{{ q('Команда') }}</dt><dd>{{ card.teamName }}</dd></div>
             <div><dt>{{ t('expiry') }}</dt><dd>{{ date(card.expiresAt) }}</dd></div>
             <div v-if="card.capturedAt"><dt>{{ t('capture') }}</dt><dd>{{ date(card.capturedAt) }}</dd></div>
             <div v-if="card.author"><dt>{{ t('author') }}</dt><dd>

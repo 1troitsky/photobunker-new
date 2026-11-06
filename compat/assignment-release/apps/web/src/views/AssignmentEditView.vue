@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import ScreenHeader from '../components/ScreenHeader.vue'
 import FormTabs from '../components/FormTabs.vue'
 import ToggleRow from '../components/ToggleRow.vue'
+import PublicCardSettings from '../components/PublicCardSettings.vue'
 import ParticipantsEditor from '../components/ParticipantsEditor.vue'
 import TeamPicker from '../components/TeamPicker.vue'
 import AppIcon from '../components/AppIcon.vue'
@@ -384,6 +385,7 @@ onBeforeUnmount(() => {
           </p>
         </div>
         <div v-show="tab === 'rules'" class="form-section">
+          <PublicCardSettings v-model="draft.rules.publicCard" :busy="busy" assignment />
           <ToggleRow v-model="draft.rules.useAssignmentPhotoId" :label="s('useAssignmentPhotoId')" :hint="s('useAssignmentPhotoIdHint')" />
           <p class="field-hint">{{ s('rulesHint') }}</p>
           <div class="form-card">

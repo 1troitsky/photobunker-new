@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import ScreenHeader from '../components/ScreenHeader.vue'
 import AppIcon from '../components/AppIcon.vue'
 import PrivateLocationMap from '../components/PrivateLocationMap.vue'
 import PhotoCardLinks from '../components/PhotoCardLinks.vue'
@@ -12,7 +11,11 @@ import { account, sessionState } from '../identity/store'
 import { appLockReady, appLocked } from '../app/lock'
 import { protectionEnabled, strongUnlocked, warmLocked } from '../crypto/store'
 import { readPrivateCardPhoto, privateCardScopeAllowed } from '../studio/photo-card-reader'
-import { privatePhotoCard, type PrivatePhotoCard } from '../studio/private-photo-card'
+import { type PrivatePhotoCard } from '../studio/private-photo-card'
+import { publicPhotoCard, publicCardPolicy } from '../studio/public-card-policy'
+import { readPhoto } from '../server/photos'
+import { externalPhotoFile, downloadFile, copyPhotoImage } from '../studio/export'
+import { listPhotoVersions } from '../studio/versions'
 import { photoCardText as t } from '../studio/photo-card-text'
 import { profilePath } from '../identity/person'
 import { formatDate, formatNumber, formatBytes } from '../i18n'
@@ -22,6 +25,22 @@ import { usePageIssue, usePageLoad } from '../app/page-load'
 
 const route = useRoute()
 const card = ref<PrivatePhotoCard>()
+const imageUrl = ref(''), actionBusy = ref(false), actionError = ref(''), disabled = ref(false)
+const imageFile = shallowRef<File>()
+function releaseImage() { if (imageUrl.value) URL.revokeObjectURL(imageUrl.value); imageUrl.value = ''; imageFile.value = undefined }
+function closeWindow() { window.close() }
+async function imageAction(copy: boolean) {
+  if (!imageFile.value || !visible.value || !canShare.value || actionBusy.value) return
+  actionBusy.value = true; actionError.value = ''
+  const token = generation
+  try {
+    const latest = await readPrivateCardPhoto(id.value)
+    if (token !== generation || !imageFile.value || !latest.workspaceAccess?.shareExternal || !publicCardPolicy(latest.metadata?.publicCard).enabled) return
+    if (copy) await copyPhotoImage(imageFile.value); else downloadFile(imageFile.value)
+  }
+  catch { if (token === generation) actionError.value = q('Не удалось выполнить действие. Повторите или скачайте изображение.') }
+  finally { if (token === generation) actionBusy.value = false }
+}
 const canShare = ref(false)
 const ownerOfCard = ref('')
 const loading = ref(false)
@@ -35,12 +54,6 @@ const shareOpen = ref(false)
 const copyState = ref<'idle' | 'copied' | 'failed'>('idle')
 const now = ref(Date.now())
 const id = computed(() => String(route.params.id ?? ''))
-const galleryLink = computed(() => '/gallery/' + encodeURIComponent(id.value))
-const inGallery = computed(() => photos.value.some(item =>
-  item.id === id.value && item.accountId === account.value?.id &&
-  !item.deleteRequested &&
-  (item.expiresAt === undefined || item.expiresAt > now.value)))
-const backLink = computed(() => inGallery.value ? galleryLink.value : '/gallery')
 const indexedPhoto = computed(() => photos.value.find(item => item.id === id.value))
 const visible = computed(() =>
   privateCardScopeAllowed() && ownerOfCard.value === account.value?.id &&
@@ -55,6 +68,7 @@ const coordinates = computed(() => visible.value?.location
 let generation = 0
 function invalidate() {
   generation++
+  releaseImage(); disabled.value = false; actionError.value = ''; actionBusy.value = false
   card.value = undefined
   canShare.value = false
   ownerOfCard.value = ''
@@ -66,6 +80,7 @@ function invalidate() {
 }
 async function load() {
   const token = ++generation, owner = account.value?.id, photoId = id.value
+  releaseImage(); disabled.value = false; actionError.value = ''; actionBusy.value = false
   card.value = undefined
   canShare.value = false
   ownerOfCard.value = ''
@@ -78,18 +93,35 @@ async function load() {
     const local = photos.value.find(item => item.id === photoId &&
       !item.deleteRequested && (item.expiresAt === undefined || item.expiresAt > Date.now()))
     if (local) {
-      card.value = privatePhotoCard(local)
+      if (!publicCardPolicy(local.metadata?.publicCard).enabled) { disabled.value = true; return }
+      card.value = publicPhotoCard(local)
       ownerOfCard.value = owner || ''
       canShare.value = local.workspaceAccess?.shareExternal === true
       loading.value = false
     }
     const photo = await readPrivateCardPhoto(photoId)
-    const projection = privatePhotoCard(photo)
     if (token !== generation || owner !== account.value?.id ||
         photoId !== id.value || !privateCardScopeAllowed()) return
+    if (!publicCardPolicy(photo.metadata?.publicCard).enabled) { releaseImage(); card.value = undefined; disabled.value = true; return }
+    const projection = publicPhotoCard(photo)
     ownerOfCard.value = owner || ''
     canShare.value = photo.workspaceAccess?.shareExternal === true
     card.value = projection
+    if (photo.workspaceAccess?.read) {
+      const versions = await listPhotoVersions(photo)
+      const latest = versions.filter(v => !v.conflict && (v.expiresAt === undefined || v.expiresAt > Date.now())).sort((a,b) => b.createdAt-a.createdAt)[0]
+      if (versions.length && !latest) throw new Error('version.unavailable')
+      const source = latest ? { photo, blob: latest.blob } : await readPhoto(photoId)
+      if (token !== generation || owner !== account.value?.id || !privateCardScopeAllowed()) return
+      if (!source.photo.workspaceAccess?.read || source.photo.deleteRequested) throw new Error('photo_card.denied')
+      imageUrl.value = URL.createObjectURL(source.blob)
+      // External actions always strip encoded metadata; never download raw bytes here.
+      if (canShare.value) {
+        const file = await externalPhotoFile(source.photo, source.blob)
+        if (token !== generation || owner !== account.value?.id || !privateCardScopeAllowed()) return
+        imageFile.value = file
+      }
+    }
   } catch (reason) {
     if (token !== generation || owner !== account.value?.id || photoId !== id.value) return
     const message = reason instanceof Error ? reason.message : ''
@@ -99,6 +131,7 @@ async function load() {
       : status === 404 || status === 410 || /expired|unavailable|deleted|not.found/.test(message)
         ? 'unavailable'
         : /locked|account_changed|cancelled/.test(message) ? 'locked' : 'offline'
+    if (error.value !== 'offline') { releaseImage(); card.value = undefined; canShare.value = false }
   } finally {
     if (token === generation) loading.value = false
   }
@@ -131,7 +164,7 @@ const expiry = setInterval(() => {
 }, 1000)
 let appliedShareIntent = ''
 watch([visible, canShare, () => route.fullPath], () => {
-  if (window.history.state?.openCardShare === true && visible.value && canShare.value && appliedShareIntent !== route.fullPath) {
+  if ((window.history.state?.openCardShare === true || route.query.share === '1') && visible.value && canShare.value && appliedShareIntent !== route.fullPath) {
     appliedShareIntent = route.fullPath
     window.history.replaceState({ ...window.history.state, openCardShare: false }, '')
     shareOpen.value = true
@@ -142,9 +175,21 @@ onBeforeUnmount(() => { invalidate(); clearInterval(expiry) })
 
 <template>
   <section class="native-screen photo-card-screen">
-    <ScreenHeader :title="t('photoCard')" :back="backLink" />
+    <header class="screen-header public-card-header">
+      <span class="screen-monogram" aria-hidden="true">pb</span>
+      <div class="screen-title"><h1>Public card</h1></div>
+      <div class="screen-actions">
+        <button class="app-icon-button" :aria-label="q('Копировать изображение')" :disabled="!imageFile || !canShare || actionBusy" @click="imageAction(true)"><AppIcon name="copy" /></button>
+        <button class="app-icon-button" :aria-label="q('Скачать изображение')" :disabled="!imageFile || !canShare || actionBusy" @click="imageAction(false)"><AppIcon name="download" /></button>
+        <button class="app-icon-button" :aria-label="q('Поделиться карточкой')" :disabled="!visible || !canShare" @click="shareOpen = true"><AppIcon name="share" /></button>
+        <button class="app-icon-button" :aria-label="q('Закрыть')" @click="closeWindow"><AppIcon name="close" /></button>
+      </div>
+    </header>
     <div class="screen-body photo-card-body">
-      <div v-if="loading && !visible" class="photo-card-loading" role="status" aria-label="Loading">
+      <p class="field-hint public-card-preview-label">{{ q('Предпросмотр. Другие увидят карточку только по созданной вами ссылке.') }}</p>
+      <p v-if="actionError" class="form-error" role="alert">{{ actionError }}</p>
+      <div v-if="disabled" class="native-empty"><AppIcon name="lock" /><h2>{{ q('Public card выключена') }}</h2><p>{{ q('Включите её в параметрах изображения, чтобы создать ссылку.') }}</p></div>
+      <div v-else-if="loading && !visible" class="photo-card-loading" role="status" aria-label="Loading">
         <span class="photo-card-loading-image" /><span /><span />
       </div>
       <div v-else-if="!visible" class="native-empty">
@@ -156,12 +201,12 @@ onBeforeUnmount(() => { invalidate(); clearInterval(expiry) })
       </div>
       <template v-else>
         <div class="photo-card-intro">
-          <span class="photo-card-kicker">{{ t('photoCard') }}</span>
           <h2>{{ visible.title || visible.nameId || t('noTitle') }}</h2>
           <p v-if="visible.namePending" class="field-hint" role="status">{{ t('pendingId') }}</p>
         </div>
         <div class="photo-card-image">
-          <PhotoThumbnail :id="visible.id"
+          <img v-if="imageUrl" :src="imageUrl" :alt="visible.title || 'Public card'" />
+          <PhotoThumbnail v-else :id="visible.id"
             :access-key="indexedPhoto?.accountId ? `${indexedPhoto.remoteRevision}:${indexedPhoto.thumbnailOnly}` : 'card'"
             :expires-at="visible.expiresAt" :alt="visible.title || t('photoCard')" />
         </div>
@@ -180,6 +225,8 @@ onBeforeUnmount(() => { invalidate(); clearInterval(expiry) })
                 <dt>{{ t('captured') }}</dt>
                 <dd>{{ dateTime(visible.capturedAt) }}</dd>
               </div>
+              <div v-if="visible.editedAt"><dt>{{ q('Дата изменения') }}</dt><dd>{{ dateTime(visible.editedAt) }}</dd></div>
+              <div v-if="visible.teamName"><dt>{{ q('Команда') }}</dt><dd>{{ visible.teamName }}</dd></div>
               <div v-if="visible.nameId">
                 <dt>{{ q('ID фотографии') }}</dt><dd>{{ visible.nameId }}</dd>
               </div>
@@ -197,9 +244,7 @@ onBeforeUnmount(() => { invalidate(); clearInterval(expiry) })
             <div v-if="visible.tags?.length" class="photo-card-tags">
               <span v-for="tag in visible.tags" :key="tag">#{{ tag }}</span>
             </div>
-            <RouterLink v-if="inGallery" :to="galleryLink" class="secondary-button photo-card-gallery">
-              <AppIcon name="gallery" />{{ t('gallery') }}
-            </RouterLink>
+
           </section>
           <section v-if="visible.location" class="photo-card-section">
             <h3>{{ t('location') }}</h3>

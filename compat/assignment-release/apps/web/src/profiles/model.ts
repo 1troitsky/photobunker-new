@@ -13,7 +13,7 @@ export type ProfileRules = {
 export type Profile = { id: string; name: string; description: string; version: number; rules: ProfileRules; archived?: boolean; spaceId?: string; access?: Access }
 export type Location = { source?: 'gps'; latitude: number; longitude: number; accuracy: number; measuredAt: number }
 export type ManualLocation = { source: 'manual'; latitude: number; longitude: number }
-export type PhotoMetadata = { locationEditedAt?: number; date?: string; time?: string; capturedAt?: number; camera?: string; location?: Location | ManualLocation; locationStatus?: 'pending' | 'unavailable'; resolutionLimited?: boolean }
+export type PhotoMetadata = { publicCard?: import('../studio/public-card-policy').PublicCardPolicy; editedAt?: number; locationEditedAt?: number; date?: string; time?: string; capturedAt?: number; camera?: string; location?: Location | ManualLocation; locationStatus?: 'pending' | 'unavailable'; resolutionLimited?: boolean }
 
 export function defaultRules(): ProfileRules {
   return { retentionSeconds: 1209600, resolution: 'maximum', width: 1600, height: 1200, aspect: 'native', aspectWidth: 4, aspectHeight: 3,

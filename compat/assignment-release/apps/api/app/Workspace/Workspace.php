@@ -89,6 +89,10 @@ final class Workspace
         }
         if ($kind === 'task') {
             $rules['rules.useAssignmentPhotoId'] = 'sometimes|boolean';
+            $rules['rules.publicCard'] = 'sometimes|array:enabled,contributor,capturedAt,editedAt,location,description,tags,metadata';
+            foreach (['enabled', 'contributor', 'capturedAt', 'editedAt', 'location', 'description', 'tags', 'metadata'] as $field) {
+                $rules['rules.publicCard.'.$field] = 'required_with:rules.publicCard|boolean';
+            }
         }
         if ($kind === 'preset') {
             $rules += ['description' => 'present|nullable|string|max:1000', 'version' => 'required|integer|min:0', 'rules' => 'required|array', 'options' => 'required|array', 'archived' => 'sometimes|boolean', 'hidden' => 'sometimes|boolean'];

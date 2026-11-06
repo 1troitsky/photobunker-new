@@ -703,6 +703,7 @@ watch(
       :class="[
         'app-shell',
         {
+          'public-card-shell': route.name === 'photo-card',
           'camera-shell': immersive,
           'native-shell': native,
           'welcome-shell': route.name === 'welcome' && !account,
@@ -725,7 +726,7 @@ watch(
       </header>
 
       <nav
-        v-if="!deletionBlocked && account && (sessionState === 'authenticated' || sessionState === 'offline' || (sessionState === 'checking' && offlineCaptureIdentity)) && appLockReady && !appLocked && !editor && !hidden"
+        v-if="!deletionBlocked && account && (sessionState === 'authenticated' || sessionState === 'offline' || (sessionState === 'checking' && offlineCaptureIdentity)) && appLockReady && !appLocked && !editor && !hidden && route.name !== 'photo-card'"
         class="navigation"
         data-testid="app-dock"
         :aria-label="t('navigation')"

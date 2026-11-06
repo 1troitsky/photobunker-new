@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import AppIcon from './AppIcon.vue'
 import type { PrivatePhotoCard } from '../studio/private-photo-card'
+import { publicPhotoCard } from '../studio/public-card-policy'
 import { cardShareText as t } from '../studio/card-share-text'
 import { formatDate } from '../i18n'
 import { CARD_ONLY, type CardScopes } from '../crypto/card-shares'
@@ -12,10 +13,10 @@ import { appLocked } from '../app/lock'
 import { photoReadAllowed, strongUnlocked, warmLocked } from '../crypto/store'
 import { readPrivateCardPhoto } from '../studio/photo-card-reader'
 import { listPhotoVersions, type PhotoVersion } from '../studio/versions'
-import { shareCardImages } from '../studio/card-share-images'
+import { shareCardImages, prepareCardPhotoVersion } from '../studio/card-share-images'
 
 const props = defineProps<{ card: PrivatePhotoCard; shareAllowed: boolean }>()
-const metadata = ref(false), photoScope = ref(false), originalScope = ref(false),
+const photoScope = ref(true), originalScope = ref(false),
   downloadScope = ref(false), originalConfirmed = ref(false), selectedVersion = ref(''),
   versions = ref<PhotoVersion[]>([]), duration = ref(3600)
 const busy = ref(false), error = ref(''), rows = ref<ShareRow[]>([]), copied = ref('')
@@ -27,8 +28,8 @@ function reset() {
   busy.value = false
   error.value = ''
   copied.value = ''
-  metadata.value = false
-  photoScope.value = originalScope.value = downloadScope.value = originalConfirmed.value = false
+  photoScope.value = true
+  originalScope.value = downloadScope.value = originalConfirmed.value = false
   selectedVersion.value = ''
   versions.value = []
 }
@@ -47,9 +48,13 @@ async function loadVersions() {
   try {
     const photo=await readPrivateCardPhoto(id)
     const list=await listPhotoVersions(photo)
-    if (token===generation && owner===account.value?.id && id===props.card.id)
-      versions.value=list.filter(v => v.parentId===id && v.sync==='synced' && !v.conflict &&
+    if (token===generation && owner===account.value?.id && id===props.card.id) {
+      const latest=list.slice().sort((a,b)=>b.createdAt-a.createdAt)[0]
+      // A newer pending/conflicting edit cannot silently select an older image.
+      versions.value=latest && (latest.sync!=='synced' || latest.conflict) ? [] : list.filter(v => v.parentId===id && v.sync==='synced' && !v.conflict &&
         (v.expiresAt===undefined || v.expiresAt>Date.now()))
+      selectedVersion.value=versions.value[0]?.id ?? ''
+    }
   } catch {
     if (token===generation) versions.value=[]
   }
@@ -60,21 +65,27 @@ async function create() {
   busy.value = true
   error.value = ''
   try {
-    if (photoScope.value && !versions.value.some(v=>v.id===selectedVersion.value))
-      throw new Error('version.unavailable')
+    const freshCard = publicPhotoCard(await readPrivateCardPhoto(props.card.id))
+    if (token !== generation || owner !== account.value?.id) return
+    if (photoScope.value && !selectedVersion.value) {
+      const version = await prepareCardPhotoVersion(props.card.id)
+      if (token !== generation || owner !== account.value?.id) return
+      versions.value = [version]; selectedVersion.value = version.id
+    }
+    if (photoScope.value && !versions.value.some(v=>v.id===selectedVersion.value)) throw new Error('version.unavailable')
     if (originalScope.value && !originalConfirmed.value)
       throw new Error('card_share.original_confirmation')
     const scopes: CardScopes = {
-      ...CARD_ONLY, metadata:metadata.value, photo:photoScope.value, original:originalScope.value,
+      ...CARD_ONLY, metadata:true, photo:photoScope.value, original:originalScope.value,
       download:downloadScope.value,
     }
-    const expiresAt = Math.min(Date.now() + duration.value * 1000, props.card.expiresAt ?? 0)
+    const expiresAt = Math.min(Date.now() + duration.value * 1000, freshCard.expiresAt ?? 0)
     const files=photoScope.value || originalScope.value
       ? await shareCardImages(props.card.id,
           photoScope.value ? selectedVersion.value : null, originalScope.value)
       : {}
     if (token!==generation || owner!==account.value?.id) return
-    const created = await commitCardShare(props.card.id, props.card, scopes, expiresAt,
+    const created = await commitCardShare(props.card.id, freshCard, scopes, expiresAt,
       duration.value as 3600 | 86400 | 604800, files)
     if (token !== generation || owner !== account.value?.id) return
     rows.value = [created, ...rows.value.filter(item => item.id !== created.id)]
@@ -136,14 +147,10 @@ onBeforeUnmount(() => {
     <p class="field-hint">{{ t('hint') }}</p>
     <p v-if="!eligible" class="field-hint">{{ t('none') }}</p>
     <template v-else>
-      <label class="toggle-row"><span><strong>{{ t('only') }}</strong></span>
-        <input type="checkbox" checked disabled /></label>
-      <label class="toggle-row"><span><strong>{{ t('metadata') }}</strong>
-        <small>{{ t('metaHint') }}</small></span>
-        <input type="checkbox" v-model="metadata" :disabled="busy" /></label>
+
       <label class="toggle-row"><span><strong>{{ t('photo') }}</strong></span>
         <input type="checkbox" v-model="photoScope" :disabled="busy" /></label>
-      <label v-if="photoScope" class="photo-card-duration">{{ t('selectVersion') }}
+      <label v-if="photoScope && versions.length" class="photo-card-duration">{{ t('selectVersion') }}
         <select v-model="selectedVersion" :disabled="busy" required>
           <option value="">{{ t('chooseVersion') }}</option>
           <option v-for="v in versions" :key="v.id" :value="v.id">
@@ -161,7 +168,6 @@ onBeforeUnmount(() => {
       <label class="toggle-row"><span><strong>{{ t('download') }}</strong></span>
         <input type="checkbox" v-model="downloadScope" :disabled="busy || (!photoScope && !originalScope)"
           @change="!photoScope && !originalScope ? downloadScope=false : undefined" /></label>
-      <p class="field-hint">{{ t('pixelsHint') }}</p>
       <label class="photo-card-duration">{{ t('duration') }}
         <select v-model.number="duration" :disabled="busy">
           <option :value="3600">{{ t('hour') }}</option>
@@ -169,13 +175,14 @@ onBeforeUnmount(() => {
           <option :value="604800">{{ t('week') }}</option>
         </select>
       </label>
-      <button class="primary-button photo-card-share-action" type="button"  :disabled="busy || (photoScope && !selectedVersion) || (originalScope && !originalConfirmed)"
+      <button class="primary-button photo-card-share-action" type="button"  :disabled="busy || (originalScope && !originalConfirmed)"
         @click="create"><AppIcon name="share" />{{ t('create') }}</button>
       <p v-if="error" role="alert" class="form-error">{{ error }}</p>
       <article v-for="item in rows" :key="item.id" class="photo-card-share-row">
         <p class="field-hint" role="status">{{ t(item.state) }}</p>
         <p v-if="item.lastError" class="form-error" role="alert">{{ t(item.lastError) }}</p>
         <template v-if="item.state !== 'revoking' && item.state !== 'revoked'">
+          <a v-if="item.state === 'sent' && !item.lastError" :href="item.url" target="_blank" rel="noopener noreferrer" class="secondary-button">{{ t('openCard') }}</a>
           <textarea readonly rows="2" :value="item.url" :aria-label="t('share')" />
           <div class="photo-card-share-actions">
             <button type="button" class="secondary-button" :disabled="!!item.lastError" @click="copy(item)">

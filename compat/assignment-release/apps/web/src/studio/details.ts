@@ -1,10 +1,11 @@
 import type { Photo, PhotoChanges } from '../local/photos'
 import { s } from './text'
+import { publicCardPolicy, type PublicCardPolicy } from './public-card-policy'
 
 export class PhotoDetailsError extends Error {}
-export type PhotoDetailsDraft = { title: string; note: string; category: string; tags: string; latitude: string; longitude: string }
+export type PhotoDetailsDraft = { title: string; note: string; category: string; tags: string; latitude: string; longitude: string; publicCard?: PublicCardPolicy }
 export function detailsFor(photo?: Photo): PhotoDetailsDraft {
-  return { title: photo?.title ?? '', note: photo?.note ?? '', category: photo?.category ?? '', tags: (photo?.tags ?? []).join(', '), latitude: String(photo?.metadata?.location?.latitude ?? ''), longitude: String(photo?.metadata?.location?.longitude ?? '') }
+  return { publicCard: publicCardPolicy(photo?.metadata?.publicCard), title: photo?.title ?? '', note: photo?.note ?? '', category: photo?.category ?? '', tags: (photo?.tags ?? []).join(', '), latitude: String(photo?.metadata?.location?.latitude ?? ''), longitude: String(photo?.metadata?.location?.longitude ?? '') }
 }
 export function detailsDirty(photo: Photo | undefined, draft: PhotoDetailsDraft) { return !!photo && JSON.stringify(detailsFor(photo)) !== JSON.stringify(draft) }
 export function categoryLimited(photo: Photo) { return photo.uiRules?.particularCategory ?? (!photo.uiOnly && !!photo.profile?.rules.categories.length) }
@@ -21,5 +22,6 @@ export function detailsChanges(photo: Photo, draft: PhotoDetailsDraft): PhotoCha
     if (!empty && (!draft.latitude.trim() || !draft.longitude.trim() || !Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180)) throw new PhotoDetailsError(s('invalidCoordinates'))
     changes.metadata = { ...photo.metadata, location: empty ? undefined : { latitude, longitude, source: 'manual' }, locationStatus: undefined, locationEditedAt: Date.now() }
   }
+  changes.metadata = { ...(changes.metadata ?? photo.metadata), publicCard: publicCardPolicy(draft.publicCard), editedAt: Date.now() }
   return changes
 }

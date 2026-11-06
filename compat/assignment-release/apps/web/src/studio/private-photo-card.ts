@@ -17,6 +17,8 @@ export type PrivatePhotoCard = {
   assignmentId?: string
   expiresAt?: number
   capturedAt?: number
+  editedAt?: number
+  teamName?: string
   metadata?: {
     date?: string
     time?: string

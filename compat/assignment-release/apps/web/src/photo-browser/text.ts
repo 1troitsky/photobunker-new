@@ -52,7 +52,7 @@ const copy = {
   photo: ['Фотография', 'Photo'],
   date: ['Дата', 'Date'],
   cards: ['Фотографии', 'Photos'],
-  card: ['Карточка', 'Photo Card'],
+  card: ['Public card', 'Photo Card'],
   copy: ['Копировать ссылку', 'Copy link'],
   copied: ['Ссылка скопирована', 'Link copied'],
   copyFailed: ['Не удалось скопировать ссылку', 'Could not copy link'],

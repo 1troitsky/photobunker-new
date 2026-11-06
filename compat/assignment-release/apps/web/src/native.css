@@ -919,3 +919,21 @@
   .photo-card-image, .photo-card-image img, .photo-card-image .thumbnail-placeholder { max-height:52svh; }
 }
 @media (prefers-reduced-motion: reduce) { .browser-skeleton span, .photo-card-loading-image, .photo-view-loading-image, .route-skeleton-card, .app-status-pill > span { animation: none; } }
+
+/* Public card is a separate scrolling document, never a dock destination. */
+.app-shell.public-card-shell { --nav-height:0px; --dock-total-height:0px; --dock-safe-bottom:0px; padding-bottom:0; }
+.public-card-shell .main-content { padding-bottom:0; }
+.public-card-shell .photo-card-screen { margin-inline:auto; width:100%; }
+.public-card-header .screen-actions { gap:2px; }
+.public-card-header .app-icon-button { width:44px; height:44px; }
+.public-card-preview-label { padding:10px 0 0; line-height:1.5; }
+.photo-card-screen .photo-card-image { width:100%; aspect-ratio:auto; }
+.photo-card-screen .photo-card-image img, .shared-card-screen .photo-card-safe-image { display:block; width:100%; max-width:100%; height:auto; max-height:none; object-fit:contain; }
+.public-card-shell .photo-card-body { padding-bottom:calc(24px + env(safe-area-inset-bottom)); }
+@media(max-width:360px) { .public-card-header { gap:6px; } .public-card-header .screen-title h1 { font-size:16px; } .public-card-header .screen-monogram { display:none; } }
+
+.photo-card-screen .photo-card-intro { padding:12px 0 16px; }
+.photo-card-screen .photo-card-intro h2 { margin:0; }
+.public-card-media { min-width:0; }
+.public-card-media img { border-radius:14px; }
+.shared-card-screen .photo-card-content { gap:16px; }
