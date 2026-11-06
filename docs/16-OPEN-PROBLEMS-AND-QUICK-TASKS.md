@@ -22,7 +22,7 @@
 
 | ID | Статус | Проблема / критерий |
 | --- | --- | --- |
-| UI-01 | `OWNER FAILED` | Владелец отклонил release `q1-dock-20261106-2`: кнопки по-прежнему слишком высоко. По его команде опубликован `q1-dock-20261106-3` (`main@96c7fce`): резерв нижнего safe-area убран, public CSS имеет `--dock-safe-bottom: 0px`. `READY FOR OWNER REVIEW` — закрыть/открыть установленную PWA и проверить низ дока на Assignments; приёмки владельца ещё нет. |
+| UI-01 | `OWNER FAILED` | Владелец отклонил и `q1-dock-20261106-2`, и `q1-dock-20261106-3`: док всё ещё слишком высоко. Обнуление `--dock-safe-bottom` не устранило дефект на его устройстве. Дальнейшая правка Q1 не входит в текущую публикацию PR #54. |
 | UI-02 | `IMPLEMENTED` | На `595be25` release marker имеет deterministic test; `q1-dock-20261106-2` подтверждён на production по marker, hash, headers и health. Upgrade установленной PWA ещё `NOT RUN`; до проверки владельцем не ставить `ACCEPTED`. |
 | UI-03 | `OWNER FAILED` | На локальном Playwright Assignments ↔ Contacts после загрузки: 4.4–15.7 ms и стабильный dock. Production/RUM и owner mobile recheck ещё `NOT RUN`; прежний owner defect не закрыт. |
 | UI-04 | `OPEN` | После capture навигация не мгновенная. Durable local commit и визуальный результат должны предшествовать фоновой доставке. |
@@ -128,7 +128,7 @@ bundle hashes, cache headers и API health `CONFIRMED`; owner acceptance пок�
 | ID | Статус | Проблема / критерий |
 | --- | --- | --- |
 | PIN-01 | `OWNER FAILED` | PIN выглядел как обычный text input и keypad не открывался автоматически. Нужен современный passcode screen с dots и numeric keyboard сразу при открытии. |
-| PIN-02 | `OWNER FAILED` | Быстрый набор терял цифры; обработка должна принимать последовательные input events без async race/debounce loss. |
+| PIN-02 | `OWNER FAILED` | Быстрый набор терял цифры. PR #54 с очередью полных частей без таймеров и дублирующей keypad опубликован как `pr54-pin-20261106-1`; обычный PIN — `READY FOR OWNER REVIEW` на `/profile/security`. Приёмки на реальном телефоне ещё нет. Аварийное удаление остаётся `BLOCKED` из-за backup-контракта. |
 | PIN-03 | `CONFIRMED PRODUCT RULE` | Normal PIN: 4–6 цифр. Emergency PIN: ровно 2N цифр, состоящий из двух последовательных половин по N. Нельзя включить emergency без normal; половины могут совпадать друг с другом, но ни одна не равна normal. Старые PIN разрешены для миграции без потери доступа. |
 | PIN-04 | `CONFIRMED PRODUCT RULE` | Один и тот же визуальный экран вводит normal и emergency PIN; наблюдатель не видит, какой тип вводит пользователь. Никакого mode switch. |
 | PIN-05 | `CONFIRMED PRODUCT RULE` | После каждых N цифр поле очищается сразу без таймера. Correct normal открывает приложение. Correct emergency half 1 скрыто ждёт half 2. Correct half 2 активирует подписанный emergency intent. Wrong half — неверная попытка; экран не раскрывает режим. Для старых несовместимых записей допустима ручная миграционная проверка. |
