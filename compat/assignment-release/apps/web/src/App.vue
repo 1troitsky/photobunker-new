@@ -8,6 +8,7 @@ import {
   loadAppLock,
   lockApp,
   unlockApp,
+  recordFailedEmergencyConfirmation,
 } from './app/lock'
 import { hardLock, resumeTrustedPhotos } from './crypto/store'
 import { pt, pinError } from './app/pin-text'
@@ -145,7 +146,10 @@ async function drainPinParts() {
         const triggered = await tryEmergencyOnLockedScreen(fullCode).catch(() => false)
         if (generation !== pinInputGeneration) break
         if (triggered) { pendingPinParts.length = 0; break }
-        appPinError.value = pinError(new Error('pin.wrong'))
+        try {
+          await recordFailedEmergencyConfirmation()
+          appPinError.value = pinError(new Error('pin.wrong'))
+        } catch(error) { appPinError.value = pinError(error) }
         continue
       }
       try {
