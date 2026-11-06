@@ -166,7 +166,9 @@ async function drainPinParts() {
     }
   } finally {
     drainingPin = false
-    if (pendingPinParts.length && appLocked.value && generation === pinInputGeneration)
+    // A new account/input generation may have queued digits while the old
+    // PBKDF2 check was finishing; drain the new queue rather than drop it.
+    if (pendingPinParts.length && appLocked.value)
       void drainPinParts()
   }
 }
