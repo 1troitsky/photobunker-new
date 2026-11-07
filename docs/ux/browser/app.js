@@ -424,6 +424,117 @@
     }
   }
 
+
+  // Only a client-side UX demo: none of this sends ciphertext or plain files
+  // to PhotoBunker storage and no fake "upload succeeded" state is produced.
+  function detectMedia(file) {
+    const type = String(file.type || '').toLowerCase();
+    if (type.startsWith('image/')) return 'photo';
+    if (type.startsWith('video/')) return 'video';
+    if (type.startsWith('audio/')) return 'audio';
+    if (type && type !== 'application/octet-stream') return null;
+    const ext = String(file.name || '').split('.').pop().toLowerCase();
+    if (['jpg','jpeg','png','webp','gif','avif','heic','heif'].includes(ext)) return 'photo';
+    if (['mp4','mov','webm','m4v','ogv','mkv'].includes(ext)) return 'video';
+    if (['mp3','m4a','wav','ogg','oga','aac','flac','opus','weba'].includes(ext)) return 'audio';
+    return null;
+  }
+  function uploadFeedback(text, isError = false) {
+    if (state.dialog !== 'upload' || overlay.hidden) return;
+    const box = dialogBody.querySelector('.upload-feedback');
+    if (box) { box.textContent = text; box.classList.toggle('error', isError); }
+  }
+  function addSelectedFiles(files, remote = false) {
+    if (!files.length) return;
+    const destination = state.uploadDestination || 'personal';
+    let added = 0, skipped = 0;
+    for (const file of files) {
+      const kind = detectMedia(file);
+      if (!kind || file.size === 0 || file.size > (remote ? MAX_LINK_BYTES : MAX_DEVICE_BYTES)) {
+        skipped++; continue;
+      }
+      const objectUrl = URL.createObjectURL(file);
+      entries.push({
+        id: 'imported-' + ++importedCounter, parent: destination,
+        name: file.name || 'Без названия', kind, imported: true, objectUrl,
+        created: 'Сегодня', order: Date.now() + importedCounter / 1000,
+        size: file.size, mime: file.type, tags: [], daysToExpiry: null,
+        readable: true, editable: false, deletable: true, shareable: false
+      });
+      added++;
+    }
+    if (!added) {
+      uploadFeedback('Не удалось добавить файлы. Поддерживаются фото, видео и аудио. ' +
+        'Лимит макета: 200 МБ с устройства или 100 МБ по ссылке.', true);
+      return;
+    }
+    closeDialog();
+    navigate(destination);
+    message('Файлы добавлены', 'Добавлено в каталог макета: ' + added +
+      (skipped ? '. Пропущено: ' + skipped : '') +
+      '.<p>Файлы находятся только в памяти текущей вкладки. В облако PhotoBunker ничего не отправлено.</p>');
+  }
+  async function importFromUrl() {
+    if (urlController || state.dialog !== 'upload') return;
+    const field = dialogBody.querySelector('#upload-url');
+    let url;
+    try {
+      url = new URL(field.value.trim());
+      if (url.protocol !== 'https:') throw Error('invalid_protocol');
+    } catch {
+      uploadFeedback('Укажите прямую HTTPS-ссылку на фото, видео или аудиофайл.', true);
+      return;
+    }
+    let fileName = url.pathname.split('/').filter(Boolean).pop() || 'media-file';
+    try { fileName = decodeURIComponent(fileName); } catch { fileName = 'media-file'; }
+    fileName = fileName.replace(/[\\\/]/g, '_').slice(0, 180);
+    const controller = new AbortController();
+    urlController = controller;
+    uploadFeedback('Получаем файл по ссылке…');
+    const button = dialogBody.querySelector('[data-action="upload-url"]');
+    if (button) button.disabled = true;
+    try {
+      const response = await fetch(url.href, {
+        credentials: 'omit', mode: 'cors', signal: controller.signal
+      });
+      if (!response.ok) throw Error('HTTP ' + response.status);
+      const mime = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+      const length = Number(response.headers.get('content-length') || 0);
+      if (mime.includes('text/html') || length > MAX_LINK_BYTES)
+        throw Error('Not a direct media file or exceeds demo limit');
+      let chunks = [], bytes = 0;
+      const reader = response.body?.getReader();
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          bytes += value.byteLength;
+          if (bytes > MAX_LINK_BYTES) {
+            await reader.cancel();
+            throw Error('File exceeds demo limit');
+          }
+          chunks.push(value);
+        }
+      } else {
+        const blob = await response.blob();
+        if (blob.size > MAX_LINK_BYTES) throw Error('File exceeds demo limit');
+        chunks = [blob];
+      }
+      const file = new File(chunks, fileName, {type: mime});
+      if (!detectMedia(file)) throw Error('Unsupported content type');
+      if (controller.signal.aborted || state.dialog !== 'upload') return;
+      addSelectedFiles([file], true);
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        uploadFeedback('Не удалось получить медиафайл. Убедитесь, что ссылка ведёт на файл ' +
+          'и браузеру разрешена загрузка с этого адреса (CORS).', true);
+      }
+    } finally {
+      if (urlController === controller) urlController = null;
+      if (button?.isConnected) button.disabled = false;
+    }
+  }
+
   function removeDemo(ids) {
     const removed = new Set(ids);
     ids.forEach(id => descendants(id).forEach(child => removed.add(child.id)));
