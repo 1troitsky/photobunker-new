@@ -116,3 +116,31 @@
 @media (prefers-reduced-motion: reduce) {
   .dialog-content .setting-toggle:after { transition: none; }
 }
+
+/* Device/URL import — additions to the approved catalogue, not a new shell. */
+.entry-preview .imported-thumb { display: block; width: 100%; height: 100%; object-fit: cover; }
+.imported-media-thumb { width: 100%; height: 100%; display: grid; place-items: center; background: #303d3b; color: #b6dccc; }
+.imported-media-thumb.audio { background: #30343b; color: #b4c9dd; }
+.imported-media-thumb svg { width: 38%; height: 38%; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.entry-preview.collage .imported-media-thumb svg { width: 48%; height: 48%; }
+.dialog-content .upload-dropzone { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; text-align: center; padding: 23px 10px; border: 1px dashed #617565; border-radius: 8px; background: #29332d; color: #e5f4e8; cursor: pointer; }
+.dialog-content .upload-dropzone:hover, .dialog-content .upload-dropzone:focus-within { border-color: var(--green); background: #2e4135; }
+.upload-dropzone > svg { width: 25px; height: 25px; fill: none; stroke: var(--green); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.upload-dropzone strong { font-size: 13px; font-weight: 730; }
+.upload-dropzone small { font-size: 11px; color: #a6bea9; }
+.dialog-content .upload-dropzone input { position: absolute; width: 1px; height: 1px; opacity: 0; padding: 0; overflow: hidden; pointer-events: none; }
+.upload-divider { position: relative; text-align: center; font-size: 11px; color: #aaa; margin: 3px 0; }
+.upload-url-field { font-weight: 600; }
+.upload-feedback { min-height: 1.4em; margin: 0; line-height: 1.5; color: #b6dabc; font-size: 11px; }
+.upload-feedback.error { color: #efb49b; }
+.upload-hint { display: grid; gap: 5px; font-size: 11px; line-height: 1.5; color: #aaa; padding: 11px; background: #303030; border-radius: 6px; }
+.upload-hint strong { font-size: 12px; color: #e1e1e1; }
+.dialog-content > button.primary-action { text-align: center; }
+.dialog-content > button.primary-action:disabled { opacity: .45; }
+.dialog-content .photo-large .imported-thumb { width: 100%; height: 100%; object-fit: contain; }
+@media (max-width: 360px) {
+  .header-actions button { width: 25px; }
+  .app-header { gap: 4px; }
+  .brand-state strong { font-size: 12px; }
+  .brand-mark { width: 31px; height: 31px; flex-basis: 31px; }
+}
