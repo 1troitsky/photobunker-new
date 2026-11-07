@@ -296,11 +296,28 @@
     overlay.hidden = true; state.dialog = ''; state.dialogTarget = '';
     if (state.returnFocus?.isConnected) state.returnFocus.focus();
     state.returnFocus = null;
+    if (urlController) { urlController.abort(); urlController = null; }
   }
 
   function show(kind, id = '') {
     const entry = get(id);
-    if (kind === 'share') {
+    if (kind === 'upload') {
+      const current = get(state.location);
+      state.uploadDestination = sectionOf(state.location) === 'personal' &&
+        (state.location === 'personal' || current?.kind === 'folder') ? state.location : 'personal';
+      const destinationName = get(state.uploadDestination)?.name || 'Мои фото';
+      openDialog('upload', 'Загрузить файлы',
+        '<div class="info">Добавьте фото, видео или аудио в Browser. Это локальный UX-макет: файлы остаются в текущей вкладке и не отправляются в облако PhotoBunker.</div>' +
+        '<label class="upload-dropzone" id="upload-dropzone"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-5 5 5-5 5 5M4 15v5h16v-5"/></svg>' +
+        '<strong>Выбрать файлы с устройства</strong><small>или перетащить сюда · фото, видео, аудио</small>' +
+        '<input id="upload-files" type="file" accept="image/*,video/*,audio/*" multiple></label>' +
+        '<div class="upload-divider">или</div>' +
+        '<label class="upload-url-field">Прямая ссылка на файл<input id="upload-url" type="url" inputmode="url" placeholder="https://example.com/file.mp4" autocomplete="off"></label>' +
+        option('upload-url', 'Загрузить по ссылке', '', 'primary-action') +
+        '<p class="upload-feedback" role="status" aria-live="polite"></p>' +
+        '<div class="upload-hint"><strong>Папка: ' + escapeHTML(destinationName) + '</strong><span>Из задания или архива демо импортирует только в личные файлы — без обхода прав.</span>' +
+        '<span>Для импорта из облака нужна прямая доступная ссылка. Страницы сервисов с авторизацией могут не загрузиться.</span></div>');
+    } else if (kind === 'share') {
       openDialog('share', 'Поделиться',
         '<div class="info">Можно поделиться фотографией или целым заданием. ' +
         '<strong>Механизм передачи, получатели, права доступа и срок действия ещё обсуждаются.</strong> ' +
@@ -336,7 +353,7 @@
         '<label>Название<input type="text" name="folderName" maxlength="80" placeholder="Новая папка"></label>' +
         option('create-folder', 'Создать папку', '', 'primary-action'));
     } else if (kind === 'menu' && entry) {
-      let html = option('open-item', entry.kind === 'photo' ? 'Открыть фотографию' : 'Открыть папку', id);
+      let html = option('open-item', entry.kind === 'photo' ? 'Открыть фотографию' : isMedia(entry) ? 'Открыть файл' : 'Открыть папку', id);
       if (entry.kind === 'photo') {
         if (entry.editable) {
           html += option('rename', 'Переименовать', id);
@@ -388,11 +405,20 @@
         option('confirm-delete', 'Удалить из макета', '', 'danger'), id);
     } else if (kind === 'photo' && entry && entry.readable !== false) {
       openDialog('photo', entry.name,
-        '<div class="photo-large">' + scene(entry.sceneIndex) + '</div>' +
-        '<div class="info">Снято: ' + escapeHTML(entry.created) + '<p>' +
-        escapeHTML(expiryText(entry)) + '</p>Теги: ' +
-        escapeHTML((entry.tags || []).map(x => '#' + x).join(' ') || 'Нет') +
-        '<p>В production открывается существующий Photo Viewer с проверкой разрешений.</p></div>', id);
+        '<div class="photo-large">' + mediaPreview(entry) + '</div>' +
+        '<div class="info">' + (entry.imported
+          ? 'Локально добавлено в демо · ' + sizeLabel(entry.size) +
+            '<p>Сохранение в облако не выполнялось. Полноценный File Viewer — следующий этап.</p>'
+          : 'Снято: ' + escapeHTML(entry.created) + '<p>' +
+            escapeHTML(expiryText(entry)) + '</p>Теги: ' +
+            escapeHTML((entry.tags || []).map(x => '#' + x).join(' ') || 'Нет') +
+            '<p>В production открывается существующий Photo Viewer с проверкой разрешений.</p>') +
+        '</div>', id);
+    } else if (kind === 'media' && entry && isMedia(entry)) {
+      openDialog('media', entry.name,
+        '<div class="info">' + mediaLabel(entry) + ' · ' + sizeLabel(entry.size || 0) +
+        '<p>Файл добавлен в каталог макета. Просмотр и редактирование видео/аудио будут следующим этапом в отдельном File Viewer.</p>' +
+        '<p>В реальный PhotoBunker ничего не загружено.</p></div>', id);
     } else if (kind === 'nav') {
       message(id, 'Другие разделы используют тот же общий UI Shell. Здесь демонстрируется только Browser.');
     }
@@ -401,6 +427,7 @@
   function removeDemo(ids) {
     const removed = new Set(ids);
     ids.forEach(id => descendants(id).forEach(child => removed.add(child.id)));
+    entries.forEach(entry => { if (removed.has(entry.id) && entry.objectUrl) URL.revokeObjectURL(entry.objectUrl); });
     entries = entries.filter(entry => !removed.has(entry.id));
     state.selected.clear(); state.selectMode = false;
   }
@@ -437,10 +464,12 @@
       }
       if (item.kind === 'photo') {
         if (item.readable !== false) show('photo', id);
-      } else { closeDialog(); navigate(id); }
+      } else if (isMedia(item)) { show('media', id); }
+      else { closeDialog(); navigate(id); }
       return;
     }
-    if (['status','share','settings','create','bulk'].includes(action)) { show(action); return; }
+    if (['status','share','settings','create','bulk','upload'].includes(action)) { show(action); return; }
+    if (action === 'upload-url') { void importFromUrl(); return; }
     if (action === 'menu') { show('menu', id); return; }
     if (action === 'share-assignment-info') { show('share-assignment-info'); return; }
     if (action === 'select-for-share') {
@@ -551,10 +580,21 @@
   });
   app.addEventListener('change', event => {
     const input = event.target;
+    if (input.id === 'upload-files') { addSelectedFiles([...input.files]); input.value = ''; return; }
     if (input.hasAttribute('data-check')) {
       const id = input.dataset.check;
       input.checked ? state.selected.add(id) : state.selected.delete(id);
       render();
+    }
+  });
+  dialogBody.addEventListener('dragover', event => {
+    if (state.dialog === 'upload' && event.target.closest('#upload-dropzone')) {
+      event.preventDefault(); event.dataTransfer.dropEffect = 'copy';
+    }
+  });
+  dialogBody.addEventListener('drop', event => {
+    if (state.dialog === 'upload' && event.target.closest('#upload-dropzone')) {
+      event.preventDefault(); addSelectedFiles([...event.dataTransfer.files]);
     }
   });
   queryInput.addEventListener('input', () => {
@@ -567,6 +607,9 @@
     if (event.key === 'Escape' && !overlay.hidden) {
       event.preventDefault(); closeDialog();
     }
+  });
+  window.addEventListener('pagehide', () => {
+    entries.forEach(entry => { if (entry.objectUrl) URL.revokeObjectURL(entry.objectUrl); });
   });
   render();
 })();
