@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>PhotoBunker — Fieldwork / Assignment editor</title>
+  <link rel="stylesheet" href="./style.css">
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <div class="preview-bar">
+    <span class="preview-label"><i></i> FIELDWORK / ASSIGNMENT EDITOR <small>· interactive prototype</small></span>
+    <div class="preview-modes">
+      <button class="selected" type="button" data-device="phone" aria-pressed="true">Телефон</button>
+      <button type="button" data-device="desktop" aria-pressed="false">Desktop</button>
+    </div>
+  </div>
+  <div class="preview-stage">
+    <div class="device phone" id="device"><div class="app" id="app">
+      <header class="app-header">
+        <button class="back-button" data-action="back" aria-label="Назад" type="button">‹</button>
+        <span class="brand-mark" aria-hidden="true">pb</span>
+        <button class="brand-state" type="button" data-action="status" aria-label="Состояние приложения">
+          <strong>PhotoBunker</strong>
+          <small><i class="state-led"></i><span id="status-label">В работе</span></small>
+        </button>
+        <div class="header-actions"><button type="button" data-action="info" aria-label="О редакторе" title="О редакторе">ⓘ</button></div>
+      </header>
+      <main class="app-main" id="editor-content">
+        <div class="content-inner">
+          <div class="editor-heading"><h1>Новое задание</h1><span id="draft-state">Черновик</span></div>
+          <nav class="editor-tabs" role="tablist" aria-label="Разделы задания">
+            <button class="selected" type="button" role="tab" aria-selected="true" data-tab="basics">Основное</button>
+            <button type="button" role="tab" aria-selected="false" data-tab="camera">Камера</button>
+            <button type="button" role="tab" aria-selected="false" data-tab="participants">Участники</button>
+            <button type="button" role="tab" aria-selected="false" data-tab="rules">Правила</button>
+          </nav>
+
+          <section class="tab-pane" data-pane="basics" aria-label="Основное">
+            <div class="form-section">
+              <h2>Общие данные</h2>
+              <label class="field">Название задания<input name="name" maxlength="80" value="Фасады — Site A" required></label>
+              <label class="field">Инструкции<textarea name="instructions" maxlength="4000" rows="4" placeholder="Что необходимо сделать?">Снять фасад здания с разных ракурсов, включая детали входной группы. Обратить внимание на качество освещения.</textarea></label>
+            </div>
+            <div class="form-section">
+              <h2>Период выполнения</h2>
+              <label class="field">Начало<input name="startsAt" type="datetime-local" value="2026-11-07T09:00"></label>
+              <label class="rule-row">
+                <span><strong>Установить срок окончания</strong><small>Без срока задание может оставаться активным</small></span>
+                <input class="switch" type="checkbox" role="switch" data-toggle="deadline" aria-label="Установить срок окончания">
+              </label>
+              <label class="field nested" data-dep="deadline" hidden>Окончание<input name="finishesAt" type="datetime-local" value="2026-11-20T18:00"></label>
+            </div>
+          </section>
+
+          <section class="tab-pane" data-pane="camera" aria-label="Камера" hidden>
+            <div class="form-section">
+              <h2>Камера</h2>
+              <label class="field">Пресет камеры
+                <select name="presetId">
+                  <option value="standard">Standard</option>
+                  <option value="field">Fieldwork · Высокое качество</option>
+                  <option value="fast">Быстрая съёмка</option>
+                </select>
+              </label>
+              <button type="button" class="secondary wide" data-action="preset">＋ Создать пресет камеры</button>
+              <p class="hint">Выбранный пресет используется участниками при съёмке в этом задании.</p>
+            </div>
+            <div class="form-section">
+              <h2>План съёмки</h2>
+              <label class="field">Необходимо фотографий<input name="targetCount" type="number" min="1" max="9999" value="30"></label>
+              <p class="hint">Число нужно для прогресса, но не ограничивает количество снимков.</p>
+              <label class="field">Список обязательных кадров <span class="optional">(необязательно)</span>
+                <textarea name="shots" rows="5" maxlength="8100" placeholder="По одному пункту в строке">Главный фасад
+Левый ракурс
+Правый ракурс
+Входная группа</textarea>
+              </label>
+              <p class="hint" id="shots-count">4 пункта в плане</p>
+            </div>
+          </section>
+
+          <section class="tab-pane" data-pane="participants" aria-label="Участники" hidden>
+            <div class="form-section">
+              <h2>Команда</h2>
+              <div class="team-card">
+                <span class="team-avatar" aria-hidden="true">▤</span>
+                <span class="team-details"><strong id="team-name">Site A Crew</strong><small id="team-caption">Выбрана команда</small></span>
+                <button type="button" class="secondary small" data-action="team">Изменить</button>
+              </div>
+              <p class="hint">Состав команды копируется в задание. Изменения команды не меняют другие задания.</p>
+            </div>
+            <div class="form-section">
+              <div class="section-heading"><h2>Участники</h2><small id="people-count">3 человека</small></div>
+              <div id="people-list" class="people-list"></div>
+              <button type="button" class="secondary wide" data-action="add-person">＋ Добавить участника</button>
+              <p class="hint">Для участника можно задать роль и область доступа к фотографиям. В приложении используются реальные контакты и приглашения.</p>
+            </div>
+          </section>
+
+          <section class="tab-pane" data-pane="rules" aria-label="Правила" hidden>
+            <p class="rules-intro">Эти правила определяют, что участники могут делать с фотографиями задания.</p>
+            <div class="rule-group">
+              <h2>Нумерация</h2>
+              <label class="rule-row"><span><strong>Общие ID фотографий</strong><small>Единая нумерация для всех участников задания</small></span><input class="switch" type="checkbox" name="useAssignmentPhotoId" role="switch" checked></label>
+            </div>
+            <div class="rule-group">
+              <h2>Данные фотографии</h2>
+              <label class="rule-row"><span><strong>Категория обязательна</strong><small>Без категории снимок считается незаполненным</small></span><input class="switch" type="checkbox" name="categoryRequired" role="switch"></label>
+              <label class="rule-row"><span><strong>Ограничить список категорий</strong><small>Разрешить только категории из списка</small></span><input class="switch" type="checkbox" name="particularCategory" role="switch" data-toggle="categories"></label>
+              <label class="field nested" data-dep="categories" hidden>Разрешённые категории
+                <textarea name="categories" rows="3" placeholder="По одной на строку">Фасад
+Детали
+Входная группа</textarea></label>
+              <label class="rule-row"><span><strong>Описание обязательно</strong></span><input class="switch" type="checkbox" name="descriptionRequired" role="switch" data-toggle="description"></label>
+              <label class="field nested" data-dep="description" hidden>Минимальная длина описания<input type="number" name="minLength" min="1" max="2000" value="10"></label>
+            </div>
+            <div class="rule-group">
+              <h2>Редактирование</h2>
+              <label class="rule-row"><span><strong>Разрешить изменения фотографий</strong></span><input class="switch" type="checkbox" name="changesAllowed" role="switch" data-toggle="changes" checked></label>
+              <label class="rule-row" data-dep="changes"><span><strong>Сохранять оригинал</strong></span><input class="switch" type="checkbox" name="keepOriginal" role="switch" checked></label>
+              <label class="rule-row"><span><strong>Разрешить удаление</strong></span><input class="switch" type="checkbox" name="deletionAllowed" role="switch" checked></label>
+            </div>
+            <div class="rule-group">
+              <h2>Просмотр</h2>
+              <label class="rule-row"><span><strong>Разрешить просмотр фотографий</strong><small>В пределах предоставленных прав доступа</small></span><input class="switch" type="checkbox" name="galleryAllowed" role="switch" data-toggle="gallery" checked></label>
+              <label class="rule-row" data-dep="gallery"><span><strong>Только миниатюры</strong></span><input class="switch" type="checkbox" name="thumbnailsOnly" role="switch"></label>
+            </div>
+            <div class="rule-group">
+              <h2>Передача фотографий</h2>
+              <label class="rule-row"><span><strong>Разрешить передачу</strong></span><input class="switch" type="checkbox" name="sharingAllowed" role="switch" data-toggle="sharing" checked></label>
+              <label class="rule-row" data-dep="sharing"><span><strong>Только между участниками</strong></span><input class="switch" type="checkbox" name="participantsOnly" role="switch"></label>
+            </div>
+            <div class="rule-group public-card-group">
+              <h2>Public Card</h2>
+              <label class="rule-row"><span><strong>Разрешить Public Card</strong><small>Какие данные разрешено показывать в карточке по ссылке</small></span><input class="switch" type="checkbox" name="publicEnabled" role="switch" data-toggle="public" checked></label>
+              <div data-dep="public">
+                <label class="rule-row"><span><strong>Автор и команда</strong></span><input class="switch" type="checkbox" name="publicContributor" role="switch"></label>
+                <label class="rule-row"><span><strong>Дата съёмки</strong></span><input class="switch" type="checkbox" name="publicCapturedAt" role="switch"></label>
+                <label class="rule-row"><span><strong>Дата изменения</strong></span><input class="switch" type="checkbox" name="publicEditedAt" role="switch"></label>
+                <label class="rule-row"><span><strong>Координаты GPS</strong></span><input class="switch" type="checkbox" name="publicLocation" role="switch" checked></label>
+                <label class="rule-row"><span><strong>Описание</strong></span><input class="switch" type="checkbox" name="publicDescription" role="switch" checked></label>
+                <label class="rule-row"><span><strong>Теги</strong></span><input class="switch" type="checkbox" name="publicTags" role="switch"></label>
+                <label class="rule-row"><span><strong>Технические данные</strong></span><input class="switch" type="checkbox" name="publicMetadata" role="switch"></label>
+              </div>
+              <p class="hint public-hint">Параметры применяются к новым фотографиям задания. Уже снятые не изменятся. Разрешение Public Card само по себе не создаёт ссылку.</p>
+            </div>
+          </section>
+
+          <p id="form-error" class="validation-error" role="alert" hidden></p>
+        </div>
+      </main>
+
+      <footer class="editor-footer">
+        <div class="footer-caption"><small id="draft-caption">Демонстрационный черновик</small><button type="button" data-action="reset">Сбросить пример</button></div>
+        <button type="button" class="primary-save" data-action="save">Создать задание <span aria-hidden="true">✓</span></button>
+      </footer>
+      <div class="dialog-overlay" id="dialog-overlay" hidden>
+        <div class="dialog-sheet" role="dialog" aria-modal="true" aria-labelledby="dialog-title" tabindex="-1">
+          <div class="dialog-heading"><strong id="dialog-title"></strong><button type="button" data-action="close" aria-label="Закрыть">✕</button></div>
+          <div class="dialog-content" id="dialog-content"></div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+  <p class="preview-note">UX-прототип с демонстрационными командами, контактами и пресетами. Сохранение не вызывает API и не создаёт реального задания.</p>
+</body>
+</html>
