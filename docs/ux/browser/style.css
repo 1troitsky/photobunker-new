@@ -1,0 +1,118 @@
+/* Browser Fieldwork 3.1
+   The shared owner-approved App Shell is imported in index.html.
+   Browser-specific layout only; DO NOT copy these rules into production global CSS.
+*/
+:root { --green: #1ed760; }
+.header-actions { gap: 0; }
+.header-actions button { width: 30px; height: 40px; }
+.header-actions button:first-child { color: var(--green); }
+.header-actions svg { width: 19px; height: 19px; }
+.header-actions [data-action="share"] svg { width: 18px; height: 18px; }
+.content-inner { padding: 23px 15px 35px; }
+
+.browser-heading { display: flex; gap: 12px; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.browser-heading-copy { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.browser-heading h1 { margin: 0; font-size: 29px; line-height: 1.1; font-weight: 800; letter-spacing: -.045em; }
+.browser-heading-copy small { color: #a3a3a3; font-size: 11px; }
+.view-switch { flex: 0 0 auto; display: flex; gap: 3px; border-radius: 7px; padding: 3px; background: #242424; }
+.view-switch button { display: grid; place-items: center; height: 33px; width: 35px; padding: 0; border: 0; border-radius: 5px; background: none; color: #aaa; }
+.view-switch button.selected { background: #464646; color: #fff; }
+.view-switch svg { height: 18px; width: 18px; }
+
+.browser-sections { display: grid; grid-template-columns: .75fr 1.2fr 1.2fr .95fr; border-bottom: 1px solid #393939; margin-bottom: 12px; }
+.browser-sections button { min-width: 0; height: 42px; padding: 0 2px; border: 0; border-bottom: 2px solid transparent; background: none; color: #999; font-size: 12px; font-weight: 650; white-space: nowrap; }
+.browser-sections button.selected { border-bottom-color: var(--green); color: #fff; }
+/* A location indicator, not a decorated card: no border or background. */
+.browser-path { display: flex; align-items: center; gap: 8px; min-height: 35px; margin: 0 0 19px; border: 0; background: transparent; }
+.path-back { display: grid; place-items: center; height: 33px; width: 27px; flex: 0 0 27px; padding: 0; border: 0; background: transparent; color: #ddd; }
+.path-back:disabled { cursor: default; opacity: .3; }
+.path-back svg { width: 19px; height: 19px; }
+.path-breadcrumbs { display: flex; gap: 6px; align-items: center; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.path-breadcrumbs::-webkit-scrollbar { display: none; }
+.path-breadcrumbs button { flex: 0 0 auto; max-width: 170px; padding: 5px 0; border: 0; background: none; color: #999; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; font-size: 12px; }
+.path-breadcrumbs button.current { color: #eee; font-weight: 680; }
+.path-breadcrumbs span { color: #696969; flex: 0 0 auto; }
+
+.browser-search { margin-bottom: 14px; }
+.search-line { display: flex; align-items: center; gap: 8px; height: 43px; padding: 0 11px; border: 1px solid #454545; border-radius: 6px; background: #292929; }
+.search-line svg { width: 18px; height: 18px; color: #999; }
+.search-line input { width: 100%; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; color: #eee; font-size: 13px; }
+.tag-filters { display: flex; gap: 6px; overflow-x: auto; padding-top: 8px; scrollbar-width: none; }
+.tag-filters button { flex: 0 0 auto; padding: 5px 8px; border: 1px solid #444; border-radius: 5px; background: #292929; color: #aaa; font-size: 11px; }
+.tag-filters button.selected { border-color: #37784a; color: var(--green); }
+
+/* Selection: only count → Cancel → Actions. Select-all lives IN Actions. */
+.selection-bar { display: flex; gap: 8px; align-items: center; padding: 8px 9px; border-radius: 7px; margin-bottom: 15px; background: #263128; }
+.selection-bar strong { flex: 1; font-size: 12px; color: #e0eee3; font-weight: 700; }
+.selection-bar button { padding: 9px 11px; border: 0; border-radius: 5px; background: #3a453b; color: #eee; font-size: 12px; }
+.selection-bar button:last-child { background: var(--green); color: #142216; font-weight: 730; }
+
+/* Grid: folder is a 2x2 collage of actual photo thumbnails from its descendants.
+   Photo is ONE full preview. Folder symbol/label is overlaid only in grid. */
+.browser-items { display: grid; gap: 10px; }
+.browser-items.grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.browser-entry { position: relative; min-width: 0; }
+.browser-entry.selected { outline: 2px solid var(--green); outline-offset: -2px; border-radius: 8px; }
+.browser-items.grid .browser-entry { overflow: hidden; border: 1px solid #343434; border-radius: 8px; background: #202020; }
+.entry-open { width: 100%; min-width: 0; padding: 0; border: 0; background: transparent; text-align: left; }
+.entry-open:disabled { opacity: .55; cursor: default; }
+.entry-preview { width: 100%; aspect-ratio: 1.35; overflow: hidden; position: relative; background: #303030; }
+.entry-preview svg.scene { display: block; width: 100%; height: 100%; fill: none; stroke: none; }
+.entry-preview.collage { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); grid-template-rows: repeat(2,minmax(0,1fr)); gap: 3px; padding: 3px; background: #282e2b; }
+.entry-preview.collage svg.scene { width: 100%; height: 100%; min-width: 0; min-height: 0; }
+.entry-preview .empty-mini { display: block; background: #383e3a; width: 100%; height: 100%; }
+.entry-preview.empty-folder { display: grid; place-items: center; color: #aaa; }
+.entry-preview.empty-folder > svg { width: 38px; height: 38px; }
+.entry-folder-badge { position: absolute; top: 8px; left: 8px; z-index: 1; display: flex; align-items: center; gap: 5px; background: #131917e8; color: #fff; border-radius: 4px; padding: 5px 7px; font-size: 9px; font-weight: 750; letter-spacing: .035em; }
+.entry-folder-badge svg { width: 12px; height: 12px; }
+.entry-copy { display: flex; flex-direction: column; gap: 5px; min-width: 0; padding: 10px 30px 13px 10px; }
+.entry-copy strong { color: #f2f2f2; font-size: 12px; font-weight: 710; line-height: 1.35; overflow-wrap: anywhere; }
+.entry-copy small { color: #a3a3a3; font-size: 10px; line-height: 1.35; }
+.entry-copy .expiring { color: #d9b184; }
+.entry-copy .tags { color: #9bc5a4; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+.entry-more { position: absolute; right: 3px; bottom: 6px; display: grid; place-items: center; height: 30px; width: 29px; padding: 0; border: 0; background: transparent; color: #bbb; font-size: 20px; }
+.entry-check { position: absolute; top: 9px; right: 9px; z-index: 2; width: 20px; height: 20px; accent-color: var(--green); }
+.tree-expand { display: none; }
+.browser-empty { grid-column: 1 / -1; text-align: center; padding: 40px 20px; background: #222; border-radius: 8px; color: #aaa; font-size: 13px; }
+
+/* List and tree: NO extra "ПАПКА/ФОТО" labels. Keep 2x2 folder thumbnails. */
+.browser-items.list, .browser-items.tree { grid-template-columns: minmax(0,1fr); gap: 0; }
+.browser-items.list .browser-entry,.browser-items.tree .browser-entry { display: flex; align-items: center; gap: 7px; min-height: 74px; border-bottom: 1px solid #343434; }
+.browser-items.list .entry-open,.browser-items.tree .entry-open { display: flex; flex: 1; min-width: 0; align-items: center; gap: 11px; padding: 8px 0; }
+.browser-items.list .entry-preview,.browser-items.tree .entry-preview { width: 58px; height: 54px; flex: 0 0 58px; aspect-ratio: auto; border-radius: 6px; }
+.browser-items.list .entry-copy,.browser-items.tree .entry-copy { min-width: 0; flex: 1; padding: 2px 0; }
+.browser-items.list .entry-copy strong,.browser-items.tree .entry-copy strong { font-size: 14px; }
+.browser-items.list .entry-folder-badge,.browser-items.tree .entry-folder-badge { display: none; }
+.browser-items.list .entry-more,.browser-items.tree .entry-more { position: static; flex: 0 0 31px; }
+.browser-items.list .entry-check,.browser-items.tree .entry-check { position: static; flex: 0 0 20px; margin: 0 1px; }
+.browser-items.tree .entry-preview { height: 43px; width: 43px; flex-basis: 43px; }
+.browser-items.tree .browser-entry { margin-left: calc(min(var(--depth,0),4) * 15px); }
+.browser-items.tree .tree-expand { display: block; height: 31px; width: 21px; flex: 0 0 21px; border: 0; background: none; color: #aaa; font-size: 21px; }
+.browser-items.tree .tree-expand:disabled { opacity: 0; }
+
+/* Sheets use the same compact shared sheet with editor-style switch rows. */
+.dialog-content button.primary-action { background: var(--green); color: #152119; text-align: center; font-weight: 750; }
+.dialog-content .settings-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 13px 0; border-top: 1px solid #414141; cursor: pointer; }
+.dialog-content .settings-row > span { flex: 1; display: flex; flex-direction: column; gap: 4px; color: #eee; font-size: 12px; }
+.dialog-content .settings-row small { color: #a5a5a5; font-weight: 400; font-size: 11px; }
+.dialog-content .setting-toggle { appearance: none; -webkit-appearance: none; height: 23px; width: 40px; flex: 0 0 40px; border: 0; border-radius: 16px; background: #555; position: relative; cursor: pointer; margin: 0; }
+.dialog-content .setting-toggle:after { content: ""; position: absolute; top: 3px; left: 3px; width: 17px; height: 17px; background: #eee; border-radius: 50%; transition: transform .16s; }
+.dialog-content .setting-toggle:checked { background: var(--green); }
+.dialog-content .setting-toggle:checked:after { transform: translateX(17px); background: #162418; }
+.dialog-content .info { padding: 13px; background: #383838; border-radius: 7px; color: #d1d1d1; font-size: 12px; line-height: 1.6; }
+.dialog-content .info p:last-child { margin-bottom: 0; }
+.dialog-content .photo-large { overflow: hidden; width: 100%; aspect-ratio: 1.55; background: #393939; border-radius: 7px; }
+.dialog-content .photo-large svg { width: 100%; height: 100%; }
+.dialog-content button:disabled { opacity: .4; cursor: not-allowed; }
+.device.desktop .content-inner { padding: 30px; }
+.device.desktop .browser-items.grid { grid-template-columns: repeat(4,minmax(0,1fr)); }
+@media (max-width: 460px) {
+  .app-header { padding-inline: 9px; gap: 5px; }
+  .brand-mark { width: 34px; height: 34px; flex-basis: 34px; }
+  .header-actions button { width: 28px; }
+  .content-inner { padding: 22px 12px 29px; }
+  .browser-sections button { font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialog-content .setting-toggle:after { transition: none; }
+}
