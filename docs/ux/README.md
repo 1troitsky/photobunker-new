@@ -11,6 +11,7 @@
 | Browser / файловый менеджер фото | Fieldwork Browser 3.1 · сетка/список/дерево, path bar, share в шапке | [browser/index.html](browser/index.html) | **OWNER-SELECTED DESIGN / IMPLEMENTATION NOT STARTED; sharing open** |
 | Browser / просмотр фотографий | Fieldwork Photo Viewer 3.1 · фиксированное изображение, жесты, нижние панели, In-App Browser | [browser/viewer/index.html](browser/viewer/index.html) | **OWNER-SELECTED DESIGN / IMPLEMENTATION NOT STARTED** |
 | Browser / редактирование фотографий | Fieldwork Photo Editor 3.2 Fixed · Информация / Фото / Проверка, тексты, фигуры, сохранение | [browser/editor/index.html](browser/editor/index.html) · [спецификация](browser/editor/README.md) | **OWNER-SELECTED DESIGN / PROTOTYPE DOCUMENTED / IMPLEMENTATION NOT STARTED** |
+| Camera / фото, видео и аудио | Fieldwork Camera 1.2 · 3 режима, слепой экран, задание, GPS, пресеты | [camera/index.html](camera/index.html) · [спецификация](camera/README.md) | **OWNER-SELECTED DESIGN / PROTOTYPE DOCUMENTED / IMPLEMENTATION NOT STARTED** |
 
 ## Обязательный общий интерфейс
 
@@ -27,4 +28,4 @@
 
 Документ-владелец требований: [`ts_and_ux.md`](../../ts_and_ux.md). Текущая реализация: `compat/assignment-release/apps/web/src/views/AssignmentsView.vue`. Правила приёмки: [`AGENTS.md`](../../AGENTS.md).
 
-**Как открыть:** запустите `python3 -m http.server 8080` из корня репозитория и откройте список `http://localhost:8080/docs/ux/assignments/` или редактор `http://localhost:8080/docs/ux/assignments/editor/`, или Browser `http://localhost:8080/docs/ux/browser/`, или Photo Viewer `http://localhost:8080/docs/ux/browser/viewer/`, или Photo Editor `http://localhost:8080/docs/ux/browser/editor/`. Никаких npm-зависимостей.
+**Как открыть:** запустите `python3 -m http.server 8080` из корня репозитория и откройте список `http://localhost:8080/docs/ux/assignments/` или редактор `http://localhost:8080/docs/ux/assignments/editor/`, или Browser `http://localhost:8080/docs/ux/browser/`, или Photo Viewer `http://localhost:8080/docs/ux/browser/viewer/`, или Photo Editor `http://localhost:8080/docs/ux/browser/editor/`, или Camera `http://localhost:8080/docs/ux/camera/`. Никаких npm-зависимостей.
