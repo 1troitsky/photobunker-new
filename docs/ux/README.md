@@ -8,6 +8,7 @@
 | --- | --- | --- | --- |
 | Assignments / список заданий | Fieldwork 4.2, Spotify-inspired dark | [assignments/index.html](assignments/index.html) | **OWNER-SELECTED DESIGN / IMPLEMENTATION NOT STARTED** |
 | Assignments / создание, редактирование, дублирование | Fieldwork Editor · 4 вкладки, Public Card внизу правил | [assignments/editor/index.html](assignments/editor/index.html) | **OWNER-SELECTED DESIGN / IMPLEMENTATION NOT STARTED** |
+| Browser / файловый менеджер фото | Fieldwork Browser 3.1 · сетка/список/дерево, path bar, share в шапке | [browser/index.html](browser/index.html) | **OWNER-SELECTED DESIGN / IMPLEMENTATION NOT STARTED; sharing open** |
 
 ## Правила
 
@@ -20,4 +21,4 @@
 
 Документ-владелец требований: [`ts_and_ux.md`](../../ts_and_ux.md). Текущая реализация: `compat/assignment-release/apps/web/src/views/AssignmentsView.vue`. Правила приёмки: [`AGENTS.md`](../../AGENTS.md).
 
-**Как открыть:** запустите `python3 -m http.server 8080` из корня репозитория и откройте список `http://localhost:8080/docs/ux/assignments/` или редактор `http://localhost:8080/docs/ux/assignments/editor/`. Никаких npm-зависимостей.
+**Как открыть:** запустите `python3 -m http.server 8080` из корня репозитория и откройте список `http://localhost:8080/docs/ux/assignments/` или редактор `http://localhost:8080/docs/ux/assignments/editor/`, или Browser `http://localhost:8080/docs/ux/browser/`. Никаких npm-зависимостей.
