@@ -91,6 +91,15 @@
     sort: 'newest', foldersFirst: true, daysLeft: false, openFirst: 'personal',
     dialog: '', dialogTarget: '', returnFocus: null
   };
+  // Local demo media: original Browser model is unchanged for real photos.
+  let importedCounter = 0;
+  let urlController = null;
+  const MAX_DEVICE_BYTES = 200 * 1024 * 1024;
+  const MAX_LINK_BYTES = 100 * 1024 * 1024;
+  const isMedia = entry => !!entry && ['photo','video','audio'].includes(entry.kind);
+  const mediaLabel = entry => entry.kind === 'video' ? 'Видео' : entry.kind === 'audio' ? 'Аудио' : 'Фото';
+  const sizeLabel = bytes => bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + ' МБ' :
+    bytes >= 1024 ? Math.round(bytes / 1024) + ' КБ' : bytes + ' Б';
   const get = id => entries.find(entry => entry.id === id);
   const children = id => entries.filter(entry => entry.parent === id);
   function lineage(id) {
@@ -104,15 +113,16 @@
       if (depth > 20) return;
       children(parent).forEach(entry => {
         result.push(entry);
-        if (entry.kind !== 'photo') visit(entry.id, depth + 1);
+        if (!isMedia(entry)) visit(entry.id, depth + 1);
       });
     }
     visit(id, 0);
     return result;
   }
-  const photosIn = id => descendants(id).filter(entry => entry.kind === 'photo');
+  const mediaIn = id => descendants(id).filter(isMedia);
+  const photosIn = id => mediaIn(id).filter(entry => entry.kind === 'photo');
   const sectionOf = id => lineage(id).find(entry => ['personal','assignments','archive'].includes(entry.id))?.id || 'all';
-  const isSelectable = entry => entry?.kind === 'photo' || entry?.kind === 'folder';
+  const isSelectable = entry => isMedia(entry) || entry?.kind === 'folder';
   const workspaceOf = id =>
     lineage(id).find(entry => entry.kind === 'assignment')?.id ||
     (sectionOf(id) === 'archive' ? 'personal' : sectionOf(id));
@@ -135,7 +145,7 @@
     return [...rows].sort((a,b) => {
       const x = a.entry, y = b.entry;
       if (state.foldersFirst) {
-        const rank = Number(x.kind === 'photo') - Number(y.kind === 'photo');
+        const rank = Number(isMedia(x)) - Number(isMedia(y));
         if (rank !== 0) return rank;
       }
       if (state.sort === 'name') return x.name.localeCompare(y.name, 'ru', { numeric: true });
@@ -158,7 +168,7 @@
     function walk(parent, depth) {
       sortRows(children(parent).map(entry => ({ entry, depth }))).forEach(row => {
         rows.push(row);
-        if (row.entry.kind !== 'photo' && state.expanded.has(row.entry.id))
+        if (!isMedia(row.entry) && state.expanded.has(row.entry.id))
           walk(row.entry.id, depth + 1);
       });
     }
@@ -166,12 +176,22 @@
     return rows;
   }
 
+  function mediaPreview(entry) {
+    if (entry.kind === 'photo') return entry.objectUrl
+      ? '<img class="imported-thumb" src="' + escapeHTML(entry.objectUrl) + '" alt="">'
+      : scene(entry.sceneIndex);
+    const icon = entry.kind === 'video'
+      ? '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/>'
+      : '<path d="M4 11v2m4-6v10m4-14v18m4-14v10m4-6v2"/>';
+    return '<span class="imported-media-thumb ' + entry.kind + '"><svg viewBox="0 0 24 24" aria-hidden="true">' +
+      icon + '</svg></span>';
+  }
   function preview(entry) {
-    if (entry.kind === 'photo')
-      return '<span class="entry-preview">' + scene(entry.sceneIndex) + '</span>';
-    const children = photosIn(entry.id).slice(0,4);
+    if (isMedia(entry))
+      return '<span class="entry-preview">' + mediaPreview(entry) + '</span>';
+    const children = mediaIn(entry.id).slice(0,4);
     const minis = children.length
-      ? Array.from({length: 4}, (_, i) => children[i] ? scene(children[i].sceneIndex) : '<span class="empty-mini"></span>').join('')
+      ? Array.from({length: 4}, (_, i) => children[i] ? mediaPreview(children[i]) : '<span class="empty-mini"></span>').join('')
       : folderIcon;
     return '<span class="entry-preview ' + (children.length ? 'collage' : 'empty-folder') + '">' + minis +
       '<span class="entry-folder-badge">' + folderIcon +
@@ -179,26 +199,27 @@
   }
 
   function rowHTML(row) {
-    const entry = row.entry, photo = entry.kind === 'photo', selected = state.selected.has(entry.id);
-    const additional = photo
+    const entry = row.entry, file = isMedia(entry), selected = state.selected.has(entry.id);
+    const additional = file
       ? '<small>' + escapeHTML(entry.created) + ' · ' +
-        (entry.readable === false ? 'Только миниатюра' : escapeHTML(expiryText(entry))) + '</small>' +
+        (entry.imported ? mediaLabel(entry) + ' · ' + sizeLabel(entry.size) :
+          entry.readable === false ? 'Только миниатюра' : escapeHTML(expiryText(entry))) + '</small>' +
         (entry.readable !== false && entry.tags?.length
           ? '<small class="tags">' + entry.tags.map(tag => '#' + escapeHTML(tag)).join(' ') + '</small>' : '')
-      : '<small>' + photosIn(entry.id).length + ' фото' +
+      : '<small>' + mediaIn(entry.id).length + (mediaIn(entry.id).some(x => x.kind !== 'photo') ? ' файлов' : ' фото') +
         (entry.created ? ' · ' + escapeHTML(entry.created) : '') + '</small>';
     const path = state.query || state.tag
       ? '<small>' + escapeHTML(lineage(entry.parent).map(item => item.name).join(' / ')) + '</small>' : '';
     return '<article class="browser-entry' + (selected ? ' selected' : '') + '" style="--depth:' + row.depth + '">' +
       (state.view === 'tree'
         ? '<button type="button" class="tree-expand" data-action="expand" data-id="' + escapeHTML(entry.id) +
-          '" ' + (photo ? 'disabled' : '') + ' aria-label="Раскрыть папку">' +
-          (photo ? '' : state.expanded.has(entry.id) ? '⌄' : '›') + '</button>' : '') +
+          '" ' + (file ? 'disabled' : '') + ' aria-label="Раскрыть папку">' +
+          (file ? '' : state.expanded.has(entry.id) ? '⌄' : '›') + '</button>' : '') +
       (state.selectMode && isSelectable(entry)
         ? '<input type="checkbox" class="entry-check" data-check="' + escapeHTML(entry.id) +
           '" aria-label="Выбрать ' + escapeHTML(entry.name) + '"' + (selected ? ' checked' : '') + '>' : '') +
       '<button type="button" class="entry-open" data-action="open" data-id="' + escapeHTML(entry.id) + '"' +
-        (photo && entry.readable === false && !state.selectMode ? ' disabled' : '') + '>' +
+        (file && entry.readable === false && !state.selectMode ? ' disabled' : '') + '>' +
         preview(entry) + '<span class="entry-copy"><strong>' + escapeHTML(entry.name) +
         '</strong>' + additional + path + '</span></button>' +
       (isSelectable(entry) ? '<button type="button" class="entry-more" data-action="menu" data-id="' +
@@ -219,8 +240,11 @@
       button.setAttribute('aria-pressed', String(selected));
     });
     bySelector('[data-action="select"]').classList.toggle('selected', state.selectMode);
-    const folders = children(state.location).filter(entry => entry.kind !== 'photo').length;
-    bySelector('#browser-count').textContent = photosIn(state.location).length + ' фото · ' + folders + ' ' + plural(folders);
+    const folders = children(state.location).filter(entry => !isMedia(entry)).length;
+    const currentFiles = mediaIn(state.location);
+    bySelector('#browser-count').textContent = currentFiles.length +
+      (currentFiles.some(entry => entry.kind !== 'photo') ? ' файлов · ' : ' фото · ') +
+      folders + ' ' + plural(folders);
     const path = state.location === 'all' ? [] : lineage(state.location);
     const crumbs = [{ id: 'all', name: 'Все' }, ...path];
     bySelector('.path-breadcrumbs').innerHTML = crumbs.map((entry,i) =>
