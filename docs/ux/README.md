@@ -11,6 +11,7 @@
 | Browser / каталог фото, видео и аудио | **Browser v3** · каталог, загрузчик, поиск, массовые действия, сортировка, архив | [browser/index.html](browser/index.html) · [эталон HTML](browser/accepted-v3-standalone.html) · [спецификация](browser/README.md) | **OWNER-ACCEPTED UX / NOT PRODUCTION IMPLEMENTED** |
 | Browser / просмотр файлов | **File Viewer 1.0** · фото, видео, аудио, одинаковая геометрия, trim, стоп-кадр | [browser/viewer/index.html](browser/viewer/index.html) · [автономный эталон](browser/viewer/accepted-file-viewer-v1-standalone.html) · [спецификация](browser/viewer/README.md) | **OWNER-ACCEPTED UX / NOT PRODUCTION IMPLEMENTED** |
 | Browser / редактирование фотографий | Fieldwork Photo Editor 3.2 Fixed · Информация / Фото / Проверка, тексты, фигуры, сохранение | [browser/editor/index.html](browser/editor/index.html) · [спецификация](browser/editor/README.md) | **OWNER-SELECTED DESIGN / PROTOTYPE DOCUMENTED / IMPLEMENTATION NOT STARTED** |
+| Browser / редактирование видео и аудио | **Video & Audio Editor 1.1** · обрезка, стоп-кадр, JPEG/WAV, сохранение на устройство и в Browser | [browser/media-editor/index.html](browser/media-editor/index.html) · [автономный эталон](browser/media-editor/accepted-media-editor-v1.1.html) · [спецификация](browser/media-editor/README.md) | **OWNER-ACCEPTED UX / NOT PRODUCTION IMPLEMENTED** |
 
 ## Обязательный общий интерфейс
 
@@ -27,4 +28,4 @@
 
 Документ-владелец требований: [`ts_and_ux.md`](../../ts_and_ux.md). Текущая реализация: `compat/assignment-release/apps/web/src/views/AssignmentsView.vue`. Правила приёмки: [`AGENTS.md`](../../AGENTS.md).
 
-**Как открыть:** запустите `python3 -m http.server 8080` из корня репозитория и откройте список `http://localhost:8080/docs/ux/assignments/` или редактор `http://localhost:8080/docs/ux/assignments/editor/`, или Browser `http://localhost:8080/docs/ux/browser/`, или File Viewer `http://localhost:8080/docs/ux/browser/viewer/`, или Photo Editor `http://localhost:8080/docs/ux/browser/editor/`. Никаких npm-зависимостей.
+**Как открыть:** запустите `python3 -m http.server 8080` из корня репозитория и откройте список `http://localhost:8080/docs/ux/assignments/` или редактор `http://localhost:8080/docs/ux/assignments/editor/`, или Browser `http://localhost:8080/docs/ux/browser/`, или File Viewer `http://localhost:8080/docs/ux/browser/viewer/`, или Photo Editor `http://localhost:8080/docs/ux/browser/editor/`, или Video & Audio Editor `http://localhost:8080/docs/ux/browser/media-editor/`. Никаких npm-зависимостей.
