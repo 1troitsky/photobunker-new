@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | Assignments / список заданий | Fieldwork 4.2, Spotify-inspired dark | [assignments/index.html](assignments/index.html) | **OWNER-SELECTED DESIGN / IMPLEMENTATION NOT STARTED** |
 | Assignments / создание, редактирование, дублирование | Fieldwork Editor · 4 вкладки, Public Card внизу правил | [assignments/editor/index.html](assignments/editor/index.html) | **OWNER-SELECTED DESIGN / IMPLEMENTATION NOT STARTED** |
-| Browser / файловый менеджер фото | Fieldwork Browser 3.1 · сетка/список/дерево, path bar, share в шапке | [browser/index.html](browser/index.html) | **OWNER-SELECTED DESIGN / IMPLEMENTATION NOT STARTED; sharing open** |
+| Browser / каталог фото, видео и аудио | **Browser v3** · каталог, загрузчик, поиск, массовые действия, сортировка, архив | [browser/index.html](browser/index.html) · [эталон HTML](browser/accepted-v3-standalone.html) · [спецификация](browser/README.md) | **OWNER-ACCEPTED UX / NOT PRODUCTION IMPLEMENTED** |
 | Browser / просмотр фотографий | Fieldwork Photo Viewer 3.1 · фиксированное изображение, жесты, нижние панели, In-App Browser | [browser/viewer/index.html](browser/viewer/index.html) | **OWNER-SELECTED DESIGN / IMPLEMENTATION NOT STARTED** |
 | Browser / редактирование фотографий | Fieldwork Photo Editor 3.2 Fixed · Информация / Фото / Проверка, тексты, фигуры, сохранение | [browser/editor/index.html](browser/editor/index.html) · [спецификация](browser/editor/README.md) | **OWNER-SELECTED DESIGN / PROTOTYPE DOCUMENTED / IMPLEMENTATION NOT STARTED** |
 
