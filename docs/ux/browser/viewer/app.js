@@ -401,12 +401,15 @@
       gesture=null;
       if(Math.abs(dx)>=60 && Math.abs(dx)>Math.abs(dy)*1.25) {
         pendingSwipeClick=true;
+        // A pointerup-generated click is suppressed; never suppress a later intentional tap.
+        setTimeout(()=>{pendingSwipeClick=false;},0);
         fullscreen.style.transform='';fullscreen.style.opacity='';
         transitionTo(dx<0?1:-1);
         return;
       }
       if(fullMode && Math.abs(dy)>=86 && Math.abs(dy)>Math.abs(dx)*1.25) {
         pendingSwipeClick=true;
+        setTimeout(()=>{pendingSwipeClick=false;},0);
         closeFullscreen(Math.sign(dy));
         return;
       }
