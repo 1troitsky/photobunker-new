@@ -233,8 +233,9 @@
         participants: Math.max(1, Math.min(100, Number(document.getElementById('form-participants').value) || 1)),
         team: document.getElementById('form-team').value
       };
-      if (state.dialog === 'edit' && task) {
-        Object.assign(task, update);
+      const editedTask = find(state.selected);
+      if (state.dialog === 'edit' && editedTask) {
+        Object.assign(editedTask, update);
       } else {
         tasks.unshift({ ...update, id: 'L-' + Date.now(), start: '2026-11-07', end: '',
           photos: 0, icon: 'building', tone: 'gray', done: false,
