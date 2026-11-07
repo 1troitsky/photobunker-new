@@ -91,15 +91,6 @@
     sort: 'newest', foldersFirst: true, daysLeft: false, openFirst: 'personal',
     dialog: '', dialogTarget: '', returnFocus: null
   };
-  // Local demo media: original Browser model is unchanged for real photos.
-  let importedCounter = 0;
-  let urlController = null;
-  const MAX_DEVICE_BYTES = 200 * 1024 * 1024;
-  const MAX_LINK_BYTES = 100 * 1024 * 1024;
-  const isMedia = entry => !!entry && ['photo','video','audio'].includes(entry.kind);
-  const mediaLabel = entry => entry.kind === 'video' ? 'Видео' : entry.kind === 'audio' ? 'Аудио' : 'Фото';
-  const sizeLabel = bytes => bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + ' МБ' :
-    bytes >= 1024 ? Math.round(bytes / 1024) + ' КБ' : bytes + ' Б';
   const get = id => entries.find(entry => entry.id === id);
   const children = id => entries.filter(entry => entry.parent === id);
   function lineage(id) {
@@ -113,16 +104,15 @@
       if (depth > 20) return;
       children(parent).forEach(entry => {
         result.push(entry);
-        if (!isMedia(entry)) visit(entry.id, depth + 1);
+        if (entry.kind !== 'photo') visit(entry.id, depth + 1);
       });
     }
     visit(id, 0);
     return result;
   }
-  const mediaIn = id => descendants(id).filter(isMedia);
-  const photosIn = id => mediaIn(id).filter(entry => entry.kind === 'photo');
+  const photosIn = id => descendants(id).filter(entry => entry.kind === 'photo');
   const sectionOf = id => lineage(id).find(entry => ['personal','assignments','archive'].includes(entry.id))?.id || 'all';
-  const isSelectable = entry => isMedia(entry) || entry?.kind === 'folder';
+  const isSelectable = entry => entry?.kind === 'photo' || entry?.kind === 'folder';
   const workspaceOf = id =>
     lineage(id).find(entry => entry.kind === 'assignment')?.id ||
     (sectionOf(id) === 'archive' ? 'personal' : sectionOf(id));
@@ -145,7 +135,7 @@
     return [...rows].sort((a,b) => {
       const x = a.entry, y = b.entry;
       if (state.foldersFirst) {
-        const rank = Number(isMedia(x)) - Number(isMedia(y));
+        const rank = Number(x.kind === 'photo') - Number(y.kind === 'photo');
         if (rank !== 0) return rank;
       }
       if (state.sort === 'name') return x.name.localeCompare(y.name, 'ru', { numeric: true });
@@ -168,7 +158,7 @@
     function walk(parent, depth) {
       sortRows(children(parent).map(entry => ({ entry, depth }))).forEach(row => {
         rows.push(row);
-        if (!isMedia(row.entry) && state.expanded.has(row.entry.id))
+        if (row.entry.kind !== 'photo' && state.expanded.has(row.entry.id))
           walk(row.entry.id, depth + 1);
       });
     }
@@ -176,22 +166,12 @@
     return rows;
   }
 
-  function mediaPreview(entry) {
-    if (entry.kind === 'photo') return entry.objectUrl
-      ? '<img class="imported-thumb" src="' + escapeHTML(entry.objectUrl) + '" alt="">'
-      : scene(entry.sceneIndex);
-    const icon = entry.kind === 'video'
-      ? '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/>'
-      : '<path d="M4 11v2m4-6v10m4-14v18m4-14v10m4-6v2"/>';
-    return '<span class="imported-media-thumb ' + entry.kind + '"><svg viewBox="0 0 24 24" aria-hidden="true">' +
-      icon + '</svg></span>';
-  }
   function preview(entry) {
-    if (isMedia(entry))
-      return '<span class="entry-preview">' + mediaPreview(entry) + '</span>';
-    const children = mediaIn(entry.id).slice(0,4);
+    if (entry.kind === 'photo')
+      return '<span class="entry-preview">' + scene(entry.sceneIndex) + '</span>';
+    const children = photosIn(entry.id).slice(0,4);
     const minis = children.length
-      ? Array.from({length: 4}, (_, i) => children[i] ? mediaPreview(children[i]) : '<span class="empty-mini"></span>').join('')
+      ? Array.from({length: 4}, (_, i) => children[i] ? scene(children[i].sceneIndex) : '<span class="empty-mini"></span>').join('')
       : folderIcon;
     return '<span class="entry-preview ' + (children.length ? 'collage' : 'empty-folder') + '">' + minis +
       '<span class="entry-folder-badge">' + folderIcon +
@@ -199,27 +179,26 @@
   }
 
   function rowHTML(row) {
-    const entry = row.entry, file = isMedia(entry), selected = state.selected.has(entry.id);
-    const additional = file
+    const entry = row.entry, photo = entry.kind === 'photo', selected = state.selected.has(entry.id);
+    const additional = photo
       ? '<small>' + escapeHTML(entry.created) + ' · ' +
-        (entry.imported ? mediaLabel(entry) + ' · ' + sizeLabel(entry.size) :
-          entry.readable === false ? 'Только миниатюра' : escapeHTML(expiryText(entry))) + '</small>' +
+        (entry.readable === false ? 'Только миниатюра' : escapeHTML(expiryText(entry))) + '</small>' +
         (entry.readable !== false && entry.tags?.length
           ? '<small class="tags">' + entry.tags.map(tag => '#' + escapeHTML(tag)).join(' ') + '</small>' : '')
-      : '<small>' + mediaIn(entry.id).length + (mediaIn(entry.id).some(x => x.kind !== 'photo') ? ' файлов' : ' фото') +
+      : '<small>' + photosIn(entry.id).length + ' фото' +
         (entry.created ? ' · ' + escapeHTML(entry.created) : '') + '</small>';
     const path = state.query || state.tag
       ? '<small>' + escapeHTML(lineage(entry.parent).map(item => item.name).join(' / ')) + '</small>' : '';
     return '<article class="browser-entry' + (selected ? ' selected' : '') + '" style="--depth:' + row.depth + '">' +
       (state.view === 'tree'
         ? '<button type="button" class="tree-expand" data-action="expand" data-id="' + escapeHTML(entry.id) +
-          '" ' + (file ? 'disabled' : '') + ' aria-label="Раскрыть папку">' +
-          (file ? '' : state.expanded.has(entry.id) ? '⌄' : '›') + '</button>' : '') +
+          '" ' + (photo ? 'disabled' : '') + ' aria-label="Раскрыть папку">' +
+          (photo ? '' : state.expanded.has(entry.id) ? '⌄' : '›') + '</button>' : '') +
       (state.selectMode && isSelectable(entry)
         ? '<input type="checkbox" class="entry-check" data-check="' + escapeHTML(entry.id) +
           '" aria-label="Выбрать ' + escapeHTML(entry.name) + '"' + (selected ? ' checked' : '') + '>' : '') +
       '<button type="button" class="entry-open" data-action="open" data-id="' + escapeHTML(entry.id) + '"' +
-        (file && entry.readable === false && !state.selectMode ? ' disabled' : '') + '>' +
+        (photo && entry.readable === false && !state.selectMode ? ' disabled' : '') + '>' +
         preview(entry) + '<span class="entry-copy"><strong>' + escapeHTML(entry.name) +
         '</strong>' + additional + path + '</span></button>' +
       (isSelectable(entry) ? '<button type="button" class="entry-more" data-action="menu" data-id="' +
@@ -240,11 +219,8 @@
       button.setAttribute('aria-pressed', String(selected));
     });
     bySelector('[data-action="select"]').classList.toggle('selected', state.selectMode);
-    const folders = children(state.location).filter(entry => !isMedia(entry)).length;
-    const currentFiles = mediaIn(state.location);
-    bySelector('#browser-count').textContent = currentFiles.length +
-      (currentFiles.some(entry => entry.kind !== 'photo') ? ' файлов · ' : ' фото · ') +
-      folders + ' ' + plural(folders);
+    const folders = children(state.location).filter(entry => entry.kind !== 'photo').length;
+    bySelector('#browser-count').textContent = photosIn(state.location).length + ' фото · ' + folders + ' ' + plural(folders);
     const path = state.location === 'all' ? [] : lineage(state.location);
     const crumbs = [{ id: 'all', name: 'Все' }, ...path];
     bySelector('.path-breadcrumbs').innerHTML = crumbs.map((entry,i) =>
@@ -296,28 +272,11 @@
     overlay.hidden = true; state.dialog = ''; state.dialogTarget = '';
     if (state.returnFocus?.isConnected) state.returnFocus.focus();
     state.returnFocus = null;
-    if (urlController) { urlController.abort(); urlController = null; }
   }
 
   function show(kind, id = '') {
     const entry = get(id);
-    if (kind === 'upload') {
-      const current = get(state.location);
-      state.uploadDestination = sectionOf(state.location) === 'personal' &&
-        (state.location === 'personal' || current?.kind === 'folder') ? state.location : 'personal';
-      const destinationName = get(state.uploadDestination)?.name || 'Мои фото';
-      openDialog('upload', 'Загрузить файлы',
-        '<div class="info">Добавьте фото, видео или аудио в Browser. Это локальный UX-макет: файлы остаются в текущей вкладке и не отправляются в облако PhotoBunker.</div>' +
-        '<label class="upload-dropzone" id="upload-dropzone"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-5 5 5-5 5 5M4 15v5h16v-5"/></svg>' +
-        '<strong>Выбрать файлы с устройства</strong><small>или перетащить сюда · фото, видео, аудио</small>' +
-        '<input id="upload-files" type="file" accept="image/*,video/*,audio/*" multiple></label>' +
-        '<div class="upload-divider">или</div>' +
-        '<label class="upload-url-field">Прямая ссылка на файл<input id="upload-url" type="url" inputmode="url" placeholder="https://example.com/file.mp4" autocomplete="off"></label>' +
-        option('upload-url', 'Загрузить по ссылке', '', 'primary-action') +
-        '<p class="upload-feedback" role="status" aria-live="polite"></p>' +
-        '<div class="upload-hint"><strong>Папка: ' + escapeHTML(destinationName) + '</strong><span>Из задания или архива демо импортирует только в личные файлы — без обхода прав.</span>' +
-        '<span>Для импорта из облака нужна прямая доступная ссылка. Страницы сервисов с авторизацией могут не загрузиться.</span></div>');
-    } else if (kind === 'share') {
+    if (kind === 'share') {
       openDialog('share', 'Поделиться',
         '<div class="info">Можно поделиться фотографией или целым заданием. ' +
         '<strong>Механизм передачи, получатели, права доступа и срок действия ещё обсуждаются.</strong> ' +
@@ -353,7 +312,7 @@
         '<label>Название<input type="text" name="folderName" maxlength="80" placeholder="Новая папка"></label>' +
         option('create-folder', 'Создать папку', '', 'primary-action'));
     } else if (kind === 'menu' && entry) {
-      let html = option('open-item', entry.kind === 'photo' ? 'Открыть фотографию' : isMedia(entry) ? 'Открыть файл' : 'Открыть папку', id);
+      let html = option('open-item', entry.kind === 'photo' ? 'Открыть фотографию' : 'Открыть папку', id);
       if (entry.kind === 'photo') {
         if (entry.editable) {
           html += option('rename', 'Переименовать', id);
@@ -405,140 +364,19 @@
         option('confirm-delete', 'Удалить из макета', '', 'danger'), id);
     } else if (kind === 'photo' && entry && entry.readable !== false) {
       openDialog('photo', entry.name,
-        '<div class="photo-large">' + mediaPreview(entry) + '</div>' +
-        '<div class="info">' + (entry.imported
-          ? 'Локально добавлено в демо · ' + sizeLabel(entry.size) +
-            '<p>Сохранение в облако не выполнялось. Полноценный File Viewer — следующий этап.</p>'
-          : 'Снято: ' + escapeHTML(entry.created) + '<p>' +
-            escapeHTML(expiryText(entry)) + '</p>Теги: ' +
-            escapeHTML((entry.tags || []).map(x => '#' + x).join(' ') || 'Нет') +
-            '<p>В production открывается существующий Photo Viewer с проверкой разрешений.</p>') +
-        '</div>', id);
-    } else if (kind === 'media' && entry && isMedia(entry)) {
-      openDialog('media', entry.name,
-        '<div class="info">' + mediaLabel(entry) + ' · ' + sizeLabel(entry.size || 0) +
-        '<p>Файл добавлен в каталог макета. Просмотр и редактирование видео/аудио будут следующим этапом в отдельном File Viewer.</p>' +
-        '<p>В реальный PhotoBunker ничего не загружено.</p></div>', id);
+        '<div class="photo-large">' + scene(entry.sceneIndex) + '</div>' +
+        '<div class="info">Снято: ' + escapeHTML(entry.created) + '<p>' +
+        escapeHTML(expiryText(entry)) + '</p>Теги: ' +
+        escapeHTML((entry.tags || []).map(x => '#' + x).join(' ') || 'Нет') +
+        '<p>В production открывается существующий Photo Viewer с проверкой разрешений.</p></div>', id);
     } else if (kind === 'nav') {
       message(id, 'Другие разделы используют тот же общий UI Shell. Здесь демонстрируется только Browser.');
-    }
-  }
-
-
-  // Only a client-side UX demo: none of this sends ciphertext or plain files
-  // to PhotoBunker storage and no fake "upload succeeded" state is produced.
-  function detectMedia(file) {
-    const type = String(file.type || '').toLowerCase();
-    if (type.startsWith('image/')) return 'photo';
-    if (type.startsWith('video/')) return 'video';
-    if (type.startsWith('audio/')) return 'audio';
-    if (type && type !== 'application/octet-stream') return null;
-    const ext = String(file.name || '').split('.').pop().toLowerCase();
-    if (['jpg','jpeg','png','webp','gif','avif','heic','heif'].includes(ext)) return 'photo';
-    if (['mp4','mov','webm','m4v','ogv','mkv'].includes(ext)) return 'video';
-    if (['mp3','m4a','wav','ogg','oga','aac','flac','opus','weba'].includes(ext)) return 'audio';
-    return null;
-  }
-  function uploadFeedback(text, isError = false) {
-    if (state.dialog !== 'upload' || overlay.hidden) return;
-    const box = dialogBody.querySelector('.upload-feedback');
-    if (box) { box.textContent = text; box.classList.toggle('error', isError); }
-  }
-  function addSelectedFiles(files, remote = false) {
-    if (!files.length) return;
-    const destination = state.uploadDestination || 'personal';
-    let added = 0, skipped = 0;
-    for (const file of files) {
-      const kind = detectMedia(file);
-      if (!kind || file.size === 0 || file.size > (remote ? MAX_LINK_BYTES : MAX_DEVICE_BYTES)) {
-        skipped++; continue;
-      }
-      const objectUrl = URL.createObjectURL(file);
-      entries.push({
-        id: 'imported-' + ++importedCounter, parent: destination,
-        name: file.name || 'Без названия', kind, imported: true, objectUrl,
-        created: 'Сегодня', order: Date.now() + importedCounter / 1000,
-        size: file.size, mime: file.type, tags: [], daysToExpiry: null,
-        readable: true, editable: false, deletable: true, shareable: false
-      });
-      added++;
-    }
-    if (!added) {
-      uploadFeedback('Не удалось добавить файлы. Поддерживаются фото, видео и аудио. ' +
-        'Лимит макета: 200 МБ с устройства или 100 МБ по ссылке.', true);
-      return;
-    }
-    closeDialog();
-    navigate(destination);
-    message('Файлы добавлены', 'Добавлено в каталог макета: ' + added +
-      (skipped ? '. Пропущено: ' + skipped : '') +
-      '.<p>Файлы находятся только в памяти текущей вкладки. В облако PhotoBunker ничего не отправлено.</p>');
-  }
-  async function importFromUrl() {
-    if (urlController || state.dialog !== 'upload') return;
-    const field = dialogBody.querySelector('#upload-url');
-    let url;
-    try {
-      url = new URL(field.value.trim());
-      if (url.protocol !== 'https:') throw Error('invalid_protocol');
-    } catch {
-      uploadFeedback('Укажите прямую HTTPS-ссылку на фото, видео или аудиофайл.', true);
-      return;
-    }
-    let fileName = url.pathname.split('/').filter(Boolean).pop() || 'media-file';
-    try { fileName = decodeURIComponent(fileName); } catch { fileName = 'media-file'; }
-    fileName = fileName.replace(/[\\\/]/g, '_').slice(0, 180);
-    const controller = new AbortController();
-    urlController = controller;
-    uploadFeedback('Получаем файл по ссылке…');
-    const button = dialogBody.querySelector('[data-action="upload-url"]');
-    if (button) button.disabled = true;
-    try {
-      const response = await fetch(url.href, {
-        credentials: 'omit', mode: 'cors', signal: controller.signal
-      });
-      if (!response.ok) throw Error('HTTP ' + response.status);
-      const mime = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-      const length = Number(response.headers.get('content-length') || 0);
-      if (mime.includes('text/html') || length > MAX_LINK_BYTES)
-        throw Error('Not a direct media file or exceeds demo limit');
-      let chunks = [], bytes = 0;
-      const reader = response.body?.getReader();
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          bytes += value.byteLength;
-          if (bytes > MAX_LINK_BYTES) {
-            await reader.cancel();
-            throw Error('File exceeds demo limit');
-          }
-          chunks.push(value);
-        }
-      } else {
-        const blob = await response.blob();
-        if (blob.size > MAX_LINK_BYTES) throw Error('File exceeds demo limit');
-        chunks = [blob];
-      }
-      const file = new File(chunks, fileName, {type: mime});
-      if (!detectMedia(file)) throw Error('Unsupported content type');
-      if (controller.signal.aborted || state.dialog !== 'upload') return;
-      addSelectedFiles([file], true);
-    } catch (error) {
-      if (!controller.signal.aborted) {
-        uploadFeedback('Не удалось получить медиафайл. Убедитесь, что ссылка ведёт на файл ' +
-          'и браузеру разрешена загрузка с этого адреса (CORS).', true);
-      }
-    } finally {
-      if (urlController === controller) urlController = null;
-      if (button?.isConnected) button.disabled = false;
     }
   }
 
   function removeDemo(ids) {
     const removed = new Set(ids);
     ids.forEach(id => descendants(id).forEach(child => removed.add(child.id)));
-    entries.forEach(entry => { if (removed.has(entry.id) && entry.objectUrl) URL.revokeObjectURL(entry.objectUrl); });
     entries = entries.filter(entry => !removed.has(entry.id));
     state.selected.clear(); state.selectMode = false;
   }
@@ -575,12 +413,10 @@
       }
       if (item.kind === 'photo') {
         if (item.readable !== false) show('photo', id);
-      } else if (isMedia(item)) { show('media', id); }
-      else { closeDialog(); navigate(id); }
+      } else { closeDialog(); navigate(id); }
       return;
     }
-    if (['status','share','settings','create','bulk','upload'].includes(action)) { show(action); return; }
-    if (action === 'upload-url') { void importFromUrl(); return; }
+    if (['status','share','settings','create','bulk'].includes(action)) { show(action); return; }
     if (action === 'menu') { show('menu', id); return; }
     if (action === 'share-assignment-info') { show('share-assignment-info'); return; }
     if (action === 'select-for-share') {
@@ -691,21 +527,10 @@
   });
   app.addEventListener('change', event => {
     const input = event.target;
-    if (input.id === 'upload-files') { addSelectedFiles([...input.files]); input.value = ''; return; }
     if (input.hasAttribute('data-check')) {
       const id = input.dataset.check;
       input.checked ? state.selected.add(id) : state.selected.delete(id);
       render();
-    }
-  });
-  dialogBody.addEventListener('dragover', event => {
-    if (state.dialog === 'upload' && event.target.closest('#upload-dropzone')) {
-      event.preventDefault(); event.dataTransfer.dropEffect = 'copy';
-    }
-  });
-  dialogBody.addEventListener('drop', event => {
-    if (state.dialog === 'upload' && event.target.closest('#upload-dropzone')) {
-      event.preventDefault(); addSelectedFiles([...event.dataTransfer.files]);
     }
   });
   queryInput.addEventListener('input', () => {
@@ -718,9 +543,6 @@
     if (event.key === 'Escape' && !overlay.hidden) {
       event.preventDefault(); closeDialog();
     }
-  });
-  window.addEventListener('pagehide', () => {
-    entries.forEach(entry => { if (entry.objectUrl) URL.revokeObjectURL(entry.objectUrl); });
   });
   render();
 })();
