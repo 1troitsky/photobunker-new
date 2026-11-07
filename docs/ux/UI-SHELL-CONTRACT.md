@@ -21,6 +21,7 @@
 - Browser: [`browser/index.html`](browser/index.html), [`browser/style.css`](browser/style.css) — одобренные path bar и действия.
 - Photo Viewer: [`browser/viewer/index.html`](browser/viewer/index.html), [`browser/viewer/style.css`](browser/viewer/style.css) — использует **те же Shell-стили** и добавляет только viewer-specific стили.
 - Photo Editor 3.2: [`browser/editor/index.html`](browser/editor/index.html), [`browser/editor/README.md`](browser/editor/README.md) — отдельный переносимый UX-эталон; **его автономный CSS не является новым разрешённым Shell**. При внедрении переиспользовать существующий Header, статус и dock.
+- Camera 1.2: [`camera/index.html`](camera/index.html), [`camera/README.md`](camera/README.md) — согласованный экран фото/видео/аудио: Header с тремя контекстными кнопками, переключатель режимов, GPS над затвором, нижняя тройка Задание / Снять / Настройки и общий dock. **Слепой режим скрывает preview, но не останавливает активную съёмку.** При внедрении не дублировать общий Shell; видеозапись и аудио требуют отдельного защищённого production pipeline.
 - Assignment Editor: [`assignments/editor/index.html`](assignments/editor/index.html).
 
 ## Архитектурное правило внедрения
