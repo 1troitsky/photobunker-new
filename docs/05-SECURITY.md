@@ -22,18 +22,20 @@ PhotoBunker не вызывает системный save-to-Photos, DCIM или
 
 Никакие decrypted thumbs/previews в service-worker caches. После lock/account switch revoke blob URLs, clear memory surfaces и reject stale callbacks. Не делать обход через input capture, который автоматически пишет системный файл, если такой режим не проверен.
 
-## 4. PIN три независимых механизма
+## 4. PIN — актуальные два зависимых механизма (2026-11-08/09)
 
-| Механизм | Для чего | Не обещает |
+Новые требования: [SECURITY-PIN-DEVICE-CONTRACT.md](product/SECURITY-PIN-DEVICE-CONTRACT.md), принятый UX: [Security & Privacy 1.3](ux/security-privacy/README.md). Прежние три независимых PIN и Emergency PIN 2×N **отменены**.
+
+| Механизм | Значение | Ограничения |
 | --- | --- | --- |
-| App lock PIN (optional) | UI gate, настраиваемые попытки/cooldown, re-lock на возврате | Сам по себе не cryptographic protection при клонировании профиля браузера |
-| Local-delete PIN (optional) | Очистить **текущее устройство** с preflight синхронизации и предупреждением про unsynced items | Не удаляет remote copy, не гарантирует OS secure erase |
-| Emergency PIN (optional) | Fail-closed immediate lock + уничтожение возможности локального доступа + долговечный подписанный intent на server revoke/delete | Не подтверждает server wipe при offline, не возвращает доступ если не было серверного ACK |
+| App lock PIN | Необязательные **4–8 цифр**; re-lock 0–5 мин | Не является Recovery Key или самостоятельной криптозащитой |
+| Emergency PIN | Только при App PIN, **строго той же длины**, другое значение | Немедленно блокирует локальный доступ; облачное удаление только после server ACK |
 
-- No PIN plaintext, verifier/recovery key materials in logs/localStorage. Hash PBKDF2/approved KDF with random salt and bounded retries, но **security scope не строится только на PIN**.
-- Local delete не скрывает потери unsynced; сохранение cloud copy до erase требует подтверждённой доступности ключей для восстановления; destructive paths с отдельной приёмкой владельца.
-- Emergency flow journal survives crash and offline with minimal non-secret intent; **block app immediately**, remote operation pending until ACK, never mark completed without ACK. Distinguish local access destruction, server deletion and previously shared/downloaded assets.
-- Ошибка PIN никогда **автоматически** не запускает экстренное удаление, если нет явно включённого и протестированного отдельного правила.
+- Смена длины App PIN инвалидирует Emergency PIN; отключение App PIN отключает и Emergency PIN с предупреждением. Никакой биометрии.
+- Не хранить PIN и verifier/recovery materials в логах/plaintext/localStorage. Salted approved KDF, bounded retries, безопасные error states; E2EE не строится только на PIN.
+- Emergency flow fail-closed: локальная блокировка до ожидания сети, durable server revoke/delete intent, при offline remote outcome **pending**, retry и server ACK.
+- Ошибка ввода обычного PIN не вызывает аварийного удаления автоматически.
+- **P0 OPEN:** тарифная политика предполагает сохранение подтверждённого платного backup, а новый UX описывает полное облачное удаление; не реализовывать удаление backup без отдельного решения и threat review.
 
 ## 5. ACL / TTL / Share / Browser
 

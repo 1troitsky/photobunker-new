@@ -45,14 +45,18 @@
 - Finder-style иерархия «Задания → Фотографии», режимы Grid/List/Tree, поиск/сортировка/multiselect, открытие Photo Card; lists не тянут все fullres assets.
 - Ограниченные recipient/expiry/visibility/download scopes; разрешённый single download и ZIP только на разрешённые файлы/версии и metadata, bounded memory, revalidate rights on each item; не дублировать оригиналы только ради Browser.
 
-## 7. PIN и Settings
+## 7. PIN и Settings — актуальная модель (2026-11-08/09)
 
-- **App lock PIN** (optional, independently enabled): настраиваемые attempts, delay/cooldown и relock; loss-of-access recovery; никакой автоматической аварийной очистки без явно включённой отдельной опции.
-- **Local-delete PIN** отдельно (optional): cloud/key recovery preflight, точное удаление data только текущего устройства, информирование об unsynced data; никакого ложного «backup complete».
-- **Emergency PIN** отдельно (optional): мгновенно закрывает локальный доступ, разрушает локальные key grants, надёжно отправляет server revoke/delete intent; offline → pending, без ложного server ACK; клиент показывает ограниченную fail-closed ошибку, не раскрывая скрытый сценарий. Destructive flows — отдельный threat-review/test.
+- **App lock PIN:** необязательный 4–8 цифр; re-lock от «Сразу» до «5 мин», настройка в одном блоке с PIN.
+- **Emergency PIN:** необязательный, только при App PIN; **та же длина, но другое значение**. Смена длины App PIN сбрасывает Emergency PIN, отключение App PIN также отключает Emergency PIN с предупреждением. Запускает немедленную локальную блокировку и безопасное локальное удаление, remote purge подтверждать лишь по server ACK.
+- Отдельный **Local-delete PIN** и FaceID/TouchID не входят в текущую двух-PIN модель; прежняя схема удвоенного аварийного PIN отменена.
+- Recovery Key: показ в textarea, копирование/системное сохранение, подтверждаемая смена и отзыв устройств. Backup и Recovery Vault находятся в «Данные и хранилище».
+- Dead Man’s Switch: выбор из `<select>` выключено/4/6/12/24 месяца, отдельный от TTL файлов и Emergency PIN; до запуска нужен серверный lifecycle и consent.
 - Settings: contacts, Teams, camera default preset (переживает reload и gracefully handles missing preset), security/PIN, devices, privacy, geolocation, language; один источник истины.
 - Аватары людей и Team: единый стиль, placeholder/initials, возможность загрузки/замены; не передавать закрытые изображения third-party avatar service.
 - Контекстные tips только с реальным действием, dismissible, выполненные не повторять; без messenger promotion.
+
+**Агенту:** [security-контракт](product/SECURITY-PIN-DEVICE-CONTRACT.md) обязателен для новых задач; unresolved backup-preservation vs full cloud wipe = **P0 OPEN**. UI принят, production destructive flow не принят.
 
 ## 8. Каждый Issue — измеримые доказательства
 
