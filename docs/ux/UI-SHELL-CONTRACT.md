@@ -38,6 +38,8 @@
 
 - Security & Privacy 1.3 **OWNER-ACCEPTED UX**: [экран](security-privacy/index.html), [автономный HTML](security-privacy/accepted-security-privacy-v1.3-standalone.html), [спецификация](security-privacy/README.md). Два зависимых PIN 4–8 цифр одинаковой длины, без биометрии; relock 0–5 мин и обычный PIN в одном блоке; Recovery Key через textarea, системное сохранение и копирование; Dead Man’s Switch — один блок с `<select>`. Сохранять Header 64px / Dock 82px, верхние уведомления и scroll position; не копировать demo security в production. Целевая политика: [security-контракт](../product/SECURITY-PIN-DEVICE-CONTRACT.md).
 
+- Data & Storage 1.2 — **OWNER-ACCEPTED UX / FURTHER REFINEMENTS POSSIBLE**: [экран](data-storage/index.html), [эталон HTML](data-storage/accepted-data-storage-v1.2-standalone.html), [контракт](data-storage/README.md). Используемые лимиты и очередь локальных unsynced файлов считаются отдельно, кэш не входит в облачную квоту. Backup — список, текущий максимум 1, автообновления по дням недели с квотами. Автопродление системно включено, без пользовательского переключателя, с ограничениями TTL и прав. Fieldwork Header 64px/Dock 82px, без новых визуальных стилей.
+
 ## Архитектурное правило внедрения
 
 В production создать/переиспользовать **ОДИН** layout/компонент общей оболочки (например, через действующий App Shell), с **контекстным слотом действий** и **одним** status controller/store. Экран передаёт действия и основное содержимое, **не реализует повторно header/dock**, не дублирует status logic. Не переносить demo HTML/CSS слепым копированием: сначала проверить действующие Vue-компоненты и роуты. Не менять `main` и не переносить в production без отдельного scope/PR и тестов.
