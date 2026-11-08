@@ -1,351 +1,333 @@
-/* PhotoBunker UX Fieldwork editor. All data are synthetic and remain on this page.
-   No network, encryption, storage, Identity or production routing is used here. */
+
 (() => {
   'use strict';
   const app = document.getElementById('app');
-  const device = document.getElementById('device');
-  const overlay = document.getElementById('dialog-overlay');
-  const dialog = overlay.querySelector('.dialog-sheet');
-  const dialogTitle = document.getElementById('dialog-title');
-  const dialogContent = document.getElementById('dialog-content');
-  const scroll = document.getElementById('editor-content');
-  const statusLabel = document.getElementById('status-label');
-  const statusLed = document.querySelector('.state-led');
-  const panes = ['basics', 'camera', 'participants', 'rules'];
-  const roleLabels = { curator: 'Куратор', contributor: 'Исполнитель', viewer: 'Наблюдатель' };
-  const photoScopeLabels = { default: 'По правилам задания', none: 'Без доступа к фото', thumbnails: 'Только миниатюры', all: 'Полный доступ' };
-  const demoPeople = [
-    { id: 1, name: 'Анна', role: 'curator', photoScope: 'all' },
-    { id: 2, name: 'Марк', role: 'contributor', photoScope: 'default' }
-  ];
-  const demoTeams = {
-    'Site A Crew': demoPeople,
-    'Репортаж': [
-      { id: 3, name: 'Ольга', role: 'curator', photoScope: 'default' },
-      { id: 4, name: 'Давид', role: 'contributor', photoScope: 'thumbnails' },
-      { id: 5, name: 'Никита', role: 'contributor', photoScope: 'default' }
-    ],
-    '': []
+  if (!app || app.dataset.ready) return;
+  app.dataset.ready = '1';
+  const $ = s => app.querySelector(s);
+  const $$ = s => [...app.querySelectorAll(s)];
+  const field = name => $(`[name="${name}"]`);
+  const overlay = $('#dialog-overlay');
+  const content = $('#dialog-content');
+  const scroll = $('#editor-content');
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const labels = {photo:'Фото',video:'Видео',audio:'Аудио'};
+  const allows = {photo:'allowPhoto',video:'allowVideo',audio:'allowAudio'};
+  const counts = {photo:'photoCount',video:'videoCount',audio:'audioCount'};
+  const instructions = {photo:'photoShots',video:'videoShots',audio:'audioShots'};
+  const roleNames = {curator:'Куратор',contributor:'Исполнитель',viewer:'Наблюдатель'};
+  const scopes = {default:'По правилам задания',none:'Нет доступа',thumbnails:'Только предпросмотр',all:'Полный доступ'};
+  const teams = {
+    'Site A Crew':[{id:1,name:'Анна',slug:'@anna',userId:'U1001',role:'curator',scope:'all'},{id:2,name:'Марк',slug:'@mark',userId:'U1002',role:'contributor',scope:'default'}],
+    'Репортаж':[{id:3,name:'Ольга',slug:'@olga',userId:'U1003',role:'curator',scope:'default'},{id:4,name:'Давид',slug:'',userId:'U1004',role:'contributor',scope:'thumbnails'}],
+    '':[]
   };
-  const contacts = { 3: 'Ольга', 4: 'Давид', 5: 'Никита' };
-  const state = { tab: 'basics', team: 'Site A Crew', people: structuredClone(demoPeople), sheet: '', selectedPerson: null, lastFocus: null };
-  const esc = value => String(value ?? '').replace(/[&<>"']/g, char => (
-    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]
-  ));
-  const field = name => app.querySelector('[name="' + name + '"]');
-  const lines = value => value.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
-  const option = (action, label, attrs = '') =>
-    '<button type="button" data-sheet="' + action + '" ' + attrs + '>' + esc(label) + '</button>';
-
-  function setTab(tab) {
-    if (!panes.includes(tab)) return;
-    state.tab = tab;
-    app.querySelectorAll('[data-tab]').forEach(button => {
-      const current = button.dataset.tab === tab;
-      button.classList.toggle('selected', current);
-      button.setAttribute('aria-selected', String(current));
-      button.tabIndex = current ? 0 : -1;
+  const directory = [
+    {key:'anna',name:'Анна',slug:'@anna',id:'U1001'},
+    {key:'mark',name:'Марк',slug:'@mark',id:'U1002'},
+    {key:'olga',name:'Ольга',slug:'@olga',id:'U1003'},
+    {key:'david',name:'Давид',slug:'',id:'U1004'},
+    {key:'nikita',name:'Никита',slug:'',id:'U1005'},
+    {key:'irina',name:'Ирина',slug:'@irina',id:'U1006'}
+  ];
+  let people = teams['Site A Crew'].map(p => ({...p}));
+  let team = 'Site A Crew', nextId=10, activePerson=null, openedTab='basics', addTab='contacts';
+  let statusLog = [{kind:'success',title:'В работе',message:'Настройки открыты'}];
+  const asLocal = d => new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  const daysAfter = (d,days=1) => new Date(d.getTime()+days*86400000);
+  const tomorrowMin = asLocal(daysAfter(new Date()));
+  const start = field('startsAt');
+  const initialNow = asLocal(new Date());
+  start.min=initialNow;
+  start.value=initialNow;
+  field('finishesAt').value=tomorrowMin;
+  field('finishesAt').min=tomorrowMin;
+  field('removeFilesAt').value=tomorrowMin;
+  field('removeAssignmentAt').value=tomorrowMin;
+  const initial = {};
+  for(const f of $$('input[name],select[name],textarea[name]')) initial[f.name] = f.type==='checkbox'?f.checked:f.value;
+  const plural = (n,one,few,many) => {
+    const v=Math.abs(n)%100;
+    return v>=11 && v<=14?many:Math.abs(n)%10===1?one:[2,3,4].includes(Math.abs(n)%10)?few:many;
+  };
+  function status(kind,title,message){
+    statusLog.unshift({kind,title,message}); statusLog=statusLog.slice(0,15);
+    $('#status-label').textContent=kind==='error'?'Ошибка':'В работе';
+    $('.state-led').classList.toggle('error',kind==='error');
+  }
+  function showSheet(title,body){
+    $('#dialog-title').textContent=title;
+    content.innerHTML=body;
+    overlay.hidden=false;
+    overlay.querySelector('.dialog-sheet').focus();
+  }
+  function closeSheet(){ overlay.hidden=true;activePerson=null; }
+  function note(title,body){ showSheet(title,`<div class="dialog-note">${body}</div><button class="submit" data-sheet="close">Готово</button>`); }
+  function setTab(name){
+    if(!['basics','camera','participants','rules'].includes(name)) return;
+    openedTab=name;
+    $$('[data-pane]').forEach(x=>{x.hidden=x.dataset.pane!==name});
+    $$('[data-tab]').forEach(x=>{
+      const on=x.dataset.tab===name;
+      x.classList.toggle('selected',on);
+      x.setAttribute('aria-selected',String(on));
     });
-    app.querySelectorAll('[data-pane]').forEach(node => { node.hidden = node.dataset.pane !== tab; });
-    scroll.scrollTop = 0;
+    scroll.scrollTop=0;
+    $('#form-error').hidden=true;
   }
-  function markChanged() {
-    document.getElementById('draft-state').textContent = 'Изменено';
-    document.getElementById('draft-caption').textContent = 'Изменения в макете';
-    document.getElementById('form-error').hidden = true;
+  function dirty(){
+    $('#draft-state').textContent='Изменён';
+    $('#draft-caption').textContent='Несохранённые изменения';
   }
-  function syncDependencies() {
-    app.querySelectorAll('[data-toggle]').forEach(toggle => {
-      app.querySelectorAll('[data-dep="' + toggle.dataset.toggle + '"]').forEach(node => {
-        node.hidden = !toggle.checked;
-      });
-    });
+  function getEffectiveFinish(){
+    if(field('hasFinish').checked) return {date:field('finishesAt').value, reason:'Установленная дата окончания'};
+    const options=[];
+    if(field('autoFiles').checked && field('removeFilesAt').value)
+      options.push({date:field('removeFilesAt').value,reason:'Дата удаления файлов'});
+    if(field('autoAssignment').checked && field('removeAssignmentAt').value)
+      options.push({date:field('removeAssignmentAt').value,reason:'Дата удаления задания'});
+    options.sort((a,b)=>a.date.localeCompare(b.date));
+    return options[0] || null;
   }
-  function renderPeople() {
-    const container = document.getElementById('people-list');
-    container.innerHTML =
-      '<div class="person-row owner"><span class="person-avatar">Я</span><span class="person-data"><strong>Вы</strong><small>Владелец</small></span><span class="person-check">✓</span></div>' +
-      state.people.map(person =>
-        '<div class="person-row"><span class="person-avatar">' + esc(person.name.slice(0, 1).toUpperCase()) + '</span>' +
-        '<span class="person-data"><strong>' + esc(person.name) + '</strong><small>' +
-        esc(roleLabels[person.role] + ' · ' + photoScopeLabels[person.photoScope]) + '</small></span>' +
-        '<button type="button" data-action="edit-person" data-person="' + person.id + '" aria-label="Настроить: ' + esc(person.name) + '">›</button></div>'
-      ).join('');
-    document.getElementById('people-count').textContent = (state.people.length + 1) + ' чел.';
-  }
-  function openDialog(kind, title, html) {
-    state.lastFocus = document.activeElement;
-    state.sheet = kind;
-    dialogTitle.textContent = title;
-    dialogContent.innerHTML = html;
-    overlay.hidden = false;
-    dialog.focus();
-  }
-  function closeDialog() {
-    overlay.hidden = true;
-    state.sheet = '';
-    state.selectedPerson = null;
-    if (state.lastFocus && state.lastFocus.isConnected) state.lastFocus.focus();
-    state.lastFocus = null;
-  }
-  function message(title, html) {
-    openDialog('message', title,
-      '<div class="dialog-note">' + html + '</div>' + option('close', 'Понятно', 'class="primary-action"'));
-  }
-  function personEditor(person) {
-    const editing = Boolean(person);
-    const contactsList = Object.entries(contacts).filter(([id]) =>
-      !state.people.some(p => p.id === Number(id))
-    );
-    const contactPicker = editing ? '<div class="dialog-note">Участник: ' + esc(person.name) + '</div>' :
-      '<div class="dialog-note">Выбери контакт. В приложении список загружается из настоящих контактов пользователя.</div>' +
-      '<label>Контакт<select id="person-contact">' +
-      (contactsList.length ? contactsList.map(([id, name]) =>
-        '<option value="' + id + '">' + esc(name) + '</option>').join('') :
-        '<option value="">Нет доступных контактов</option>') +
-      '</select></label>';
-    const roles = Object.entries(roleLabels).map(([key, label]) =>
-      '<option value="' + key + '"' + ((person ? person.role : 'contributor') === key ? ' selected' : '') + '>' + label + '</option>').join('');
-    const scopes = Object.entries(photoScopeLabels).map(([key, label]) =>
-      '<option value="' + key + '"' + ((person ? person.photoScope : 'default') === key ? ' selected' : '') + '>' + label + '</option>').join('');
-    const saveAttrs = !editing && !contactsList.length ? 'disabled' : '';
-    return contactPicker +
-      '<label>Роль<select id="person-role">' + roles + '</select></label>' +
-      '<label>Доступ к фотографиям<select id="person-scope">' + scopes + '</select></label>' +
-      option('save-person', editing ? 'Сохранить изменения' : 'Добавить участника',
-        'class="primary-action" ' + saveAttrs) +
-      (editing ? option('remove-person', 'Удалить участника', 'class="danger"') : '');
-  }
-  function resetDemo() {
-    field('name').value = 'Фасады — Site A';
-    field('instructions').value = 'Снять фасад здания с разных ракурсов, включая детали входной группы. Обратить внимание на качество освещения.';
-    field('startsAt').value = '2026-11-07T09:00';
-    field('finishesAt').value = '2026-11-20T18:00';
-    field('presetId').value = 'standard';
-    field('targetCount').value = '30';
-    field('shots').value = 'Главный фасад\nЛевый ракурс\nПравый ракурс\nВходная группа';
-    field('categories').value = 'Фасад\nДетали\nВходная группа';
-    field('minLength').value = '10';
-    const defaults = {
-      useAssignmentPhotoId: true, categoryRequired: false,
-      particularCategory: false, descriptionRequired: false,
-      changesAllowed: true, keepOriginal: true, deletionAllowed: true,
-      galleryAllowed: true, thumbnailsOnly: false, sharingAllowed: true,
-      participantsOnly: false, publicEnabled: true, publicContributor: false,
-      publicCapturedAt: false, publicEditedAt: false, publicLocation: true,
-      publicDescription: true, publicTags: false, publicMetadata: false
-    };
-    Object.entries(defaults).forEach(([key, checked]) => { field(key).checked = checked; });
-    app.querySelector('[data-toggle="deadline"]').checked = false;
-    state.people = structuredClone(demoPeople);
-    state.team = 'Site A Crew';
-    document.getElementById('team-name').textContent = state.team;
-    document.getElementById('team-caption').textContent = 'Выбрана команда';
-    document.getElementById('shots-count').textContent = '4 пункта в плане';
-    document.getElementById('draft-state').textContent = 'Черновик';
-    document.getElementById('draft-caption').textContent = 'Демонстрационный черновик';
-    document.getElementById('form-error').hidden = true;
-    renderPeople();
-    syncDependencies();
-    setTab('basics');
-  }
-  function validate() {
-    if (!field('name').value.trim()) return { tab: 'basics', target: field('name'), error: 'Укажи название задания.' };
-    const start = field('startsAt').value;
-    const finish = field('finishesAt').value;
-    if (app.querySelector('[data-toggle="deadline"]').checked &&
-      (!finish || (start && new Date(finish) <= new Date(start)))) {
-      return { tab: 'basics', target: field('finishesAt'), error: 'Окончание должно быть позже начала.' };
+  function refreshDates(){
+    const startValue=field('startsAt').value || initialNow;
+    const finishMin=[tomorrowMin,asLocal(new Date(new Date(startValue).getTime()+60000))].sort().at(-1);
+    const finish=field('finishesAt');
+    finish.min=finishMin;
+    if(!finish.value||finish.value<finishMin)finish.value=finishMin;
+    const removeMin=field('hasFinish').checked?finish.value:finishMin;
+    for(const name of ['removeFilesAt','removeAssignmentAt']){
+      const el=field(name);el.min=removeMin;
+      if(!el.value||el.value<removeMin)el.value=removeMin;
     }
-    const target = Number(field('targetCount').value);
-    if (!Number.isInteger(target) || target < 1 || target > 9999) {
-      return { tab: 'camera', target: field('targetCount'), error: 'Количество фотографий: от 1 до 9999.' };
+    const computed=getEffectiveFinish();
+    $('#effective-finish').textContent=computed
+      ? 'Задание завершится: '+computed.date.replace('T',' ')+' · '+computed.reason
+      : 'Без срока окончания';
+  }
+  function refreshDeps(){
+    for(const control of $$('[data-toggle]')){
+      $$(`[data-dep="${control.dataset.toggle}"]`).forEach(node=>{node.hidden=!control.checked});
     }
-    const shots = lines(field('shots').value);
-    if (shots.length > 100 || shots.some(x => x.length > 80)) {
-      return { tab: 'camera', target: field('shots'), error: 'Максимум 100 пунктов, не более 80 символов каждый.' };
+  }
+  function refreshMedia(){
+    let active=0,hasTarget=false;
+    const items=[];
+    for(const type of ['photo','video','audio']){
+      const enabled=field(allows[type]).checked;
+      const card=$(`[data-type="${type}"]`);
+      card.classList.toggle('off',!enabled);
+      if(enabled){
+        active++;
+        const target=field(counts[type]).value.trim();
+        if(target)hasTarget=true;
+        items.push(`<span>${labels[type]}: ${target?esc(target):'без цели'}</span>`);
+      }
+      const value=field(instructions[type]).value.trim();
+      $(`[data-shots="${type}"]`).textContent=value?'Инструкции указаны':'Без дополнительных инструкций';
     }
-    if (field('particularCategory').checked && !lines(field('categories').value).length) {
-      return { tab: 'rules', target: field('categories'), error: 'Заполни список разрешённых категорий.' };
+    $('#media-summary').innerHTML=items.join('');
+    $('#total-count').textContent=active+' '+plural(active,'тип','типа','типов')+(hasTarget?' · цели для прогресса':' · без количественных целей');
+  }
+  const displayId=p=>p.slug || '#'+(p.userId || p.id);
+  const avatarText=p=>p.name?.slice(0,1).toUpperCase() || (p.slug?.replace('@','').slice(0,1).toUpperCase()) || '#';
+  function renderPeople(){
+    const all=[{id:'owner',name:'Вы',slug:'@you',userId:'U1000',role:'Владелец',scope:'Полный доступ'},...people];
+    $('#people-count').textContent=all.length+' '+plural(all.length,'человек','человека','человек');
+    $('#team-name').textContent=team || 'Без команды';
+    $('#people-list').innerHTML=all.map(p=>`<div class="person-row ${p.id==='owner'?'owner':''}">
+      <div class="person-avatar" aria-hidden="true">${esc(avatarText(p))}</div>
+      <div class="person-data"><strong>${esc(displayId(p))}</strong></div>
+      ${p.id==='owner'?'<span style="color:var(--green)" title="Владелец">✓</span>':`<button type="button" data-action="person" data-person="${p.id}" aria-label="Настроить участника ${esc(displayId(p))}">•••</button>`}
+    </div>`).join('');
+  }
+  function reset(){
+    for(const f of $$('input[name],select[name],textarea[name]')){
+      if(f.type==='checkbox') f.checked=initial[f.name];
+      else f.value=initial[f.name];
     }
-    if (lines(field('categories').value).length > 30 ||
-      lines(field('categories').value).some(x => x.length > 80)) {
-      return { tab: 'rules', target: field('categories'), error: 'Максимум 30 категорий, не более 80 символов каждая.' };
+    team='Site A Crew'; people=teams[team].map(p=>({...p}));
+    refreshDates();refreshDeps();refreshMedia();renderPeople();setTab('basics');
+    $('#draft-state').textContent='Черновик';$('#draft-caption').textContent='Черновик';
+    status('success','В работе','Настройки сброшены');
+  }
+  function validate(){
+    if(!field('name').value.trim()) return ['Введите название задания','basics','name'];
+    if(!start.value||start.value<start.min) return ['Дата начала не может быть раньше текущего времени','basics','startsAt'];
+    const hasFinish=field('hasFinish').checked;
+    if(hasFinish && (!field('finishesAt').value||field('finishesAt').value<field('finishesAt').min))
+      return ['Проверьте дату окончания','basics','finishesAt'];
+    for(const [toggle,name,label] of [['autoFiles','removeFilesAt','удаления файлов'],['autoAssignment','removeAssignmentAt','удаления задания']]){
+      if(field(toggle).checked && (!field(name).value||field(name).value<field(name).min))
+        return [`Проверьте дату ${label}`,'basics',name];
     }
-    const minLength = Number(field('minLength').value);
-    if (!Number.isInteger(minLength) || minLength < 1 || minLength > 2000) {
-      return { tab: 'rules', target: field('minLength'), error: 'Минимальная длина описания: 1–2000.' };
+    const effective=getEffectiveFinish();
+    if(effective && effective.date < asLocal(new Date(new Date(start.value).getTime()+60000)))
+      return ['Задание не может завершиться до начала','basics',field('hasFinish').checked?'finishesAt':field('autoFiles').checked?'removeFilesAt':'removeAssignmentAt'];
+    const enabled=['photo','video','audio'].filter(t=>field(allows[t]).checked);
+    if(enabled.length===0)return ['Разрешите хотя бы один тип файла','camera','allowPhoto'];
+    for(const type of enabled){
+      const el=field(counts[type]);
+      const raw=el.value.trim();
+      const limit=type==='photo'?9999:999;
+      if(raw && (!/^\d+$/.test(raw)||+raw<1||+raw>limit))
+        return [`Количество ${labels[type].toLowerCase()} должно быть от 1 до ${limit}`,'camera',counts[type]];
     }
-    if (state.people.length > 100) {
-      return { tab: 'participants', target: document.getElementById('people-list'), error: 'Слишком много участников.' };
-    }
+    if(field('particularCategory').checked && !field('categories').value.trim())
+      return ['Укажите разрешённые категории','rules','categories'];
+    if(field('particularTags').checked && !field('allowedTags').value.trim())
+      return ['Укажите разрешённые теги','rules','allowedTags'];
+    if(field('descriptionRequired').checked && (+field('minLength').value<1||+field('minLength').value>2000))
+      return ['Минимальная длина описания — от 1 до 2000','rules','minLength'];
     return null;
   }
-  app.addEventListener('click', event => {
-    const button = event.target.closest('button');
-    if (!button || !app.contains(button)) return;
-    if (button.dataset.tab) { setTab(button.dataset.tab); return; }
-    const action = button.dataset.action;
-    if (action === 'close') { closeDialog(); return; }
-    if (action === 'back') {
-      message('Назад к заданиям', 'В реальном приложении кнопка возвращает на предыдущий экран по истории. Этот прототип не подключён к маршрутам.');
+  function showValidationFailure(failure){
+    setTab(failure[1]);
+    $('#form-error').hidden=false;
+    $('#form-error').textContent=failure[0];
+    field(failure[2])?.focus();
+    status('error','Проверка',failure[0]);
+  }
+  function save(){
+    const failure=validate();
+    if(failure) return showValidationFailure(failure);
+    const media=['photo','video','audio'].filter(t=>field(allows[t]).checked)
+      .map(t=>`<div style="padding:6px 0;border-bottom:1px solid #4b4b4b">${labels[t]} · ${field(counts[t]).value.trim()||'без цели'}</div>`).join('');
+    const autoFiles=field('autoFiles').checked ? esc(field('removeFilesAt').value.replace('T',' ')):'Никогда';
+    const autoTask=field('autoAssignment').checked ? esc(field('removeAssignmentAt').value.replace('T',' ')):'Никогда';
+    showSheet('Параметры задания',`<div class="dialog-note"><strong>${esc(field('name').value.trim())}</strong>
+      <p>Разрешённые форматы:</p>${media}<p>Удаление файлов: ${autoFiles}<br>Удаление задания: ${autoTask}</p>
+      <p>Загрузка из внешних источников: ${field('allowExternalUpload').checked?'разрешена':'запрещена'}</p></div>
+      <button class="submit" data-sheet="close">Закрыть</button>`);
+    $('#draft-state').textContent='Проверено';
+    $('#draft-caption').textContent='Настройки проверены';
+    status('success','Проверка','Параметры прошли проверку формы');
+  }
+  function presetSheet(){
+    showSheet('Настройки камеры',`<div class="dialog-note">Параметры выбранного пресета</div>
+    <label>Название пресета<input id="preset-name" value="${esc(field('presetId').selectedOptions[0].textContent)}" maxlength="60"></label>
+    <label>Качество фото<select id="preset-photo"><option>Максимальное</option><option selected>Высокое</option><option>Среднее</option></select></label>
+    <label>Качество видео<select id="preset-video"><option>480p</option><option>720p</option><option selected>1080p</option></select></label>
+    <label>Качество аудио<select id="preset-audio"><option>64 кбит/с</option><option selected>128 кбит/с</option><option>256 кбит/с</option></select></label>
+    <button class="submit" data-sheet="save-preset">Сохранить пресет</button>
+    <button data-sheet="add-preset">Добавить пресет</button>`);
+  }
+  function teamSheet(){
+    showSheet('Выбрать команду',Object.keys(teams).map(name=>`<button data-sheet="choose-team" data-team="${esc(name)}">${esc(name||'Без команды')}</button>`).join('')+
+    '');
+  }
+  function teamSettings(){
+    showSheet('Настройки команды',`<div class="dialog-note"><strong>${esc(team||'Без команды')}</strong><p>Настройки команды доступны отдельно от задания.</p></div>
+    <button data-sheet="choose-team">Без команды</button><button class="submit" data-sheet="close">Готово</button>`);
+  }
+  function personSheet(id){
+    const p=people.find(x=>x.id===id);if(!p)return;
+    activePerson=id;
+    showSheet(displayId(p),`<label>Роль<select id="person-role">${Object.entries(roleNames).map(([v,t])=>`<option value="${v}" ${p.role===v?'selected':''}>${t}</option>`).join('')}</select></label>
+    <label>Доступ к файлам<select id="person-scope">${Object.entries(scopes).map(([v,t])=>`<option value="${v}" ${p.scope===v?'selected':''}>${t}</option>`).join('')}</select></label>
+    <button class="submit" data-sheet="save-person">Сохранить</button><button class="danger" data-sheet="remove-person">Удалить участника</button>`);
+  }
+  function addPersonSheet(tab='contacts'){
+    addTab=tab;
+    showSheet('Добавить участника',`<div class="sheet-tabs"><button data-sheet="contacts-tab" class="${tab==='contacts'?'selected':''}">Контакты</button>
+      <button data-sheet="search-tab" class="${tab==='search'?'selected':''}">Поиск</button></div>
+      <label>${tab==='contacts'?'Контакты':'UserID или @UserSlug'}<input id="people-query" placeholder="${tab==='contacts'?'Имя контакта':'@username или U1003'}" autocomplete="off"></label>
+      <div class="search-results" id="people-results"></div>`);
+    renderMatches('');
+  }
+  function renderMatches(query){
+    const place=content.querySelector('#people-results');if(!place)return;
+    const q=query.toLocaleLowerCase().trim();
+    let items=directory.filter(p=>!people.some(x=>x.name===p.name));
+    if(addTab==='contacts') items=items.filter(p=>['Ольга','Давид','Никита'].includes(p.name));
+    if(q) items=items.filter(p=>[p.name,p.slug,p.id].some(x=>x.toLocaleLowerCase().includes(q)));
+    place.innerHTML=items.length?items.map(p=>`<button class="person-choice" data-sheet="pick-person" data-person-key="${p.key}"><span class="person-avatar" aria-hidden="true">${esc(avatarText(p))}</span><span class="person-data"><strong>${esc(displayId({slug:p.slug,userId:p.id}))}</strong></span></button>`).join('')
+      : '<div class="dialog-note">Ничего не найдено</div>';
+  }
+  app.addEventListener('click',event=>{
+    const btn=event.target.closest('button');if(!btn)return;
+    if(btn.dataset.tab){setTab(btn.dataset.tab);return;}
+    const action=btn.dataset.action;
+    if(action==='status'){showSheet('Состояние',statusLog.map(x=>`<div class="dialog-note"><strong>${esc(x.title)}</strong><p>${esc(x.message)}</p></div>`).join(''));return;}
+    if(action==='info'){note('Редактор задания','Настройте сроки, разрешённые типы файлов, участников и правила.');return;}
+    if(action==='back'){note('Возврат к заданиям','Вернуться к списку заданий?');return;}
+    if(action==='save'){save();return;}
+    if(action==='reset'){reset();return;}
+    if(action==='preset'){presetSheet();return;}
+    if(action==='team'){teamSheet();return;}
+    if(action==='team-settings'){teamSettings();return;}
+    if(action==='person'){personSheet(+btn.dataset.person);return;}
+    if(action==='add-person'){addPersonSheet();return;}
+    if(action==='close'){closeSheet();return;}
+  });
+  app.addEventListener('change',event=>{
+    const el=event.target;
+    if(el.matches('.media-enable')&&!['photo','video','audio'].some(t=>field(allows[t]).checked)){
+      el.checked=true;
+      note('Типы файлов','Нужно разрешить хотя бы один тип файлов.');
       return;
     }
-    if (action === 'info') {
-      message('Редактор задания', 'Те же четыре раздела, что в текущем PhotoBunker: Основное, Камера, Участники, Правила. Public Card находится в конце правил, в общем стиле переключателей. Данные не отправляются на сервер.');
-      return;
-    }
-    if (action === 'status') {
-      openDialog('status', 'Состояние приложения',
-        '<div class="dialog-note">Это демонстрация. В production статус отображает реальные операции.</div>' +
-        ['В работе', 'Загрузка', 'Подключение', 'Офлайн', 'Ошибка', 'Готово']
-          .map(name => option('set-status', name, 'data-value="' + name + '"')).join(''));
-      return;
-    }
-    if (action === 'preset') {
-      openDialog('preset', 'Пресеты камеры',
-        option('choose-preset', 'Standard', 'data-value="standard"') +
-        option('choose-preset', 'Fieldwork · Высокое качество', 'data-value="field"') +
-        option('choose-preset', 'Быстрая съёмка', 'data-value="fast"') +
-        '<div class="dialog-note">В приложении «Создать пресет» открывает настоящий редактор и сохраняет контекст задания. Здесь можно переключить демонстрационный пресет.</div>');
-      return;
-    }
-    if (action === 'team') {
-      openDialog('team', 'Выбрать команду',
-        option('choose-team', 'Site A Crew · 2 участника', 'data-value="Site A Crew"') +
-        option('choose-team', 'Репортаж · 3 участника', 'data-value="Репортаж"') +
-        option('choose-team', 'Без команды', 'data-value=""') +
-        '<div class="dialog-note">Участники копируются в задание. В реальном проекте они выбираются по действительным данным команды.</div>');
-      return;
-    }
-    if (action === 'add-person') {
-      state.selectedPerson = null;
-      openDialog('person', 'Добавить участника', personEditor(null));
-      return;
-    }
-    if (action === 'edit-person') {
-      const person = state.people.find(p => p.id === Number(button.dataset.person));
-      if (!person) return;
-      state.selectedPerson = person.id;
-      openDialog('person', 'Настройка участника', personEditor(person));
-      return;
-    }
-    if (action === 'reset') {
-      if (window.confirm('Сбросить демонстрационный черновик?')) resetDemo();
-      return;
-    }
-    if (action === 'save') {
-      const invalid = validate();
-      if (invalid) {
-        setTab(invalid.tab);
-        const errorNode = document.getElementById('form-error');
-        errorNode.textContent = invalid.error;
-        errorNode.hidden = false;
-        invalid.target.focus();
-        return;
-      }
-      document.getElementById('draft-state').textContent = 'Проверено';
-      document.getElementById('draft-caption').textContent = 'Не отправлено на сервер';
-      message('Демонстрация сохранения',
-        '<strong>' + esc(field('name').value.trim()) + '</strong><p>Все обязательные поля заполнены. ' +
-        'В настоящем PhotoBunker сохраняется полный объект задания с правилами, пресетом, командой и участниками.</p>' +
-        '<p>В этом прототипе реальное задание не создаётся.</p>');
-      return;
-    }
-
-    const sheetAction = button.dataset.sheet;
-    if (!sheetAction) return;
-    if (sheetAction === 'close') { closeDialog(); return; }
-    if (sheetAction === 'set-status') {
-      const label = button.dataset.value;
-      statusLabel.textContent = label;
-      statusLed.className = 'state-led ' +
-        (label === 'Загрузка' || label === 'Подключение' ? 'busy' :
-          label === 'Ошибка' ? 'error' : label === 'Офлайн' ? 'warning' : '');
-      closeDialog();
-      return;
-    }
-    if (sheetAction === 'choose-preset') {
-      field('presetId').value = button.dataset.value;
-      markChanged();
-      closeDialog();
-      return;
-    }
-    if (sheetAction === 'choose-team') {
-      state.team = button.dataset.value;
-      state.people = structuredClone(demoTeams[state.team] || []);
-      document.getElementById('team-name').textContent = state.team || 'Без команды';
-      document.getElementById('team-caption').textContent = state.team ? 'Выбрана команда' : 'Команда не выбрана';
-      renderPeople();
-      markChanged();
-      closeDialog();
-      return;
-    }
-    if (sheetAction === 'save-person') {
-      const role = dialogContent.querySelector('#person-role').value;
-      const photoScope = dialogContent.querySelector('#person-scope').value;
-      if (state.selectedPerson !== null) {
-        const person = state.people.find(p => p.id === state.selectedPerson);
-        if (person) Object.assign(person, { role, photoScope });
-      } else {
-        const id = Number(dialogContent.querySelector('#person-contact').value);
-        if (!id || !contacts[id] || state.people.some(p => p.id === id)) return;
-        state.people.push({ id, name: contacts[id], role, photoScope });
-      }
-      renderPeople();
-      markChanged();
-      closeDialog();
-      return;
-    }
-    if (sheetAction === 'remove-person') {
-      state.people = state.people.filter(p => p.id !== state.selectedPerson);
-      renderPeople();
-      markChanged();
-      closeDialog();
+    if(el.matches('input,textarea,select')){
+      if(['startsAt','finishesAt','hasFinish','autoFiles','autoAssignment'].includes(el.name))refreshDates();
+      refreshDeps();refreshMedia();dirty();
     }
   });
-
-  // Dependency switches use the same interaction as all other Rules switches.
-  app.addEventListener('change', event => {
-    if (event.target.matches('input,textarea,select')) {
-      if (event.target.dataset.toggle) syncDependencies();
-      if (event.target.name === 'shots') {
-        const shotCount = lines(field('shots').value).length;
-        document.getElementById('shots-count').textContent = shotCount + ' пунктов в плане';
-        if (Number(field('targetCount').value) < shotCount) field('targetCount').value = String(shotCount);
-      }
-      markChanged();
+  app.addEventListener('input',event=>{
+    if(event.target.matches('input,textarea,select')){
+      if(['startsAt','finishesAt','removeFilesAt','removeAssignmentAt'].includes(event.target.name)) refreshDates();
+      refreshMedia();dirty();
     }
   });
-  app.addEventListener('input', event => {
-    if (event.target.matches('input,textarea,select')) markChanged();
+  content.addEventListener('input',event=>{
+    if(event.target.id==='people-query')renderMatches(event.target.value);
   });
-  app.querySelectorAll('[data-tab]').forEach(button => {
-    button.addEventListener('keydown', event => {
-      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-      event.preventDefault();
-      const index = panes.indexOf(button.dataset.tab);
-      const next = event.key === 'Home' ? 0 : event.key === 'End' ? panes.length - 1 :
-        (index + (event.key === 'ArrowRight' ? 1 : -1) + panes.length) % panes.length;
-      const nextButton = app.querySelector('[data-tab="' + panes[next] + '"]');
-      setTab(panes[next]);
-      nextButton.focus();
+  content.addEventListener('click',event=>{
+    const btn=event.target.closest('button[data-sheet]');if(!btn)return;
+    const a=btn.dataset.sheet;
+    if(a==='close'){closeSheet();return;}
+    if(a==='contacts-tab'){addPersonSheet('contacts');return;}
+    if(a==='search-tab'){addPersonSheet('search');return;}
+    if(a==='add-preset'||a==='save-preset'){
+      const name=content.querySelector('#preset-name')?.value.trim();if(!name)return;
+      const select=field('presetId');
+      if(a==='add-preset'){
+        const opt=document.createElement('option');opt.value='custom-'+Date.now();opt.textContent=name;select.append(opt);select.value=opt.value;
+      }else select.selectedOptions[0].textContent=name;
+      closeSheet();dirty();return;
+    }
+    if(a==='team-settings'){teamSettings();return;}
+    if(a==='choose-team'){
+      team=btn.dataset.team||'';
+      people=(teams[team]||[]).map(p=>({...p}));
+      renderPeople();closeSheet();dirty();return;
+    }
+    if(a==='pick-person'){
+      const person=directory.find(p=>p.key===btn.dataset.personKey);
+      if(person&&!people.some(x=>x.name===person.name)){
+        people.push({id:nextId++,name:person.name,slug:person.slug,userId:person.id,role:'contributor',scope:'default'});
+        renderPeople();dirty();
+      }
+      closeSheet();return;
+    }
+    if(a==='save-person'){
+      const p=people.find(x=>x.id===activePerson);
+      if(p){p.role=content.querySelector('#person-role').value;p.scope=content.querySelector('#person-scope').value;}
+      renderPeople();closeSheet();dirty();return;
+    }
+    if(a==='remove-person'){
+      people=people.filter(x=>x.id!==activePerson);
+      renderPeople();closeSheet();dirty();return;
+    }
+  });
+  overlay.addEventListener('click',e=>{if(e.target===overlay)closeSheet();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!overlay.hidden)closeSheet();});
+  document.querySelectorAll('[data-device]').forEach(btn=>btn.addEventListener('click',()=>{
+    document.getElementById('device').className='device '+btn.dataset.device;
+    document.querySelectorAll('[data-device]').forEach(x=>{
+      x.classList.toggle('selected',x===btn);
+      x.setAttribute('aria-pressed',String(x===btn));
     });
-  });
-  document.querySelectorAll('[data-device]').forEach(button => {
-    button.addEventListener('click', () => {
-      const selected = button.dataset.device;
-      device.className = 'device ' + selected;
-      document.querySelectorAll('[data-device]').forEach(other => {
-        other.classList.toggle('selected', other === button);
-        other.setAttribute('aria-pressed', String(other === button));
-      });
-    });
-  });
-  overlay.addEventListener('click', event => { if (event.target === overlay) closeDialog(); });
-  document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && !overlay.hidden) { event.preventDefault(); closeDialog(); }
-  });
-
-  resetDemo();
+  }));
+  refreshDates();refreshDeps();refreshMedia();renderPeople();setTab('basics');
 })();
+
