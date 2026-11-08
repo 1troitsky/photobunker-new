@@ -15,6 +15,8 @@
 | Browser / редактирование фотографий | Fieldwork Photo Editor 3.2 Fixed · Информация / Фото / Проверка, тексты, фигуры, сохранение | [browser/editor/index.html](browser/editor/index.html) · [спецификация](browser/editor/README.md) | **OWNER-SELECTED DESIGN / PROTOTYPE DOCUMENTED / IMPLEMENTATION NOT STARTED** |
 | Browser / редактирование видео и аудио | **Video & Audio Editor 1.1** · обрезка, стоп-кадр, JPEG/WAV, сохранение на устройство и в Browser | [browser/media-editor/index.html](browser/media-editor/index.html) · [автономный эталон](browser/media-editor/accepted-media-editor-v1.1.html) · [спецификация](browser/media-editor/README.md) | **OWNER-ACCEPTED UX / NOT PRODUCTION IMPLEMENTED** |
 
+**Тарифная политика (решение владельца 2026-11-08):** [Billing & Tariff Contract](../product/BILLING-TARIFF-CONTRACT.md). Содержит Free / Go / Pro / Unlimited, окончательную продуктовую сетку, скидки, квоты, одну обновляемую резервную копию и льготный период. Старый `payments/catalog.ts` содержит устаревшие значения. Новый HTML тарифов пока проходит отдельное согласование и **не является готовым UX-эталоном**.
+
 ## Обязательный общий интерфейс
 
 Перед созданием или изменением экрана прочитать **[UI-SHELL-CONTRACT.md](UI-SHELL-CONTRACT.md)**. Header, логотип PhotoBunker, системный статус, path bar Browser и пятикнопочный dock **не меняют визуальный стиль, геометрию и расположение от страницы к странице**. Разрешён только контекстный набор иконок Header. File Viewer (ранее Photo Viewer) — часть Browser, не отдельный UI Shell.
