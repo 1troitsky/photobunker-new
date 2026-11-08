@@ -28,6 +28,8 @@
 
 - Settings & Profile 1.6 **WIP**: [интерактивный экран](settings-profile/index.html), [неизменённый автономный HTML](settings-profile/settings-profile-v1.6-standalone.html), [контракт](settings-profile/README.md). Сохранить геометрию Header 64 px / dock 82 px и общий статус. Header содержит контекстный поиск и зелёный статус тарифа, но источник реального тарифа — отдельный будущий модуль. Экран **не принят как финальный**, поэтому не переносить спорные детали в production без отдельного согласования.
 
+- Payments & Tariffs 1.1 — **OWNER-ACCEPTED UX**: [экран](payments-tariffs/index.html), [исходный автономный HTML](payments-tariffs/accepted-payments-tariffs-v1.1-standalone.html), [описание](payments-tariffs/README.md). Fieldwork Header 64px / dock 82px, нейтральный тёмный фон, зелёный статус тарифа, умеренное закругление; Free / Go / Pro / Unlimited, периоды 1/6/12 месяцев. Не объявлять checkout, billing, backups или entitlements реализованными по наличию макета. Бизнес-правила — только [контракт тарифов](../product/BILLING-TARIFF-CONTRACT.md).
+
 ## Архитектурное правило внедрения
 
 В production создать/переиспользовать **ОДИН** layout/компонент общей оболочки (например, через действующий App Shell), с **контекстным слотом действий** и **одним** status controller/store. Экран передаёт действия и основное содержимое, **не реализует повторно header/dock**, не дублирует status logic. Не переносить demo HTML/CSS слепым копированием: сначала проверить действующие Vue-компоненты и роуты. Не менять `main` и не переносить в production без отдельного scope/PR и тестов.

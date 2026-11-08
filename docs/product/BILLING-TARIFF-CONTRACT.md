@@ -89,6 +89,8 @@ Emergency PIN доступен **на всех планах**. Его назна
 
 **Обязательные инварианты:** quotas enforced server-side; не терять несинхронизированный зашифрованный файл; никакого прямого уничтожения по одному истекшему plan timestamp; backup pointer swapping atomic; тарификация не обходит ACL/E2EE/TTL; cancelled/failed payment никогда не выглядит успешным; server clock authoritative; idempotency across retry/reload.
 
+**UX reference:** [Payments & Tariffs 1.1](../ux/payments-tariffs/README.md) — **OWNER-ACCEPTED UX** 2026-11-08; [утверждённый автономный HTML](../ux/payments-tariffs/accepted-payments-tariffs-v1.1-standalone.html). Принятие дизайна не означает production-реализацию оплаты.
+
 ## 8. UX-экраны и язык отображения
 
 - «Платежи и тарифы»: Free / Go / Pro / Unlimited, сравнение возможностей, текущий план, продление, оформление, история операций.
