@@ -30,6 +30,8 @@
 
 - Payments & Tariffs 1.1 — **OWNER-ACCEPTED UX**: [экран](payments-tariffs/index.html), [исходный автономный HTML](payments-tariffs/accepted-payments-tariffs-v1.1-standalone.html), [описание](payments-tariffs/README.md). Fieldwork Header 64px / dock 82px, нейтральный тёмный фон, зелёный статус тарифа, умеренное закругление; Free / Go / Pro / Unlimited, периоды 1/6/12 месяцев. Не объявлять checkout, billing, backups или entitlements реализованными по наличию макета. Бизнес-правила — только [контракт тарифов](../product/BILLING-TARIFF-CONTRACT.md).
 
+- Help, FAQ & Legal 1.0 — **OWNER-ACCEPTED UI / TEXT DRAFT**: [экран](help-legal/index.html), [автономный HTML](help-legal/accepted-help-legal-v1.0-standalone.html), [описание](help-legal/README.md). Сохранён общий Header 64px / Dock 82px, нейтральные тёмные панели, средние скругления. Юридические страницы намеренно являются placeholder; их нельзя публиковать как действительные юридические условия. Заявления о security-функциях проверять по [SECURITY](../05-SECURITY.md), не делать абсолютных обещаний о следах ОС или Dead Man's Switch.
+
 ## Архитектурное правило внедрения
 
 В production создать/переиспользовать **ОДИН** layout/компонент общей оболочки (например, через действующий App Shell), с **контекстным слотом действий** и **одним** status controller/store. Экран передаёт действия и основное содержимое, **не реализует повторно header/dock**, не дублирует status logic. Не переносить demo HTML/CSS слепым копированием: сначала проверить действующие Vue-компоненты и роуты. Не менять `main` и не переносить в production без отдельного scope/PR и тестов.
