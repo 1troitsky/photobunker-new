@@ -32,6 +32,8 @@
 
 - Help, FAQ & Legal 1.0 — **OWNER-ACCEPTED UI / TEXT DRAFT**: [экран](help-legal/index.html), [автономный HTML](help-legal/accepted-help-legal-v1.0-standalone.html), [описание](help-legal/README.md). Сохранён общий Header 64px / Dock 82px, нейтральные тёмные панели, средние скругления. Юридические страницы намеренно являются placeholder; их нельзя публиковать как действительные юридические условия. Заявления о security-функциях проверять по [SECURITY](../05-SECURITY.md), не делать абсолютных обещаний о следах ОС или Dead Man's Switch.
 
+- App Appearance 1.2 — **OWNER-ACCEPTED UX**: [экран](app-appearance/index.html), [точный автономный HTML](app-appearance/accepted-app-appearance-v1.2-standalone.html), [спецификация](app-appearance/README.md). Header 64 px / Dock 82 px, тёмно-серый нейтральный стиль Fieldwork по умолчанию с зелёным акцентом и средним скруглением. Под Dock никогда не переносить закреплённые кнопки «Отмена» / «Сохранить»: они стоят **над dock**, с отдельной неподвижной областью. Поиск Settings поддерживает RU/EN синонимы и **переход к конкретному полю** (например, «язык» / `language`), а не просто страницу «Оформление». Реальный store настроек и persistent i18n — отдельная production-задача.
+
 ## Архитектурное правило внедрения
 
 В production создать/переиспользовать **ОДИН** layout/компонент общей оболочки (например, через действующий App Shell), с **контекстным слотом действий** и **одним** status controller/store. Экран передаёт действия и основное содержимое, **не реализует повторно header/dock**, не дублирует status logic. Не переносить demo HTML/CSS слепым копированием: сначала проверить действующие Vue-компоненты и роуты. Не менять `main` и не переносить в production без отдельного scope/PR и тестов.
