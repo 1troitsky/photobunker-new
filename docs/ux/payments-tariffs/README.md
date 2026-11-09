@@ -26,3 +26,7 @@
 UI является демонстрацией с фиктивными данными, не платежным SDK. Production биллинг, ACL, E2EE, TTL/GC, хранилище, безопасная оплата, ledger и провайдеры реализуются отдельной задачей. Не менять работающий runtime или `main` ради фиксации UX.
 
 **Проверка сохранения:** обратная сборка index + style + app даёт в точности исходный автономный HTML, скрипт проходит `node --check`. Пользователь ранее просмотрел интерактивный HTML и явно подтвердил UX. Production E2E/платёжный тест не проводился.
+
+## Web3 Checkout 1.0 (утверждённый отдельный экран)
+
+Из действий «Оплатить» / «Продлить» должен открываться самостоятельный шаг [Web3 Checkout 1.0](checkout/README.md): [интерактивный макет](checkout/index.html), [утверждённый автономный HTML](checkout/accepted-web3-checkout-v1.0-standalone.html). Визуально наследует этот раздел и Fieldwork Shell, использует цены из [BILLING-TARIFF-CONTRACT.md](../../product/BILLING-TARIFF-CONTRACT.md), первый способ оплаты — DePay с возможностью добавления Web3-провайдеров. Пока **OWNER-ACCEPTED UX / NOT PRODUCTION IMPLEMENTED**: invoice, DePay SDK, подтверждение блокчейна и активация тарифа требуют отдельной безопасной реализации.

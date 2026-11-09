@@ -50,6 +50,8 @@
 
 - Data & Storage 1.2 — **OWNER-ACCEPTED UX / FURTHER REFINEMENTS POSSIBLE**: [экран](data-storage/index.html), [эталон HTML](data-storage/accepted-data-storage-v1.2-standalone.html), [контракт](data-storage/README.md). Используемые лимиты и очередь локальных unsynced файлов считаются отдельно, кэш не входит в облачную квоту. Backup — список, текущий максимум 1, автообновления по дням недели с квотами. Автопродление системно включено, без пользовательского переключателя, с ограничениями TTL и прав. Fieldwork Header 64px/Dock 82px, без новых визуальных стилей.
 
+- Web3 Checkout 1.0 — **OWNER-ACCEPTED UX / NOT PRODUCTION IMPLEMENTED**: [экран](payments-tariffs/checkout/index.html), [утверждённый автономный HTML](payments-tariffs/checkout/accepted-web3-checkout-v1.0-standalone.html), [спецификация](payments-tariffs/checkout/README.md). Это шаг из Payments & Tariffs 1.1 с прежним Fieldwork Header 64px / Dock 82px; заказ Go/Pro/Unlimited на 1/6/12 месяцев, сумма USD, DePay как первый Web3-способ и расширение под других провайдеров, состояния pending/success/failed/cancelled. **Не подключать реальную оплату или тарифную активацию без серверной проверки settlement.**
+
 ## Архитектурное правило внедрения
 
 В production создать/переиспользовать **ОДИН** layout/компонент общей оболочки (например, через действующий App Shell), с **контекстным слотом действий** и **одним** status controller/store. Экран передаёт действия и основное содержимое, **не реализует повторно header/dock**, не дублирует status logic. Не переносить demo HTML/CSS слепым копированием: сначала проверить действующие Vue-компоненты и роуты. Не менять `main` и не переносить в production без отдельного scope/PR и тестов.
