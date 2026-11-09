@@ -272,8 +272,8 @@ S - Profile/Settings
         - Launch pin
         - Emergency-data-removing pin
 
-**Утверждённая PIN-модель (2026-11-06):** обычный PIN 4–6 цифр, аварийный — строго 2× длины обычного (8/10/12 цифр), вводится как две последовательные N-значные части. Первая совпавшая половина скрыто переводит в ожидание второй; обе части могут совпадать друг с другом, но не с обычным PIN. Поле очищается автоматически после каждых N цифр, без auto-submit таймеров. После 5 ошибок обычный вход заблокирован на 20 минут, аварийный остаётся доступен. Забытый PIN восстанавливается через Recovery Key. Аварийный PIN — только уничтожение данных, не запасной вход: локальное удаление раньше облачной команды; при отсутствии бэкапа потеря безвозвратна. Если подтверждённый независимый облачный бэкап существует, его нужно сохранять для восстановления по ключу. Текущий сервер этот последний пункт пока не обеспечивает — до исправления нет production acceptance.
-            - keep data in cloud?
+**Текущая PIN-модель — решение владельца 2026-11-08/09:** только два PIN — вход (4–8 цифр) и экстренное удаление (4–8 цифр, та же длина, другое значение, только после PIN входа). Смена длины обычного PIN сбрасывает аварийный; отключение входного отключает и аварийный с предупреждением. Биометрии нет. Экстренный PIN немедленно блокирует локальный доступ, инициирует удаление данных и cloud delete при наличии связи; cloud deletion подтверждается отдельным server ACK. Recovery Key, устройства и сроки удаления по неактивности: [целевой контракт](docs/product/SECURITY-PIN-DEVICE-CONTRACT.md), [утверждённый UX](docs/ux/security-privacy/README.md). **OPEN/P0**: сохранение платного backup vs полная облачная очистка; не выдумывать политику.
+            - full cloud wipe vs preserving paid backup: unresolved, see security contract.
 - Data and Storage
     - Storage info
         - Cache size
@@ -290,47 +290,22 @@ S - Profile/Settings
 - About
 
 
-## SaaS Tariffs
+## SaaS Tariffs — UPDATED CONTRACT (2026-11-08)
 
-### Free
-No Backups
-3 assignments / month
-50 photos (yours + assignments)
-Max photo-living 14 days
-Encryption of all data, including photos
-Emergency-data-removing without keeping data in cloud
+**Единственный актуальный источник тарифных правил и целевых API-контрактов:** [docs/product/BILLING-TARIFF-CONTRACT.md](docs/product/BILLING-TARIFF-CONTRACT.md). Более ранняя версия тарифов ниже отменена решением владельца. Значения из старого `payments/catalog.ts` не использовать при разработке новых контрактов.
 
-### Go
-1 Auto-Backup/week
-10 assignments / month
-Max 200 photos (yours + assignments)
-Max photo-living 30 days
-Encryption of all data, including photos
-Emergency-data-removing with keeping data in cloud
-15$ for 1 month | 80$ for 6 month | 140$ for year
+**Free:** 3 задания/месяц; 50 файлов; 1 ГБ; до 14 дней; нет бэкапа.
+**Go:** $20/мес.; 20 заданий/месяц; 250 файлов; 30 ГБ; до 30 дней; 1 ручное + 1 автоматическое обновление *одного* бэкапа в неделю.
+**Pro:** $30/мес.; 50 заданий/месяц; 2000 файлов; 200 ГБ; до 90 дней; 5 ручных + 2 автоматических обновления в неделю.
+**Unlimited:** $50/мес.; без ограничения количества заданий и файлов; до 1 ТБ; сроки хранения пока действует соответствующее право; одна копия обновляется ежедневно, ручные обновления без лимита.
 
-### Pro
-5 Auto-Backups/week
-50 assignments / month
-1000 photos (yours + assignments)
-Max photo-living 60 days
-Encryption of all data, including photos
-Emergency-data-removing with keeping data in cloud
-Your own Matrix/Signal server
-Your own S3/IPFS Server
-25$ for 1 month | 140$ for 6 month | 240$ for year
+Шифрование и Emergency PIN есть **во всех** планах; облачное восстановление по копии — только если зашифрованный backup существует и доступен recovery key. Отдельных пунктов «свой S3» и «свой сервер Matrix/Signal» в тарифах нет.
 
-### Unlimited
-Unlimited Backups (evry day Auto-backups)
-Unlimited assignments
-Unlimited photos (yours + assignments)
-Unlimited photo-living
-Encryption of all data, including photos
-Emergency-data-removing with keeping data in cloud
-Your own Matrix/Signal server
-Your own S3/IPFS Server
-Priority Support
-40$ for 1 month | 220$ for 6 month | 370$ for year
+Скидки за 6/12 месяцев: Go −10%/−15%, Pro −15%/−20%, Unlimited −20%/−30%. Суммы за 6/12 месяцев: Go $108/$204; Pro $153/$288; Unlimited $240/$420.
+
+**Internal grace:** Free 15, Go 15, Pro 30, Unlimited 60 дней; отдельные 15 дней на безопасный downgrade. Рекламная формулировка 15–60 дней, точная дата удаления/потери доступа сообщается владельцу до действия. Free не имеет заканчивающейся подписки: 15 дней — защита при изменении прав/квот, **не продление собственного TTL 14 дней для каждого бесплатного файла**.
+
+**Пока не реализовано:** source of truth для тарифов и дат, backend квоты, backup pipeline, безопасный TTL/GC, ledger и оплата; точные способы оплаты всё ещё требуют отдельного решения.
 
 
 ## UI
@@ -440,4 +415,4 @@ Profile/Settings - Просмотр карточки профиля (как св
 Payment - платежи и настройка тарифного плана
 Status - статус страницы/объекта со списком очереди, таймером, временем и выполненых процессов для отладки приложения (страница с мониторингом только для админов - через привязку id), само состояние (загрузка/подключение и тп.) нужно показывать всем.
 
-Оплату принимаем через depay или NOWPayments - разумеется со сменой оператора платежей, но это будет полюбому web3.
+Историческое предложение по провайдерам: DePay/NOWPayments. **Не утверждённое решение; провайдер, налоги, контракт checkout и способы оплаты открыты.** См. [контракт тарифов](docs/product/BILLING-TARIFF-CONTRACT.md).
