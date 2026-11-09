@@ -10,6 +10,8 @@
 
 - PIN Shell 1.1 — **OWNER-ACCEPTED UX**: [экран](pin-shell/index.html), [утверждённый автономный HTML](pin-shell/accepted-pin-shell-v1.1-standalone.html), [спецификация](pin-shell/README.md). Это **отдельный полноэкранный экран разблокировки без Header и Dock**; компактная клавиатура шириной 248 px, логотип 54 px, заголовок «Введите PIN» 21 px. Обычный и аварийный PIN используют один интерфейс 4–8 цифр; без биометрии или отдельной кнопки Emergency. Переключатель длины и Phone/Desktop относятся только к preview. Real PIN verification и security flow — самостоятельная production-задача; не копировать demo PIN.
 
+- Authorization Error 1.0 — **OWNER-ACCEPTED UX**: [экран](authorization-error/index.html), [неизменённый автономный эталон](authorization-error/accepted-authorization-error-v1.0-standalone.html), [спецификация](authorization-error/README.md). Полноэкранная страница без Header/Dock; логотип, сообщение о подтверждённой ошибке Identity/Recovery Key/устройства/аварийного PIN и **ровно одна ссылка** на [Welcome 1.4](welcome/index.html). Выбор причины — только для preview; в production не путать network timeout с удалённым аккаунтом. В `index.html` ссылка исправлена на относительную для каталога GitHub, оригинальный автономный HTML не менялся.
+
 ## Неизменная оболочка
 
 1. **Header**: высота **64px**, фон `#181818`, нижний разделитель `#303030`. Слева квадрат `[pb]` (37×37px, mobile может 34×34px), затем **PhotoBunker** с системным статусом **строго под названием** и точечным индикатором. Цвет основного текста `#f3f3f3`; статуса `#aaa`; акцент `#1ed760`. Никаких чёрных надписей на тёмной панели.
