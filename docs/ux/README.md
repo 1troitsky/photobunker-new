@@ -6,7 +6,7 @@
 
 | Экран | Концепция | Где открыть | Статус |
 | --- | --- | --- | --- |
-| Assignments / список заданий | Fieldwork 4.2, Spotify-inspired dark | [assignments/index.html](assignments/index.html) | **OWNER-SELECTED DESIGN / IMPLEMENTATION NOT STARTED** |
+| Assignments / список заданий | **Fieldwork 5.0** · фото/видео/аудио, необязательные цели, автоудаление | [assignments/v5/index.html](assignments/v5/index.html) · [принятый HTML 5.0](assignments/v5/accepted-assignments-v5.0-standalone.html) · [спецификация](assignments/v5/README.md) · [архив 4.2](assignments/index.html) | **OWNER-ACCEPTED UX / NOT PRODUCTION IMPLEMENTED** |
 | Assignments / настройка задания | **Assignment Editor 2.2** · фото, видео, аудио, цели, автоудаление и права | [assignments/editor/index.html](assignments/editor/index.html) · [оригинальный HTML](assignments/editor/accepted-assignment-editor-v2.2.html) · [спецификация](assignments/editor/README.md) | **OWNER-ACCEPTED UX / NOT PRODUCTION IMPLEMENTED** |
 | Контакты и Команды / единая страница | **Contacts & Teams 1.1** · две вкладки со счётчиками, Blacklist, профили, команды, участники, права | [contacts-teams/index.html](contacts-teams/index.html) · [оригинальный HTML](contacts-teams/accepted-contacts-teams-v1.1.html) · [спецификация](contacts-teams/README.md) | **OWNER-ACCEPTED UX / NOT PRODUCTION IMPLEMENTED** |
 | Settings + Profile / настройки и карточка | **Fieldwork 1.6 (WIP)** · поиск, профиль, приватность, команды, заголовок с тарифом | [settings-profile/index.html](settings-profile/index.html) · [автономный HTML](settings-profile/settings-profile-v1.6-standalone.html) · [спецификация](settings-profile/README.md) | **INTERIM / NOT FINAL / NOT PRODUCTION IMPLEMENTED** |
