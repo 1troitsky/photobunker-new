@@ -12,6 +12,8 @@
 
 - Authorization Error 1.0 — **OWNER-ACCEPTED UX**: [экран](authorization-error/index.html), [неизменённый автономный эталон](authorization-error/accepted-authorization-error-v1.0-standalone.html), [спецификация](authorization-error/README.md). Полноэкранная страница без Header/Dock; логотип, сообщение о подтверждённой ошибке Identity/Recovery Key/устройства/аварийного PIN и **ровно одна ссылка** на [Welcome 1.4](welcome/index.html). Выбор причины — только для preview; в production не путать network timeout с удалённым аккаунтом. В `index.html` ссылка исправлена на относительную для каталога GitHub, оригинальный автономный HTML не менялся.
 
+- Public Card 1.1 — **OWNER-ACCEPTED UX**: [публичный экран](public-card/index.html), [неизменённый HTML](public-card/accepted-public-card-v1.1-standalone.html), [спецификация](public-card/README.md). Это **внешняя веб-страница без авторизованного App Header/Dock**: минимальный логотип и «Установить приложение», название/ID и C/D/S, безопасная версия медиа, выборочно разрешённые данные, GPS-карта только при разрешении, TTL, копирайт. Назначение — внешний просмотр без входа, но public ACL, E2EE safe export, lifetime/revocation — отдельная production задача. Не путать с неутверждённым Browser Share нескольких файлов.
+
 ## Неизменная оболочка
 
 1. **Header**: высота **64px**, фон `#181818`, нижний разделитель `#303030`. Слева квадрат `[pb]` (37×37px, mobile может 34×34px), затем **PhotoBunker** с системным статусом **строго под названием** и точечным индикатором. Цвет основного текста `#f3f3f3`; статуса `#aaa`; акцент `#1ed760`. Никаких чёрных надписей на тёмной панели.
