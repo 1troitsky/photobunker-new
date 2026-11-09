@@ -27,6 +27,8 @@
 
 - Assignments Fieldwork 5.0 — **OWNER-ACCEPTED UX**: [интерактивный список](assignments/v5/index.html), [точный автономный HTML](assignments/v5/accepted-assignments-v5.0-standalone.html), [спецификация](assignments/v5/README.md). Это актуальный список поверх прежней оболочки 4.2: независимые Фото/Видео/Аудио, отдельные необязательные цели и общий процент только по типам с целью, разные сроки автоудаления файлов и самого задания. Нет новых обложек или Shell, повторного сокращённого редактора или самовольного backend GC. Исходная 4.2 сохранена в `assignments/`; редактор Media 2.2 — в `assignments/editor/`.
 
+- Messages Fieldwork 1.1 Beta — **OWNER-ACCEPTED BETA UX / FUTURE MATRIX**: [интерактивный HTML](messages/index.html), [неизменённый standalone](messages/accepted-messages-fieldwork-v1.1-standalone.html), [спецификация](messages/README.md). Список диалогов использует существующий Shell; **открытая переписка — отдельный полноэкранный слой поверх всего приложения, включая Header/Dock**, и на телефоне, и на Desktop. Закрытие возвращает к сохранённому списку, анимации учитывают reduced motion. Фон переписки `#101210`, исходящие `#315640`, увеличенные промежутки. Matrix/реальная доставка/E2EE не подключены; запрещено возвращать старую двухколоночную концепцию по умолчанию.
+
 ## Канонические исходники прототипов
 
 - Shell CSS: [`assignments/style.css`](assignments/style.css) — базовые правила `.app-header`, `.brand-mark`, `.brand-state`, `.state-led`, `.header-actions`, `.app-dock`.
